@@ -16,7 +16,7 @@
 /**
  * FIXME
  */
-static void print_and_exit(const char *msg) {
+static void print_error(const char *msg) {
     fprintf(stderr, "%s\n", msg);
     exit(-1);
 }
@@ -29,13 +29,10 @@ int main(int argc, char *argv[]) {
 
     char buffer[BUFF_SIZE];
 
-    /* Assert that the correct number of arguments were given */
     if (argc != 3) {
 	sprintf(buffer, "Usage: %s domain_name port_num", argv[0]);
-	print_and_exit(buffer);
+	print_error(buffer);
     }
-
-    
 
     return 0;
 }

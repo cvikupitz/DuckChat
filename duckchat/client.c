@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -22,7 +23,7 @@
 /**
  * FIXME
  */
-static void print_and_exit(const char *msg) {
+static void print_error(const char *msg) {
     fprintf(stderr, "%s\n", msg);
     exit(-1);
 }
@@ -34,32 +35,30 @@ static void print_and_exit(const char *msg) {
 int main(int argc, char *argv[]) {
 
     struct sockaddr_in server_addr;
-    struct hostent *host;
-    int client_fd;
+    struct hostent *hp;
+    int client_fd, port_num;
     char buffer[BUFF_SIZE];
     const char *username;
 
-    /* Assert that the correct number of arguments were given */
     if (argc != 4) {
 	sprintf(buffer, "Usage: %s server_socket server_port username", argv[0]);
-	print_and_exit(buffer);
+	print_error(buffer);
     }
 
-    if ((client_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-	print_and_exit("Error: Failed to create the socket.");
-
-    server_addr.sin_family = AF_INET;
-    if ((host = gethostbyname(argv[1])) == 0)
-	print_and_exit("Error: Unknown host.");///////FIXME, should not be an error
-
-    bcopy((char *)host->h_addr, (char *)&server_addr.sin_addr, host->h_length);
-    server_addr.sin_port = htons(atoi(argv[2]));
-
-    strcpy(buffer, "This is a test.");
-    send(client_fd, buffer, BUFF_SIZE, 0);
-
     username = argv[3];
-    fprintf(stdout, "Welcome %s\n", username);
+    port_num = atoi(argv[2]);
 
+    if ((client_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+	print_error("Call to socket() failed.");
+
+    memset((char *)&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    server_addr.sin_port = htons(port_num);
+
+    if (bind(client_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
+	print_error("Call to bind() failed.");
+
+    close(client_fd);
     return 0;
 }

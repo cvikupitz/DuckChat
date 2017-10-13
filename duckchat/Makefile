@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -W -g -Werror
+CFLAGS=-Wall -W -g
 
 FILES=Makefile client.c server.c
 OBJECTS=client.o server.o
