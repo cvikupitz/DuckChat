@@ -1,0 +1,4 @@
+*.swp
+*.o
+duckchat/server
+duckchat/client
