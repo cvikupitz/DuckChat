@@ -31,6 +31,7 @@ static char subscribed[MAX_CHANNELS][CHANNEL_MAX];
 static int socket_fd;
 
 //// FIXME = ERROR CHECK sendto()
+//// FIXME = ERROR CHECK recvfrom()
 //// FIXME - Use bind instead of connect?
 
 
@@ -131,16 +132,7 @@ static void client_switch_request(const char *request) {
     fprintf(stdout, "You are not subscribed to the channel %s\n", channel);
 }
 
-/**
- * FIXME
- */
-static void client_logout_request(struct sockaddr_in server) {
-    
-    struct request_logout logout_packet;
-    logout_packet.req_type = REQ_LOGOUT;
-    sendto(socket_fd, &logout_packet, sizeof(logout_packet), 0,
-		(struct sockaddr *)&server, sizeof(server));
-}
+
 
 /**
  * Prints out full list of all the channels the user is currently subscribed
@@ -171,6 +163,17 @@ static void client_help_request(void) {
     fprintf(stdout, "  /subscribed: Lists the names of all the channels you're subscribed to.\n");
     fprintf(stdout, "  /help: Lists all available commands.\n");
     fprintf(stdout, "  /exit: Logout and exit the client software.\n");
+}
+
+/**
+ * FIXME
+ */
+static void client_logout_request(struct sockaddr_in server) {
+    
+    struct request_logout logout_packet;
+    logout_packet.req_type = REQ_LOGOUT;
+    sendto(socket_fd, &logout_packet, sizeof(logout_packet), 0,
+		(struct sockaddr *)&server, sizeof(server));
 }
 
 /**
@@ -275,49 +278,65 @@ int main(int argc, char *argv[]) {
     if (raw_mode() < 0)
 	print_error("Failed to switch the terminal to raw mode.");
 
-    FD_ZERO(&receiver);
-    FD_SET(socket_fd, &receiver);
-
+    fprintf(stdout, ">");
     while (1) {
 
-
 	i = 0;
+	FD_ZERO(&receiver);
+	FD_SET(socket_fd, &receiver);
+	FD_SET(STDIN_FILENO, &receiver);
+
+	if (select((socket_fd + 1), &receiver, NULL, NULL, NULL) > 0) {
+	    if (FD_ISSET(socket_fd, &receiver)) {
+		
+		struct text in_packet;
+		recvfrom(socket_fd, &in_packet, sizeof(in_packet), 0,
+			(struct sockaddr *)&server, NULL);
+			///FIXME - SEG FAULT
+		puts("Packet received!");
+	    }
+
+	    if (FD_ISSET(STDIN_FILENO, &receiver)) {
+
+		while ((ch = getchar()) != '\n') {
+		    //// FIXME - DELETE & BACKSPACE
+		    // KEY 127 - backspace
+		    if (i != (SAY_MAX - 1)) {
+			buffer[i++] = ch;
+			putchar(ch);
+		    }
+		}
+		
+		buffer[i] = '\0';
+		fprintf(stdout, "\n");
+		if (buffer[0] == '/') {
+		    if (strncmp(buffer, "/join", 5) == 0) {
+			client_join_request(server, buffer);
+		    } else if (strncmp(buffer, "/leave", 6) == 0) {
+			client_leave_request(server, buffer);
+		    } else if (strncmp(buffer, "/list", 5) == 0) {
+			client_list_request(server);
+		    } else if (strncmp(buffer, "/who", 4) == 0) {
+			client_who_request(server, buffer);
+		    } else if (strncmp(buffer, "/switch", 7) == 0) {
+			client_switch_request(buffer);
+		    } else if (strncmp(buffer, "/subscribed", 11) == 0) {
+			client_subscribed_request();
+		    } else if (strncmp(buffer, "/help", 5) == 0) {
+			client_help_request();
+		    } else if (strncmp(buffer, "/exit", 5) == 0) {
+			client_logout_request(server);
+			break;
+		    } else {
+			fprintf(stdout, "*Unknown command\n");
+		    }
+		} else {
+		    client_say_request(server, buffer);
+		}
+	    }
+	}
 	fprintf(stdout, ">");
-	while ((ch = getchar()) != '\n') {
-	    //// FIXME - DELETE & BACKSPACE
-	    //127 - backspace
-	    if (i != (SAY_MAX - 1)) {
-		buffer[i++] = ch;
-		putchar(ch);
-	    }
-	}
 	
-	buffer[i] = '\0';
-	fprintf(stdout, "\n");
-	if (buffer[0] == '/') {
-	    if (strncmp(buffer, "/join", 5) == 0) {
-		client_join_request(server, buffer);
-	    } else if (strncmp(buffer, "/leave", 6) == 0) {
-		client_leave_request(server, buffer);
-	    } else if (strncmp(buffer, "/list", 5) == 0) {
-		client_list_request(server);
-	    } else if (strncmp(buffer, "/who", 4) == 0) {
-		client_who_request(server, buffer);
-	    } else if (strncmp(buffer, "/switch", 7) == 0) {
-		client_switch_request(buffer);
-	    } else if (strncmp(buffer, "/subscribed", 11) == 0) {
-		client_subscribed_request();
-	    } else if (strncmp(buffer, "/help", 5) == 0) {
-		client_help_request();
-	    } else if (strncmp(buffer, "/exit", 5) == 0) {
-		client_logout_request(server);
-		break;
-	    } else {
-		fprintf(stdout, "*Unknown command\n");
-	    }
-	} else {
-	    client_say_request(server, buffer);
-	}
     }
 
     return 0;
