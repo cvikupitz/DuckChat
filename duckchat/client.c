@@ -278,7 +278,6 @@ int main(int argc, char *argv[]) {
     if (raw_mode() < 0)
 	print_error("Failed to switch the terminal to raw mode.");
 
-    fprintf(stdout, ">");
     while (1) {
 
 	i = 0;
@@ -286,14 +285,16 @@ int main(int argc, char *argv[]) {
 	FD_SET(socket_fd, &receiver);
 	FD_SET(STDIN_FILENO, &receiver);
 
+	//fprintf(stdout, ">");
+
 	if (select((socket_fd + 1), &receiver, NULL, NULL, NULL) > 0) {
 	    if (FD_ISSET(socket_fd, &receiver)) {
 		
-		struct text in_packet;
-		recvfrom(socket_fd, &in_packet, sizeof(in_packet), 0,
+		char in_buffer[BUFF_SIZE];
+		recvfrom(socket_fd, &in_buffer, sizeof(in_buffer), 0,
 			(struct sockaddr *)&server, NULL);
-			///FIXME - SEG FAULT
-		puts("Packet received!");
+		////FIXME
+		puts("Packet received");
 	    }
 
 	    if (FD_ISSET(STDIN_FILENO, &receiver)) {
@@ -335,7 +336,6 @@ int main(int argc, char *argv[]) {
 		}
 	    }
 	}
-	fprintf(stdout, ">");
 	
     }
 
