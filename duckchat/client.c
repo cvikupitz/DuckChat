@@ -82,8 +82,19 @@ static void client_logout(struct sockaddr_in server) {
 		(struct sockaddr *)&server, sizeof(server));
 }
 
+static void client_help(void) {
+    fprintf(stdout, "Possible commands are:\n");
+    fprintf(stdout, "   /exit: Logout and exit the client software.\n");
+    fprintf(stdout, "   /join <channel>: Join the named channel, creating it if it does not exist.\n");
+    fprintf(stdout, "   /leave <channel>: Leave the named channel.\n");
+    fprintf(stdout, "   /list: Lists the names of all the available channels.\n");
+    fprintf(stdout, "   /who <channel>: Lists all users who are on the named channel.\n");
+    fprintf(stdout, "   /switch <channel>: Switch to the named channel you already joined.\n");
+    fprintf(stdout, "   /help: Lists all available commands.\n");
+}
+
 static void print_error(const char *msg) {
-    perror(msg);///FIXME-fprintf()
+    fprintf(stderr, "%s\n", msg);
     exit(-1);
 }
 
@@ -97,12 +108,18 @@ int main(int argc, char *argv[]) {
 
     /* Assert that the number of arguments given is correct; print usage otherwise */
     if (argc != 4) {
-	fprintf(stderr, "Usage: %s server_socket server_port username\n", argv[0]);
-	exit(-1);
+	sprintf(buffer, "Usage: %s server_socket server_port username", argv[0]);
+	print_error(buffer);
+    }
+
+    if (strlen(argv[1]) > UNIX_PATH_MAX) {
+	sprintf(buffer, "Error - Path name to domain socket exceeds the length allowed (%d)",
+			UNIX_PATH_MAX);
+	print_error(buffer);
     }
 
     if ((host_end = gethostbyname(argv[1])) == NULL)
-	print_error("Error - Failed to locate the host.\n");
+	print_error("Error - Failed to locate the host.");
     port_num = atoi(argv[2]);
 
     bzero((char *)&server_addr, sizeof(server_addr));
@@ -111,16 +128,16 @@ int main(int argc, char *argv[]) {
     server_addr.sin_port = htons(port_num);
 
     if ((socket_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-	print_error("Error - Failed to open a socket for client.\n");
+	print_error("Error - Failed to open a socket for client.");
 
     if (connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-	print_error("Error - Failed to connect client to server.\n");
+	print_error("Error - Failed to connect client to server.");
 
     if ((username = (char *)malloc(USERNAME_MAX + 1)) == NULL)
-	perror("Error - Unable to allocate a sufficient amount of memory.\n");
+	print_error("Error - Unable to allocate a sufficient amount of memory.");
     strncpy(username, argv[3], USERNAME_MAX);
     if (strlen(argv[3]) > USERNAME_MAX) {
-	fprintf(stdout, "Username length exceeds the limit allowed (%d characters)\n", USERNAME_MAX);
+	fprintf(stdout, "Username length exceeds the length allowed (%d)\n", USERNAME_MAX);
 	fprintf(stdout, "Your username will be: %s\n", username);
     }
 
@@ -148,6 +165,8 @@ int main(int argc, char *argv[]) {
 	    } else if (strncmp(buffer, "/exit", 5) == 0) {
 		client_logout(server_addr);
 		break;
+	    } else if (strncmp(buffer, "/help", 5) == 0) {
+		client_help();
 	    } else {
 		fprintf(stdout, "*Unknown command\n");
 	    }
