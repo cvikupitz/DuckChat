@@ -6,7 +6,7 @@
  * FIXME - DESCRIPTION
  */
 
-#include <stdio.h>  /* FIXME */
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -35,9 +35,8 @@ static int socket_fd;
 //// FIXME = ERROR CHECK recvfrom()
 //// FIXME - recvfrom size; parameters
 //// FIXME - Use bind instead of connect?
-//// FIXME - Add joined channel to subscribed list
 //// FIXME - Add backspace in use input
-
+//// FIXME - Fix '>' prompt
 
 /**
  * FIXME
@@ -45,6 +44,15 @@ static int socket_fd;
 static int join_channel(const char *channel) {
     
     int i;
+
+    for (i = 0; i < MAX_CHANNELS; i++) {
+	if (strcmp(subscribed[i], channel) == 0) {
+	    strcpy(active_channel, "");
+	    strncpy(active_channel, subscribed[i], (CHANNEL_MAX - 1));
+	    return 1;
+	}
+    }
+
     for (i = 0; i < MAX_CHANNELS; i++) {
 	if (strcmp(subscribed[i], "") == 0) {
 	    strncpy(subscribed[i], channel, (CHANNEL_MAX - 1));
@@ -193,7 +201,7 @@ static void server_who_reply(const char *packet) {
 }
 
 /**
- * Switches the user's currrently active channel to the specified channel name
+ * FIXME
  */
 static void client_switch_request(const char *request) {
     
@@ -203,6 +211,7 @@ static void client_switch_request(const char *request) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
     }
+
     ++channel;
     for (i = 0; i < MAX_CHANNELS; i++) {
 	if (strcmp(subscribed[i], channel) == 0) {
@@ -223,8 +232,8 @@ static void client_subscribed_request(void) {
     int i;
     fprintf(stdout, "Subscribed channels:\n");
     for (i = 0; i < MAX_CHANNELS; i++) {
-	if (strcmp(subscribed[i], "") == 0) /* Skip over empty strings */
-	    continue;
+	if (strcmp(subscribed[i], "") == 0)
+	    continue;	    /* Skip over empty strings */
 	fprintf(stdout, "  %s\n", subscribed[i]);
     }
 }
@@ -246,7 +255,8 @@ static void client_help_request(void) {
 }
 
 /**
- * FIXME
+ * Sends a packet to the server requesting the client to log out. Invoked
+ * when the user enters the special command '/exit'.
  */
 static void client_logout_request(void) {
     
@@ -257,7 +267,8 @@ static void client_logout_request(void) {
 }
 
 /**
- * FIXME
+ * Prints out an error message to the client from the specified packet
+ * received from the server.
  */
 static void server_error_reply(const char *packet) {
 
@@ -335,6 +346,7 @@ int main(int argc, char *argv[]) {
     /* FIXME */
     if ((socket_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	print_error("Failed to open a socket for client.");
+    /* FIXME */
     if (connect(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
 	print_error("Failed to connect client to server.");
 
@@ -347,18 +359,20 @@ int main(int argc, char *argv[]) {
 	fprintf(stdout, "* Your username will be: %s\n", username);
     }
 
-    /* FIXME */
+    /* Subscribe and join the default channel upon login */
+    /* For this assignment, the default channel is named 'Common' */
     strncpy(active_channel, DEFAULT_CHANNEL, (CHANNEL_MAX - 1));
     strncpy(subscribed[0], DEFAULT_CHANNEL, (CHANNEL_MAX - 1));
+    /* Opens up all other spots for channels to join */
     for (i = 1; i < MAX_CHANNELS; i++)
-	memset(subscribed[i], 0, sizeof(subscribed[i]));
+    strcpy(subscribed[i], "");
 
-    /* FIXME */
+    /* Send a packet to the server to log user in */
     login_packet.req_type = REQ_LOGIN;
     strncpy(login_packet.req_username, username, USERNAME_MAX);
     sendto(socket_fd, &login_packet, sizeof(login_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
-    /* FIXME */
+    /* Send a packet to the server to join the default channel */
     struct request_join join_packet;
     join_packet.req_type = REQ_JOIN;
     strncpy(join_packet.req_channel, DEFAULT_CHANNEL, (CHANNEL_MAX - 1));
@@ -366,8 +380,10 @@ int main(int argc, char *argv[]) {
 		(struct sockaddr *)&server, sizeof(server));
 
     /* Switch terminal to raw mode, terminate if unable */
-    if (raw_mode() < 0)
+    if (raw_mode() < 0) {
+	client_logout_request();
 	print_error("Failed to switch the terminal to raw mode.");
+    }
 
     while (1) {
 
@@ -375,8 +391,6 @@ int main(int argc, char *argv[]) {
 	FD_ZERO(&receiver);
 	FD_SET(socket_fd, &receiver);
 	FD_SET(STDIN_FILENO, &receiver);
-
-	//fprintf(stdout, ">");
 
 	if (select((socket_fd + 1), &receiver, NULL, NULL, NULL) > 0) {
 	    if (FD_ISSET(socket_fd, &receiver)) {
@@ -393,7 +407,7 @@ int main(int argc, char *argv[]) {
 		    server_who_reply(in_buff);
 		} else if (packet_type->txt_type == TXT_ERROR) {
 		    server_error_reply(in_buff);
-		} else { /* Likely a bogus packet, do nothing */ }
+		} else { /* Do nothing, likely a bogus packet */ }
 	    }
 
 	    if (FD_ISSET(STDIN_FILENO, &receiver)) {
