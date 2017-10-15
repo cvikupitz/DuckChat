@@ -28,7 +28,7 @@ static int socket_fd;
 //////////////////////////////////
 //// FIXME = ERROR CHECK sendto()
 
-static void client_join(struct sockaddr_in server, const char *request) {
+static void client_join_request(struct sockaddr_in server, const char *request) {
     struct request_join join_packet;
     join_packet.req_type = REQ_JOIN;
     char *channel = strchr(request, ' ');
@@ -41,7 +41,7 @@ static void client_join(struct sockaddr_in server, const char *request) {
 		(struct sockaddr *)&server, sizeof(server));
 }
 
-static void client_leave(struct sockaddr_in server, const char *request) {
+static void client_leave_request(struct sockaddr_in server, const char *request) {
     struct request_leave leave_packet;
     leave_packet.req_type = REQ_LEAVE;
     char *channel = strchr(request, ' ');
@@ -54,7 +54,7 @@ static void client_leave(struct sockaddr_in server, const char *request) {
 		(struct sockaddr *)&server, sizeof(server));
 }
 
-static void client_say(struct sockaddr_in server, const char *request) {
+static void client_say_request(struct sockaddr_in server, const char *request) {
     struct request_say say_packet;
     say_packet.req_type = REQ_SAY;
     strncpy(say_packet.req_channel, active_channel, (CHANNEL_MAX - 1));
@@ -63,14 +63,14 @@ static void client_say(struct sockaddr_in server, const char *request) {
 		(struct sockaddr *)&server, sizeof(server));
 }
 
-static void client_list(struct sockaddr_in server) {
+static void client_list_request(struct sockaddr_in server) {
     struct request_list list_packet;
     list_packet.req_type = REQ_LIST;
     sendto(socket_fd, &list_packet, sizeof(list_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
 }
 
-static void client_who(struct sockaddr_in server, const char *request) {
+static void client_who_request(struct sockaddr_in server, const char *request) {
     struct request_who who_packet;
     who_packet.req_type = REQ_WHO;
     char *channel = strchr(request, ' ');
@@ -83,7 +83,7 @@ static void client_who(struct sockaddr_in server, const char *request) {
 		(struct sockaddr *)&server, sizeof(server));
 }
 
-static void client_switch(const char *request) {
+static void client_switch_request(const char *request) {
     char *channel = strchr(request, ' ');
     if (channel == NULL) {
 	fprintf(stdout, "*Unknown command\n");
@@ -94,7 +94,7 @@ static void client_switch(const char *request) {
     puts(active_channel);
 }
 
-static void client_logout(struct sockaddr_in server) {
+static void client_logout_request(struct sockaddr_in server) {
     struct request_logout logout_packet;
     logout_packet.req_type = REQ_LOGOUT;
     sendto(socket_fd, &logout_packet, sizeof(logout_packet), 0,
@@ -104,7 +104,7 @@ static void client_logout(struct sockaddr_in server) {
 /**
  * FIXME
  */
-static void client_help(void) {
+static void client_help_request(void) {
     fprintf(stdout, "Possible commands are:\n");
     fprintf(stdout, "   /exit: Logout and exit the client software.\n");
     fprintf(stdout, "   /join <channel>: Join the named channel, creating it if it does not exist.\n");
@@ -113,10 +113,6 @@ static void client_help(void) {
     fprintf(stdout, "   /who <channel>: Lists all users who are on the named channel.\n");
     fprintf(stdout, "   /switch <channel>: Switch to the named channel you already joined.\n");
     fprintf(stdout, "   /help: Lists all available commands.\n");
-}
-
-UNUSED static void receive_packets(UNUSED void *args) {
-    while (1){}
 }
 
 /**
@@ -209,25 +205,25 @@ int main(int argc, char *argv[]) {
 	fprintf(stdout, "\n");
 	if (buffer[0] == '/') {
 	    if (strncmp(buffer, "/join", 5) == 0) {
-		client_join(server, buffer);
+		client_join_request(server, buffer);
 	    } else if (strncmp(buffer, "/leave", 6) == 0) {
-		client_leave(server, buffer);
+		client_leave_request(server, buffer);
 	    } else if (strncmp(buffer, "/list", 5) == 0) {
-		client_list(server);
+		client_list_request(server);
 	    } else if (strncmp(buffer, "/who", 4) == 0) {
-		client_who(server, buffer);
+		client_who_request(server, buffer);
 	    } else if (strncmp(buffer, "/switch", 7) == 0) {
-		client_switch(buffer);
+		client_switch_request(buffer);
 	    } else if (strncmp(buffer, "/exit", 5) == 0) {
-		client_logout(server);
+		client_logout_request(server);
 		break;
 	    } else if (strncmp(buffer, "/help", 5) == 0) {
-		client_help();
+		client_help_request();
 	    } else {
 		fprintf(stdout, "*Unknown command\n");
 	    }
 	} else {
-	    client_say(server, buffer);
+	    client_say_request(server, buffer);
 	}
     }
 
