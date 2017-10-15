@@ -36,6 +36,7 @@ static int socket_fd;
 //// FIXME - recvfrom size; parameters
 //// FIXME - Use bind instead of connect?
 //// FIXME - Add joined channel to subscribed list
+//// FIXME - Add backspace in use input
 
 
 /**
@@ -43,15 +44,32 @@ static int socket_fd;
  */
 static int join_channel(const char *channel) {
     
-    int i, res = 0;
+    int i;
     for (i = 0; i < MAX_CHANNELS; i++) {
 	if (strcmp(subscribed[i], "") == 0) {
 	    strncpy(subscribed[i], channel, (CHANNEL_MAX - 1));
-	    res = 1;
-	    break;
+	    strcpy(active_channel, "");
+	    strncpy(active_channel, channel, (CHANNEL_MAX - 1));
+	    return 1;
 	}
     }
-    return res;
+    return 0;
+}
+
+/**
+ * FIXME
+ */
+static void leave_channel(const char *channel) {
+    
+    int i;
+    for (i = 0; i < MAX_CHANNELS; i++) {
+	if (strcmp(subscribed[i], channel) == 0) {
+	    strcpy(subscribed[i], "");
+	    if (strcmp(active_channel, channel) == 0)
+		strcpy(active_channel, "");
+	    return;
+	}
+    }
 }
 
 /**
@@ -89,9 +107,13 @@ static void client_leave_request(const char *request) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
     }
+    
+    channel++;
+    leave_channel(channel);
+
     struct request_leave leave_packet;
     leave_packet.req_type = REQ_LEAVE;
-    strncpy(leave_packet.req_channel, ++channel, (CHANNEL_MAX - 1));
+    strncpy(leave_packet.req_channel, channel, (CHANNEL_MAX - 1));
     sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
 }
@@ -203,7 +225,7 @@ static void client_subscribed_request(void) {
     for (i = 0; i < MAX_CHANNELS; i++) {
 	if (strcmp(subscribed[i], "") == 0) /* Skip over empty strings */
 	    continue;
-	fprintf(stdout, "%s\n", subscribed[i]);
+	fprintf(stdout, "  %s\n", subscribed[i]);
     }
 }
 
@@ -377,8 +399,6 @@ int main(int argc, char *argv[]) {
 	    if (FD_ISSET(STDIN_FILENO, &receiver)) {
 
 		while ((ch = getchar()) != '\n') {
-		    //// FIXME - DELETE & BACKSPACE
-		    // KEY 127 - backspace
 		    if (i != (SAY_MAX - 1)) {
 			buffer[i++] = ch;
 			putchar(ch);
