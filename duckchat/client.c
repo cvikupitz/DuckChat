@@ -19,6 +19,9 @@
 
 #define UNUSED __attribute__((unused))
 
+static char username[USERNAME_MAX + 1];
+static int socket_fd;
+
 
 /**
  * FIXME
@@ -38,18 +41,17 @@ int main(int argc, char *argv[]) {
     struct sockaddr_in server_addr;
     struct hostent *server;
     struct request_login login_packet;
-    int port_num, socket_fd;
-    const char *username;
+    int port_num;
 
+    /* Assert the correct number of arguments were given, print usage otherwise */
     if (argc != 4) {
 	fprintf(stderr, "Usage: %s server_socket server_port username\n", argv[0]);
 	exit(-1);
     }
-
-    port_num = atoi(argv[2]);
-    username = argv[3];
+    
     if ((server = gethostbyname(argv[1])) == NULL)
 	print_error("Error - Failed to locate the server.\n");
+    port_num = atoi(argv[2]);
 
     bzero((char *)&server_addr, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
@@ -61,6 +63,12 @@ int main(int argc, char *argv[]) {
 
     if (connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
 	perror("Error - Failed to connect client to server.\n");
+
+    strncpy(username, argv[3], USERNAME_MAX);
+    if (strlen(argv[3]) > USERNAME_MAX) {
+	fprintf(stdout, "Username length exceeds the limit allowed (%d characters)\n", USERNAME_MAX);
+	fprintf(stdout, "Your username will be: %s\n", username);
+    }
 
     login_packet.req_type = REQ_LOGIN;
     strncpy(login_packet.req_username, username, USERNAME_MAX);
