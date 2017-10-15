@@ -15,8 +15,9 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include "duckchat.h"
+#include "raw.h"
 
-#define BUFF_SIZE 2048
+#define BUFF_SIZE 256
 #define UNUSED __attribute__((unused))
 
 static char *username;
@@ -51,7 +52,7 @@ static void client_leave(struct sockaddr_in server, const char *query) {
 		(struct sockaddr *)&server, sizeof(server));
 }
 
-static void client_say(UNUSED struct sockaddr_in server) {
+static void client_say(UNUSED struct sockaddr_in server, UNUSED const char *query) {
     puts("-- Reached client say...");
 }
 
@@ -82,6 +83,9 @@ static void client_logout(struct sockaddr_in server) {
 		(struct sockaddr *)&server, sizeof(server));
 }
 
+/**
+ * FIXME
+ */
 static void client_help(void) {
     fprintf(stdout, "Possible commands are:\n");
     fprintf(stdout, "   /exit: Logout and exit the client software.\n");
@@ -93,17 +97,33 @@ static void client_help(void) {
     fprintf(stdout, "   /help: Lists all available commands.\n");
 }
 
+/**
+ * FIXME
+ */
+static void cleanup(void) {
+    free(username);
+    close(socket_fd);
+    cooked_mode();
+}
+
+/**
+ * FIXME
+ */
 static void print_error(const char *msg) {
     fprintf(stderr, "%s\n", msg);
     exit(-1);
 }
 
+/**
+ * FIXME
+ */
 int main(int argc, char *argv[]) {
 
     struct sockaddr_in server_addr;
     struct hostent *host_end;
     struct request_login login_packet;
-    int port_num;
+    int port_num, i;
+    char ch;
     char buffer[BUFF_SIZE];
 
     /* Assert that the number of arguments given is correct; print usage otherwise */
@@ -112,9 +132,12 @@ int main(int argc, char *argv[]) {
 	print_error(buffer);
     }
 
+    if ((atexit(cleanup)) != 0)
+	print_error("Error - Call to atexit() failed.");
+
     if (strlen(argv[1]) > UNIX_PATH_MAX) {
 	sprintf(buffer, "Error - Path name to domain socket exceeds the length allowed (%d)",
-			UNIX_PATH_MAX);
+		    UNIX_PATH_MAX);
 	print_error(buffer);
     }
 
@@ -146,13 +169,20 @@ int main(int argc, char *argv[]) {
     sendto(socket_fd, &login_packet, sizeof(login_packet), 0,
 		(struct sockaddr *)&server_addr, sizeof(server_addr));
 
+    if (raw_mode() < 0)
+	print_error("Error - Failed to switch the terminal to raw mode.");
+
     while (1) {
 
-	fputs(">", stdout);
-	fgets(buffer, sizeof(buffer), stdin);
-	buffer[strlen(buffer) - 1] = '\0';
+	i = 0;
+	fprintf(stdout, ">");
+	while ((ch = getchar()) != '\n') {
+	    buffer[i++] = ch;
+	    putchar(ch);////FIXME - GET BACKSPACE TO WORK
+	}
+	buffer[i] = '\0';
 
-
+	fprintf(stdout, "\n");
 	if (buffer[0] == '/') {
 	    if (strncmp(buffer, "/join", 5) == 0) {
 		client_join(server_addr, buffer);
@@ -171,10 +201,9 @@ int main(int argc, char *argv[]) {
 		fprintf(stdout, "*Unknown command\n");
 	    }
 	} else {
-	    client_say(server_addr);
+	    client_say(server_addr, buffer);
 	}
     }
 
-    close(socket_fd);
     return 0;
 }
