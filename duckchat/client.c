@@ -25,6 +25,7 @@
 #define DEFAULT_CHANNEL "Common"
 #define UNUSED __attribute__((unused))
 
+static struct sockaddr_in server;
 static char username[USERNAME_MAX];
 static char active_channel[CHANNEL_MAX];
 static char subscribed[MAX_CHANNELS][CHANNEL_MAX];
@@ -32,13 +33,15 @@ static int socket_fd;
 
 //// FIXME = ERROR CHECK sendto()
 //// FIXME = ERROR CHECK recvfrom()
+//// FIXME - recvfrom size; parameters
 //// FIXME - Use bind instead of connect?
+//// FIXME - Add joined channel to subscribed list
 
 
 /**
  * FIXME
  */
-static void client_join_request(struct sockaddr_in server, const char *request) {
+static void client_join_request(const char *request) {
     
     char *channel = strchr(request, ' ');
     if (channel == NULL) {
@@ -55,7 +58,7 @@ static void client_join_request(struct sockaddr_in server, const char *request) 
 /**
  * FIXME
  */
-static void client_leave_request(struct sockaddr_in server, const char *request) {
+static void client_leave_request(const char *request) {
     
     char *channel = strchr(request, ' ');
     if (channel == NULL) {
@@ -72,7 +75,7 @@ static void client_leave_request(struct sockaddr_in server, const char *request)
 /**
  * FIXME
  */
-static void client_say_request(struct sockaddr_in server, const char *request) {
+static void client_say_request(const char *request) {
     
     struct request_say say_packet;
     say_packet.req_type = REQ_SAY;
@@ -85,7 +88,17 @@ static void client_say_request(struct sockaddr_in server, const char *request) {
 /**
  * FIXME
  */
-static void client_list_request(struct sockaddr_in server) {
+static void server_say_reply(UNUSED const char *packet) {
+    
+    struct text_say *say_packet = (struct text_say *) packet;
+    fprintf(stdout, "[%s][%s]: %s\n", say_packet->txt_channel,
+		    say_packet->txt_username, say_packet->txt_text);
+}
+
+/**
+ * FIXME
+ */
+static void client_list_request() {
     
     struct request_list list_packet;
     list_packet.req_type = REQ_LIST;
@@ -93,10 +106,19 @@ static void client_list_request(struct sockaddr_in server) {
 		(struct sockaddr *)&server, sizeof(server));
 }
 
+static void server_list_reply(UNUSED const char *packet) {
+    
+    int i;
+    struct text_list *list_packet = (struct text_list *) packet;
+    fprintf(stdout, "Existing channels:\n");
+    for (i = 0; i < list_packet->txt_nchannels; i++)
+	fprintf(stdout, "  %s\n", list_packet->txt_channels[i].ch_channel);
+}
+
 /**
  * FIXME
  */
-static void client_who_request(struct sockaddr_in server, const char *request) {
+static void client_who_request(const char *request) {
     
     char *channel = strchr(request, ' ');
     if (channel == NULL) {
@@ -108,6 +130,18 @@ static void client_who_request(struct sockaddr_in server, const char *request) {
     strncpy(who_packet.req_channel, ++channel, (CHANNEL_MAX - 1));
     sendto(socket_fd, &who_packet, sizeof(who_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
+}
+
+/**
+ * FIXME
+ */
+static void server_who_reply(const char *packet) {
+    
+    int i;
+    struct text_who *who_packet = (struct text_who *) packet;
+    fprintf(stdout, "Users on channel: %s\n", who_packet->txt_channel);
+    for (i = 0; i < who_packet->txt_nusernames; i++)
+	fprintf(stdout, "  %s\n", who_packet->txt_users[i].us_username);
 }
 
 /**
@@ -131,8 +165,6 @@ static void client_switch_request(const char *request) {
     }
     fprintf(stdout, "You are not subscribed to the channel %s\n", channel);
 }
-
-
 
 /**
  * Prints out full list of all the channels the user is currently subscribed
@@ -168,12 +200,21 @@ static void client_help_request(void) {
 /**
  * FIXME
  */
-static void client_logout_request(struct sockaddr_in server) {
+static void client_logout_request() {
     
     struct request_logout logout_packet;
     logout_packet.req_type = REQ_LOGOUT;
     sendto(socket_fd, &logout_packet, sizeof(logout_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
+}
+
+/**
+ * FIXME
+ */
+static void server_error_reply(const char *packet) {
+
+    struct text_error *error_packet = (struct text_error *) packet;
+    fprintf(stdout, "%s\n", error_packet->txt_error);
 }
 
 /**
@@ -199,7 +240,6 @@ static void print_error(const char *msg) {
  */
 int main(int argc, char *argv[]) {
 
-    struct sockaddr_in server;
     struct hostent *host_end;
     struct request_login login_packet;
     fd_set receiver;
@@ -272,7 +312,7 @@ int main(int argc, char *argv[]) {
 		(struct sockaddr *)&server, sizeof(server));
     /* FIXME */
     sprintf(buffer, " %s", DEFAULT_CHANNEL);
-    client_join_request(server, buffer);
+    client_join_request(buffer);
 
     /* Switch terminal to raw mode, terminate if unable */
     if (raw_mode() < 0)
@@ -290,11 +330,19 @@ int main(int argc, char *argv[]) {
 	if (select((socket_fd + 1), &receiver, NULL, NULL, NULL) > 0) {
 	    if (FD_ISSET(socket_fd, &receiver)) {
 		
-		char in_buffer[BUFF_SIZE];
-		recvfrom(socket_fd, &in_buffer, sizeof(in_buffer), 0,
+		char in_buff[BUFF_SIZE];
+		recvfrom(socket_fd, in_buff, BUFF_SIZE, 0,
 			(struct sockaddr *)&server, NULL);
-		////FIXME
-		puts("Packet received");
+		struct text *packet_type = (struct text *) in_buff;
+		if (packet_type->txt_type == TXT_SAY) {
+		    server_say_reply(in_buff);
+		} else if (packet_type->txt_type == TXT_LIST) {
+		    server_list_reply(in_buff);
+		} else if (packet_type->txt_type == TXT_WHO) {
+		    server_who_reply(in_buff);
+		} else if (packet_type->txt_type == TXT_ERROR) {
+		    server_error_reply(in_buff);
+		} else { /* Likely a bogus packet, do nothing */ }
 	    }
 
 	    if (FD_ISSET(STDIN_FILENO, &receiver)) {
@@ -312,13 +360,13 @@ int main(int argc, char *argv[]) {
 		fprintf(stdout, "\n");
 		if (buffer[0] == '/') {
 		    if (strncmp(buffer, "/join", 5) == 0) {
-			client_join_request(server, buffer);
+			client_join_request(buffer);
 		    } else if (strncmp(buffer, "/leave", 6) == 0) {
-			client_leave_request(server, buffer);
+			client_leave_request(buffer);
 		    } else if (strncmp(buffer, "/list", 5) == 0) {
-			client_list_request(server);
+			client_list_request();
 		    } else if (strncmp(buffer, "/who", 4) == 0) {
-			client_who_request(server, buffer);
+			client_who_request(buffer);
 		    } else if (strncmp(buffer, "/switch", 7) == 0) {
 			client_switch_request(buffer);
 		    } else if (strncmp(buffer, "/subscribed", 11) == 0) {
@@ -326,13 +374,13 @@ int main(int argc, char *argv[]) {
 		    } else if (strncmp(buffer, "/help", 5) == 0) {
 			client_help_request();
 		    } else if (strncmp(buffer, "/exit", 5) == 0) {
-			client_logout_request(server);
+			client_logout_request();
 			break;
 		    } else {
 			fprintf(stdout, "*Unknown command\n");
 		    }
 		} else {
-		    client_say_request(server, buffer);
+		    client_say_request(buffer);
 		}
 	    }
 	}
