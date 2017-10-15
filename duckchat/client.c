@@ -21,7 +21,7 @@
 #include "raw.h"
 
 #define BUFF_SIZE 256
-#define MAX_CHANNELS 10
+#define MAX_CHANNELS 5
 #define DEFAULT_CHANNEL "Common"
 #define UNUSED __attribute__((unused))
 
@@ -41,6 +41,22 @@ static int socket_fd;
 /**
  * FIXME
  */
+static int join_channel(const char *channel) {
+    
+    int i, res = 0;
+    for (i = 0; i < MAX_CHANNELS; i++) {
+	if (strcmp(subscribed[i], "") == 0) {
+	    strncpy(subscribed[i], channel, (CHANNEL_MAX - 1));
+	    res = 1;
+	    break;
+	}
+    }
+    return res;
+}
+
+/**
+ * FIXME
+ */
 static void client_join_request(const char *request) {
     
     char *channel = strchr(request, ' ');
@@ -48,9 +64,17 @@ static void client_join_request(const char *request) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
     }
+
+    ++channel;
+    if (!join_channel(channel)) {
+	fprintf(stdout, "Cannot join channel, subscribed to the maximum allowed (%d)\n",
+		MAX_CHANNELS);
+	return;
+    }
+    
     struct request_join join_packet;
     join_packet.req_type = REQ_JOIN;
-    strncpy(join_packet.req_channel, ++channel, (CHANNEL_MAX - 1));
+    strncpy(join_packet.req_channel, channel, (CHANNEL_MAX - 1));
     sendto(socket_fd, &join_packet, sizeof(join_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
 }
@@ -77,6 +101,8 @@ static void client_leave_request(const char *request) {
  */
 static void client_say_request(const char *request) {
     
+    if (strcmp(active_channel, "") == 0)
+	return;
     struct request_say say_packet;
     say_packet.req_type = REQ_SAY;
     strncpy(say_packet.req_channel, active_channel, (CHANNEL_MAX - 1));
@@ -88,7 +114,7 @@ static void client_say_request(const char *request) {
 /**
  * FIXME
  */
-static void server_say_reply(UNUSED const char *packet) {
+static void server_say_reply(const char *packet) {
     
     struct text_say *say_packet = (struct text_say *) packet;
     fprintf(stdout, "[%s][%s]: %s\n", say_packet->txt_channel,
@@ -98,7 +124,7 @@ static void server_say_reply(UNUSED const char *packet) {
 /**
  * FIXME
  */
-static void client_list_request() {
+static void client_list_request(void) {
     
     struct request_list list_packet;
     list_packet.req_type = REQ_LIST;
@@ -106,7 +132,7 @@ static void client_list_request() {
 		(struct sockaddr *)&server, sizeof(server));
 }
 
-static void server_list_reply(UNUSED const char *packet) {
+static void server_list_reply(const char *packet) {
     
     int i;
     struct text_list *list_packet = (struct text_list *) packet;
@@ -139,7 +165,7 @@ static void server_who_reply(const char *packet) {
     
     int i;
     struct text_who *who_packet = (struct text_who *) packet;
-    fprintf(stdout, "Users on channel: %s\n", who_packet->txt_channel);
+    fprintf(stdout, "Users on channel %s:\n", who_packet->txt_channel);
     for (i = 0; i < who_packet->txt_nusernames; i++)
 	fprintf(stdout, "  %s\n", who_packet->txt_users[i].us_username);
 }
@@ -177,7 +203,7 @@ static void client_subscribed_request(void) {
     for (i = 0; i < MAX_CHANNELS; i++) {
 	if (strcmp(subscribed[i], "") == 0) /* Skip over empty strings */
 	    continue;
-	fprintf(stdout, "  %s\n", subscribed[i]);
+	fprintf(stdout, "%s\n", subscribed[i]);
     }
 }
 
@@ -200,7 +226,7 @@ static void client_help_request(void) {
 /**
  * FIXME
  */
-static void client_logout_request() {
+static void client_logout_request(void) {
     
     struct request_logout logout_packet;
     logout_packet.req_type = REQ_LOGOUT;
@@ -311,8 +337,11 @@ int main(int argc, char *argv[]) {
     sendto(socket_fd, &login_packet, sizeof(login_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
     /* FIXME */
-    sprintf(buffer, " %s", DEFAULT_CHANNEL);
-    client_join_request(buffer);
+    struct request_join join_packet;
+    join_packet.req_type = REQ_JOIN;
+    strncpy(join_packet.req_channel, DEFAULT_CHANNEL, (CHANNEL_MAX - 1));
+    sendto(socket_fd, &join_packet, sizeof(join_packet), 0,
+		(struct sockaddr *)&server, sizeof(server));
 
     /* Switch terminal to raw mode, terminate if unable */
     if (raw_mode() < 0)
