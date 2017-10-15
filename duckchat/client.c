@@ -23,7 +23,6 @@
 #define BUFF_SIZE 256
 #define MAX_CHANNELS 5
 #define DEFAULT_CHANNEL "Common"
-#define UNUSED __attribute__((unused))
 
 static struct sockaddr_in server;
 static char username[USERNAME_MAX];
