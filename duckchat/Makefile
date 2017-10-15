@@ -2,14 +2,14 @@ CC=gcc
 CFLAGS=-Wall -W -g
 
 FILES=Makefile client.c server.c
-OBJECTS=client.o server.o
+OBJECTS=client.o server.o raw.o
 EXECS=client server
 
 
 all: $(EXECS)
 
-client: client.o
-	$(CC) $(CFLAGS) client.o -o client
+client: client.o raw.o
+	$(CC) $(CFLAGS) client.o raw.o -o client
 
 server: server.o
 	$(CC) $(CFLAGS) server.o -o server
@@ -35,4 +35,5 @@ clean:
 
 client.o: client.c duckchat.h raw.h
 server.o: server.c duckchat.h raw.h
+raw.o: raw.c raw.h
 
