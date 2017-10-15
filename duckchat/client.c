@@ -51,7 +51,7 @@ static void client_leave(struct sockaddr_in server, const char *query) {
 		(struct sockaddr *)&server, sizeof(server));
 }
 
-UNUSED static void client_say(UNUSED struct sockaddr_in server) {
+static void client_say(UNUSED struct sockaddr_in server) {
     puts("-- Reached client say...");
 }
 
