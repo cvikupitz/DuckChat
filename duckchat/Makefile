@@ -33,7 +33,7 @@ help:
 clean:
 	rm -f $(OBJECTS) $(EXECS)
 
-client.o: client.c duckchat.h
+client.o: client.c duckchat.h raw.h
 server.o: server.c duckchat.h
 raw.o: raw.c raw.h
 

@@ -18,16 +18,34 @@
 #include "raw.h"
 
 #define BUFF_SIZE 256
-
+#define MAX_CHANNELS 10
+#define DEFAULT_CHANNEL "Common"
 #define UNUSED __attribute__((unused))
 
 static char username[USERNAME_MAX];
 static char active_channel[CHANNEL_MAX];
+static char subscribed[MAX_CHANNELS][CHANNEL_MAX];
 static int socket_fd;
 
-//////////////////////////////////
 //// FIXME = ERROR CHECK sendto()
+//// FIXME - Use bind instead of connect?
 
+static int join_channel(const char *channel) {
+    return 0;
+}
+
+static int switch_channel(const char *channel) {
+    return 0;
+}
+
+static int leave_channel(const char *channel) {
+    return 0;
+}
+
+
+/**
+ * FIXME
+ */
 static void client_join_request(struct sockaddr_in server, const char *request) {
     struct request_join join_packet;
     join_packet.req_type = REQ_JOIN;
@@ -41,6 +59,9 @@ static void client_join_request(struct sockaddr_in server, const char *request) 
 		(struct sockaddr *)&server, sizeof(server));
 }
 
+/**
+ * FIXME
+ */
 static void client_leave_request(struct sockaddr_in server, const char *request) {
     struct request_leave leave_packet;
     leave_packet.req_type = REQ_LEAVE;
@@ -54,6 +75,9 @@ static void client_leave_request(struct sockaddr_in server, const char *request)
 		(struct sockaddr *)&server, sizeof(server));
 }
 
+/**
+ * FIXME
+ */
 static void client_say_request(struct sockaddr_in server, const char *request) {
     struct request_say say_packet;
     say_packet.req_type = REQ_SAY;
@@ -63,6 +87,9 @@ static void client_say_request(struct sockaddr_in server, const char *request) {
 		(struct sockaddr *)&server, sizeof(server));
 }
 
+/**
+ * FIXME
+ */
 static void client_list_request(struct sockaddr_in server) {
     struct request_list list_packet;
     list_packet.req_type = REQ_LIST;
@@ -70,6 +97,9 @@ static void client_list_request(struct sockaddr_in server) {
 		(struct sockaddr *)&server, sizeof(server));
 }
 
+/**
+ * FIXME
+ */
 static void client_who_request(struct sockaddr_in server, const char *request) {
     struct request_who who_packet;
     who_packet.req_type = REQ_WHO;
@@ -83,6 +113,9 @@ static void client_who_request(struct sockaddr_in server, const char *request) {
 		(struct sockaddr *)&server, sizeof(server));
 }
 
+/**
+ * FIXME
+ */
 static void client_switch_request(const char *request) {
     char *channel = strchr(request, ' ');
     if (channel == NULL) {
@@ -94,6 +127,9 @@ static void client_switch_request(const char *request) {
     puts(active_channel);
 }
 
+/**
+ * FIXME
+ */
 static void client_logout_request(struct sockaddr_in server) {
     struct request_logout logout_packet;
     logout_packet.req_type = REQ_LOGOUT;
@@ -104,15 +140,23 @@ static void client_logout_request(struct sockaddr_in server) {
 /**
  * FIXME
  */
+static void client_subscribed_request(void) {
+    return;
+}
+
+/**
+ * FIXME
+ */
 static void client_help_request(void) {
     fprintf(stdout, "Possible commands are:\n");
-    fprintf(stdout, "   /exit: Logout and exit the client software.\n");
-    fprintf(stdout, "   /join <channel>: Join the named channel, creating it if it does not exist.\n");
-    fprintf(stdout, "   /leave <channel>: Leave the named channel.\n");
-    fprintf(stdout, "   /list: Lists the names of all the available channels.\n");
-    fprintf(stdout, "   /who <channel>: Lists all users who are on the named channel.\n");
-    fprintf(stdout, "   /switch <channel>: Switch to the named channel you already joined.\n");
-    fprintf(stdout, "   /help: Lists all available commands.\n");
+    fprintf(stdout, "  /exit: Logout and exit the client software.\n");
+    fprintf(stdout, "  /join <channel>: Join the named channel, creating it if it does not exist.\n");
+    fprintf(stdout, "  /leave <channel>: Leave the named channel.\n");
+    fprintf(stdout, "  /list: Lists the names of all the available channels.\n");
+    fprintf(stdout, "  /who <channel>: Lists all users who are on the named channel.\n");
+    fprintf(stdout, "  /switch <channel>: Switch to the named channel you already joined.\n");
+    fprintf(stdout, "  /subscribed: Lists the names of all the channels you joined.\n");
+    fprintf(stdout, "  /help: Lists all available commands.\n");
 }
 
 /**
@@ -127,7 +171,7 @@ static void cleanup(void) {
  * FIXME
  */
 static void print_error(const char *msg) {
-    fprintf(stderr, "%s\n", msg);
+    fprintf(stderr, "Error: %s\n", msg);
     exit(0);
 }
 
@@ -145,22 +189,25 @@ int main(int argc, char *argv[]) {
 
     /* Assert that the number of arguments given is correct; print usage otherwise */
     if (argc != 4) {
-	sprintf(buffer, "Usage: %s server_socket server_port username", argv[0]);
-	print_error(buffer);
+	fprintf(stdout, "Usage: %s server_socket server_port username\n", argv[0]);
+	return 0;
     }
 
     if ((atexit(cleanup)) != 0)
-	print_error("Error - Call to atexit() failed.");
+	print_error("Call to atexit() failed.");
 
     if (strlen(argv[1]) > UNIX_PATH_MAX) {
-	sprintf(buffer, "Error - Path name to domain socket exceeds the length allowed (%d)",
+	sprintf(buffer, "Path name to domain socket exceeds the length allowed (%d).",
 		    UNIX_PATH_MAX);
 	print_error(buffer);
     }
 
     if ((host_end = gethostbyname(argv[1])) == NULL)
-	print_error("Error - Failed to locate the host.");
+	print_error("Failed to locate the host.");
+    
     port_num = atoi(argv[2]);
+    if (port_num < 0 || port_num > 65535)
+	print_error("Server socket must be in the range [0, 65535].");
 
     bzero((char *)&server, sizeof(server));
     server.sin_family = AF_INET;
@@ -168,18 +215,21 @@ int main(int argc, char *argv[]) {
     server.sin_port = htons(port_num);
 
     if ((socket_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-	print_error("Error - Failed to open a socket for client.");
+	print_error("Failed to open a socket for client.");
 
-    if (connect(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0) ///FIXME - USE BIND?
-	print_error("Error - Failed to connect client to server.");
+    if (connect(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
+	print_error("Failed to connect client to server.");
 
     strncpy(username, argv[3], (USERNAME_MAX - 1));
     if (strlen(argv[3]) > USERNAME_MAX) {
-	fprintf(stdout, "Username length exceeds the length allowed (%d)\n", USERNAME_MAX);
-	fprintf(stdout, "Your username will be: %s\n", username);
+	fprintf(stdout, "* Username length exceeds the length allowed (%d).\n", USERNAME_MAX);
+	fprintf(stdout, "* Your username will be: %s\n", username);
     }
 
-    strncpy(active_channel, "Common", (CHANNEL_MAX - 1));
+    strncpy(active_channel, DEFAULT_CHANNEL, (CHANNEL_MAX - 1));
+    strncpy(subscribed[0], DEFAULT_CHANNEL, (CHANNEL_MAX - 1));
+    for (i = 1; i < MAX_CHANNELS; i++)
+	strcpy(subscribed[i], "");
 
     login_packet.req_type = REQ_LOGIN;
     strncpy(login_packet.req_username, username, USERNAME_MAX);
@@ -187,14 +237,14 @@ int main(int argc, char *argv[]) {
 		(struct sockaddr *)&server, sizeof(server));
 
     if (raw_mode() < 0)
-	print_error("Error - Failed to switch the terminal to raw mode.");
+	print_error("Failed to switch the terminal to raw mode.");
 
     while (1) {
 
 	i = 0;
 	fprintf(stdout, ">");
 	while ((ch = getchar()) != '\n') {
-	////// FIXME = ADD DELETEING !!
+	    //// FIXME - DELETE & BACKSPACE
 	    if (i != (SAY_MAX - 1)) {
 		buffer[i++] = ch;
 		putchar(ch);
