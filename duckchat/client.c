@@ -17,14 +17,15 @@
 #include "duckchat.h"
 #include "raw.h"
 
-#define BUFF_SIZE 4096
 #define UNUSED __attribute__((unused))
+
 
 /**
  * FIXME
  */
 static void print_error(const char *msg) {
-    fprintf(stderr, "%s\n", msg);
+    
+    perror(msg);
     exit(-1);
 }
 
@@ -35,30 +36,36 @@ static void print_error(const char *msg) {
 int main(int argc, char *argv[]) {
 
     struct sockaddr_in server_addr;
-    struct hostent *hp;
-    int client_fd, port_num;
-    char buffer[BUFF_SIZE];
+    struct hostent *server;
+    struct request_login login_packet;
+    int port_num, socket_fd;
     const char *username;
 
     if (argc != 4) {
-	sprintf(buffer, "Usage: %s server_socket server_port username", argv[0]);
-	print_error(buffer);
+	fprintf(stderr, "Usage: %s server_socket server_port username\n", argv[0]);
+	exit(-1);
     }
 
-    username = argv[3];
     port_num = atoi(argv[2]);
+    username = argv[3];
+    if ((server = gethostbyname(argv[1])) == NULL)
+	print_error("Error - Failed to locate the server.\n");
 
-    if ((client_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-	print_error("Call to socket() failed.");
-
-    memset((char *)&server_addr, 0, sizeof(server_addr));
+    bzero((char *)&server_addr, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    bcopy((char *)server->h_addr, (char *)&server_addr.sin_addr.s_addr, server->h_length);
     server_addr.sin_port = htons(port_num);
 
-    if (bind(client_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-	print_error("Call to bind() failed.");
+    if ((socket_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+	print_error("Error - Failed to open a socket for client.\n");
 
-    close(client_fd);
+    if (connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
+	perror("Error - Failed to connect client to server.\n");
+
+    login_packet.req_type = REQ_LOGIN;
+    strncpy(login_packet.req_username, username, USERNAME_MAX);
+    send(socket_fd, &login_packet, sizeof(login_packet), 0);
+
+    close(socket_fd);
     return 0;
 }
