@@ -18,18 +18,20 @@
 #include "raw.h"
 
 #define BUFF_SIZE 256
+
 #define UNUSED __attribute__((unused))
 
-static char *username;
+static char username[USERNAME_MAX];
+static char active_channel[CHANNEL_MAX];
 static int socket_fd;
 
 //////////////////////////////////
 //// FIXME = ERROR CHECK sendto()
 
-static void client_join(struct sockaddr_in server, const char *query) {
+static void client_join(struct sockaddr_in server, const char *request) {
     struct request_join join_packet;
     join_packet.req_type = REQ_JOIN;
-    char *channel = strchr(query, ' ');
+    char *channel = strchr(request, ' ');
     if (channel == NULL) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
@@ -39,10 +41,10 @@ static void client_join(struct sockaddr_in server, const char *query) {
 		(struct sockaddr *)&server, sizeof(server));
 }
 
-static void client_leave(struct sockaddr_in server, const char *query) {
+static void client_leave(struct sockaddr_in server, const char *request) {
     struct request_leave leave_packet;
     leave_packet.req_type = REQ_LEAVE;
-    char *channel = strchr(query, ' ');
+    char *channel = strchr(request, ' ');
     if (channel == NULL) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
@@ -52,8 +54,13 @@ static void client_leave(struct sockaddr_in server, const char *query) {
 		(struct sockaddr *)&server, sizeof(server));
 }
 
-static void client_say(UNUSED struct sockaddr_in server, UNUSED const char *query) {
-    puts("-- Reached client say...");
+static void client_say(struct sockaddr_in server, const char *request) {
+    struct request_say say_packet;
+    say_packet.req_type = REQ_SAY;
+    strncpy(say_packet.req_channel, active_channel, (CHANNEL_MAX - 1));
+    strncpy(say_packet.req_text, request, (SAY_MAX - 1));
+    sendto(socket_fd, &say_packet, sizeof(say_packet), 0,
+		(struct sockaddr *)&server, sizeof(server));
 }
 
 static void client_list(struct sockaddr_in server) {
@@ -63,10 +70,10 @@ static void client_list(struct sockaddr_in server) {
 		(struct sockaddr *)&server, sizeof(server));
 }
 
-static void client_who(struct sockaddr_in server, const char *query) {
+static void client_who(struct sockaddr_in server, const char *request) {
     struct request_who who_packet;
     who_packet.req_type = REQ_WHO;
-    char *channel = strchr(query, ' ');
+    char *channel = strchr(request, ' ');
     if (channel == NULL) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
@@ -74,6 +81,17 @@ static void client_who(struct sockaddr_in server, const char *query) {
     strncpy(who_packet.req_channel, ++channel, (CHANNEL_MAX - 1));
     sendto(socket_fd, &who_packet, sizeof(who_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
+}
+
+static void client_switch(const char *request) {
+    char *channel = strchr(request, ' ');
+    if (channel == NULL) {
+	fprintf(stdout, "*Unknown command\n");
+	return;
+    }
+    memset(active_channel, 0, sizeof(active_channel));
+    strncpy(active_channel, ++channel, (CHANNEL_MAX - 1));
+    puts(active_channel);
 }
 
 static void client_logout(struct sockaddr_in server) {
@@ -101,7 +119,6 @@ static void client_help(void) {
  * FIXME
  */
 static void cleanup(void) {
-    free(username);
     close(socket_fd);
     cooked_mode();
 }
@@ -156,13 +173,13 @@ int main(int argc, char *argv[]) {
     if (connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
 	print_error("Error - Failed to connect client to server.");
 
-    if ((username = (char *)malloc(USERNAME_MAX + 1)) == NULL)
-	print_error("Error - Unable to allocate a sufficient amount of memory.");
-    strncpy(username, argv[3], USERNAME_MAX);
+    strncpy(username, argv[3], (USERNAME_MAX - 1));
     if (strlen(argv[3]) > USERNAME_MAX) {
 	fprintf(stdout, "Username length exceeds the length allowed (%d)\n", USERNAME_MAX);
 	fprintf(stdout, "Your username will be: %s\n", username);
     }
+
+    strncpy(active_channel, "Common", CHANNEL_MAX);
 
     login_packet.req_type = REQ_LOGIN;
     strncpy(login_packet.req_username, username, USERNAME_MAX);
@@ -177,11 +194,12 @@ int main(int argc, char *argv[]) {
 	i = 0;
 	fprintf(stdout, ">");
 	while ((ch = getchar()) != '\n') {
+	////// FIXME = ADD DELETEING !!
 	    buffer[i++] = ch;
-	    putchar(ch);////FIXME - GET BACKSPACE TO WORK
+	    putchar(ch);
 	}
+	
 	buffer[i] = '\0';
-
 	fprintf(stdout, "\n");
 	if (buffer[0] == '/') {
 	    if (strncmp(buffer, "/join", 5) == 0) {
@@ -192,6 +210,8 @@ int main(int argc, char *argv[]) {
 		client_list(server_addr);
 	    } else if (strncmp(buffer, "/who", 4) == 0) {
 		client_who(server_addr, buffer);
+	    } else if (strncmp(buffer, "/switch", 7) == 0) {
+		client_switch(buffer);
 	    } else if (strncmp(buffer, "/exit", 5) == 0) {
 		client_logout(server_addr);
 		break;
