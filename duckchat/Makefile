@@ -8,8 +8,8 @@ EXECS=client server
 
 all: $(EXECS)
 
-client: client.o raw.o
-	$(CC) $(CFLAGS) client.o raw.o -o client
+client: client.o
+	$(CC) $(CFLAGS) client.o -o client
 
 server: server.o
 	$(CC) $(CFLAGS) server.o -o server
@@ -33,7 +33,6 @@ help:
 clean:
 	rm -f $(OBJECTS) $(EXECS)
 
-client.o: client.c duckchat.h raw.h
-server.o: server.c duckchat.h raw.h
-raw.o: raw.c raw.h
+client.o: client.c duckchat.h
+server.o: server.c duckchat.h
 

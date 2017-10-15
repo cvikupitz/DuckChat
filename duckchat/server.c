@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "duckchat.h"
-#include "raw.h"
 
 #define BUFF_SIZE 4096
 #define UNUSED __attribute__((unused))
