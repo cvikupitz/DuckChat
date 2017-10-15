@@ -1,14 +1,16 @@
 /**
  * client.c
  * Author: Cole Vikupitz
+ * Last Modified: October 17, 2017
  *
  * FIXME - DESCRIPTION
  */
 
-#include <stdio.h>
+#include <stdio.h>  /* FIXME */
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/select.h>
 #include <sys/socket.h>
@@ -19,7 +21,7 @@
 #include "raw.h"
 
 #define BUFF_SIZE 256
-#define MAX_CHANNELS 20
+#define MAX_CHANNELS 10
 #define DEFAULT_CHANNEL "Common"
 #define UNUSED __attribute__((unused))
 
@@ -70,6 +72,7 @@ static void client_leave_request(struct sockaddr_in server, const char *request)
  * FIXME
  */
 static void client_say_request(struct sockaddr_in server, const char *request) {
+    
     struct request_say say_packet;
     say_packet.req_type = REQ_SAY;
     strncpy(say_packet.req_channel, active_channel, (CHANNEL_MAX - 1));
@@ -82,6 +85,7 @@ static void client_say_request(struct sockaddr_in server, const char *request) {
  * FIXME
  */
 static void client_list_request(struct sockaddr_in server) {
+    
     struct request_list list_packet;
     list_packet.req_type = REQ_LIST;
     sendto(socket_fd, &list_packet, sizeof(list_packet), 0,
@@ -106,9 +110,10 @@ static void client_who_request(struct sockaddr_in server, const char *request) {
 }
 
 /**
- * FIXME
+ * Switches the user's currrently active channel to the specified channel name
  */
 static void client_switch_request(const char *request) {
+    
     int i;
     char *channel = strchr(request, ' ');
     if (channel == NULL) {
@@ -130,6 +135,7 @@ static void client_switch_request(const char *request) {
  * FIXME
  */
 static void client_logout_request(struct sockaddr_in server) {
+    
     struct request_logout logout_packet;
     logout_packet.req_type = REQ_LOGOUT;
     sendto(socket_fd, &logout_packet, sizeof(logout_packet), 0,
@@ -141,6 +147,7 @@ static void client_logout_request(struct sockaddr_in server) {
  * to; invoked when the user enters the special command '/subscribed'.
  */
 static void client_subscribed_request(void) {
+    
     int i;
     fprintf(stdout, "Subscribed channels:\n");
     for (i = 0; i < MAX_CHANNELS; i++) {
@@ -180,7 +187,7 @@ static void cleanup(void) {
  * message, then terminates the client application.
  */
 static void print_error(const char *msg) {
-    fprintf(stderr, "Client Error: %s\n", msg);
+    fprintf(stderr, "Client: %s\n", msg);
     exit(0);
 }
 
@@ -192,6 +199,7 @@ int main(int argc, char *argv[]) {
     struct sockaddr_in server;
     struct hostent *host_end;
     struct request_login login_packet;
+    fd_set receiver;
     int port_num, i;
     char ch;
     char buffer[BUFF_SIZE];
@@ -211,8 +219,8 @@ int main(int argc, char *argv[]) {
     /* Print error message and exit otherwise */
     /* Maximum lenght is specified in duckchat.h */
     if (strlen(argv[1]) > UNIX_PATH_MAX) {
-	sprintf(buffer, "Path name to domain socket exceeds the length allowed (%d).",
-		    UNIX_PATH_MAX);
+	sprintf(buffer, "Path name to domain socket length exceeds the length allowed (%d).",
+			UNIX_PATH_MAX);
 	print_error(buffer);
     }
 
@@ -260,19 +268,24 @@ int main(int argc, char *argv[]) {
     sendto(socket_fd, &login_packet, sizeof(login_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
     /* FIXME */
-    sprintf(buffer, "join %s", DEFAULT_CHANNEL);
+    sprintf(buffer, " %s", DEFAULT_CHANNEL);
     client_join_request(server, buffer);
 
     /* Switch terminal to raw mode, terminate if unable */
     if (raw_mode() < 0)
 	print_error("Failed to switch the terminal to raw mode.");
 
+    FD_ZERO(&receiver);
+    FD_SET(socket_fd, &receiver);
+
     while (1) {
+
 
 	i = 0;
 	fprintf(stdout, ">");
 	while ((ch = getchar()) != '\n') {
 	    //// FIXME - DELETE & BACKSPACE
+	    //127 - backspace
 	    if (i != (SAY_MAX - 1)) {
 		buffer[i++] = ch;
 		putchar(ch);
