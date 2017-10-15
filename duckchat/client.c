@@ -17,6 +17,7 @@
 #include "duckchat.h"
 #include "raw.h"
 
+#define BUFF_SIZE 2048
 #define UNUSED __attribute__((unused))
 
 static char username[USERNAME_MAX + 1];
@@ -42,6 +43,7 @@ int main(int argc, char *argv[]) {
     struct hostent *server;
     struct request_login login_packet;
     int port_num;
+    char buffer[BUFF_SIZE];
 
     /* Assert the correct number of arguments were given, print usage otherwise */
     if (argc != 4) {
@@ -73,6 +75,11 @@ int main(int argc, char *argv[]) {
     login_packet.req_type = REQ_LOGIN;
     strncpy(login_packet.req_username, username, USERNAME_MAX);
     send(socket_fd, &login_packet, sizeof(login_packet), 0);
+
+    while (1) {
+	fprintf(stdout, ">");
+	fgets(buffer, sizeof(buffer), stdin);
+    }
 
     close(socket_fd);
     return 0;
