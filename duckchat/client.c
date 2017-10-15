@@ -115,6 +115,10 @@ static void client_help(void) {
     fprintf(stdout, "   /help: Lists all available commands.\n");
 }
 
+UNUSED static void receive_packets(UNUSED void *args) {
+    while (1){}
+}
+
 /**
  * FIXME
  */
@@ -128,15 +132,15 @@ static void cleanup(void) {
  */
 static void print_error(const char *msg) {
     fprintf(stderr, "%s\n", msg);
-    exit(-1);
+    exit(0);
 }
 
 /**
- * FIXME
+ * Runs the client software.
  */
 int main(int argc, char *argv[]) {
 
-    struct sockaddr_in server_addr;
+    struct sockaddr_in server;
     struct hostent *host_end;
     struct request_login login_packet;
     int port_num, i;
@@ -162,15 +166,15 @@ int main(int argc, char *argv[]) {
 	print_error("Error - Failed to locate the host.");
     port_num = atoi(argv[2]);
 
-    bzero((char *)&server_addr, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    bcopy((char *)host_end->h_addr, (char *)&server_addr.sin_addr.s_addr, host_end->h_length);
-    server_addr.sin_port = htons(port_num);
+    bzero((char *)&server, sizeof(server));
+    server.sin_family = AF_INET;
+    bcopy((char *)host_end->h_addr, (char *)&server.sin_addr.s_addr, host_end->h_length);
+    server.sin_port = htons(port_num);
 
     if ((socket_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	print_error("Error - Failed to open a socket for client.");
 
-    if (connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
+    if (connect(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0) ///FIXME - USE BIND?
 	print_error("Error - Failed to connect client to server.");
 
     strncpy(username, argv[3], (USERNAME_MAX - 1));
@@ -179,12 +183,12 @@ int main(int argc, char *argv[]) {
 	fprintf(stdout, "Your username will be: %s\n", username);
     }
 
-    strncpy(active_channel, "Common", CHANNEL_MAX);
+    strncpy(active_channel, "Common", (CHANNEL_MAX - 1));
 
     login_packet.req_type = REQ_LOGIN;
     strncpy(login_packet.req_username, username, USERNAME_MAX);
     sendto(socket_fd, &login_packet, sizeof(login_packet), 0,
-		(struct sockaddr *)&server_addr, sizeof(server_addr));
+		(struct sockaddr *)&server, sizeof(server));
 
     if (raw_mode() < 0)
 	print_error("Error - Failed to switch the terminal to raw mode.");
@@ -195,25 +199,27 @@ int main(int argc, char *argv[]) {
 	fprintf(stdout, ">");
 	while ((ch = getchar()) != '\n') {
 	////// FIXME = ADD DELETEING !!
-	    buffer[i++] = ch;
-	    putchar(ch);
+	    if (i != (SAY_MAX - 1)) {
+		buffer[i++] = ch;
+		putchar(ch);
+	    }
 	}
 	
 	buffer[i] = '\0';
 	fprintf(stdout, "\n");
 	if (buffer[0] == '/') {
 	    if (strncmp(buffer, "/join", 5) == 0) {
-		client_join(server_addr, buffer);
+		client_join(server, buffer);
 	    } else if (strncmp(buffer, "/leave", 6) == 0) {
-		client_leave(server_addr, buffer);
+		client_leave(server, buffer);
 	    } else if (strncmp(buffer, "/list", 5) == 0) {
-		client_list(server_addr);
+		client_list(server);
 	    } else if (strncmp(buffer, "/who", 4) == 0) {
-		client_who(server_addr, buffer);
+		client_who(server, buffer);
 	    } else if (strncmp(buffer, "/switch", 7) == 0) {
 		client_switch(buffer);
 	    } else if (strncmp(buffer, "/exit", 5) == 0) {
-		client_logout(server_addr);
+		client_logout(server);
 		break;
 	    } else if (strncmp(buffer, "/help", 5) == 0) {
 		client_help();
@@ -221,7 +227,7 @@ int main(int argc, char *argv[]) {
 		fprintf(stdout, "*Unknown command\n");
 	    }
 	} else {
-	    client_say(server_addr, buffer);
+	    client_say(server, buffer);
 	}
     }
 
