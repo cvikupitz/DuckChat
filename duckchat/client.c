@@ -19,14 +19,19 @@
 #include "duckchat.h"
 #include "raw.h"
 
-#define BUFF_SIZE 128
+#define BUFF_SIZE 1024
 #define MAX_CHANNELS 10
 #define DEFAULT_CHANNEL "Common"
 
+/*  */
 static struct sockaddr_in server;
+/* The username of the client */
 static char username[USERNAME_MAX];
+/* The client's currently active channel */
 static char active_channel[CHANNEL_MAX];
+/* List of channels the client is currently subscribed/listening to */
 static char subscribed[MAX_CHANNELS][CHANNEL_MAX];
+/*  */
 static int socket_fd;
 
 //// FIXME - ERROR CHECK sendto()
@@ -143,12 +148,19 @@ static void client_leave_request(const char *request) {
 }
 
 /**
- * FIXME
+ * Sends a packet to the server requesting the server to distribute the
+ * client's message. The client will receive the message on their prompt,
+ * and the server is responsible for sending the packets to all other
+ * clients currently on the client's active channel. If the user is not on
+ * an active channel, no message should be sent.
  */
 static void client_say_request(const char *request) {
     
+    /* User is not active in a channel, do nothing */
     if (strcmp(active_channel, "") == 0)
 	return;
+    /* Create & send the say packet to the server */
+    /* Packet should contain the message and active channel */
     struct request_say say_packet;
     say_packet.req_type = REQ_SAY;
     strncpy(say_packet.req_channel, active_channel, (CHANNEL_MAX - 1));
@@ -158,7 +170,9 @@ static void client_say_request(const char *request) {
 }
 
 /**
- * FIXME
+ * Prints out a message to the user, including the user who sent the
+ * message, their active channel, and the message itself. Extracted
+ * from the packet that is received from the server.
  */
 static void server_say_reply(const char *packet) {
     
@@ -168,7 +182,9 @@ static void server_say_reply(const char *packet) {
 }
 
 /**
- * FIXME
+ * Sends a packet to the server requesting the server to return a
+ * list of available channels to the client. Invoked when the user
+ * enters the special command '/list'.
  */
 static void client_list_request(void) {
     
@@ -178,6 +194,11 @@ static void client_list_request(void) {
 		(struct sockaddr *)&server, sizeof(server));
 }
 
+/**
+ * Prints out a list of existing channels currently available to the
+ * client. The list is extracted from the specified packet received
+ * from the server requested from the special command '/list'.
+ */
 static void server_list_reply(const char *packet) {
     
     int i;
@@ -188,15 +209,19 @@ static void server_list_reply(const char *packet) {
 }
 
 /**
- * FIXME
+ * Sends a packet to the server requesting a list of users who are currently
+ * subscribed to the specified channel. Invoked when the user enters the
+ * special command '/who <name>'.
  */
 static void client_who_request(const char *request) {
     
+    /* Parse the request, return with error if failed */
     char *channel = strchr(request, ' ');
     if (channel == NULL) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
     }
+    /* Create & send the who packet to the server */
     struct request_who who_packet;
     who_packet.req_type = REQ_WHO;
     strncpy(who_packet.req_channel, ++channel, (CHANNEL_MAX - 1));
@@ -317,6 +342,7 @@ int main(int argc, char *argv[]) {
 
     struct hostent *host_end;
     struct request_login login_packet;
+    struct request_join join_packet;
     fd_set receiver;
     int port_num, i;
     char ch;
@@ -363,7 +389,7 @@ int main(int argc, char *argv[]) {
     if ((socket_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	print_error("Failed to open a socket for client.");
     /* FIXME */
-    if (connect(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
+    if (connect(socket_fd, (struct sockaddr *)&server, sizeof(server)) != 0)
 	print_error("Failed to connect client to server.");
 
     /* Initialize username string, do not copy more bytes than maximum allowed */
@@ -381,7 +407,7 @@ int main(int argc, char *argv[]) {
     strncpy(subscribed[0], DEFAULT_CHANNEL, (CHANNEL_MAX - 1));
     /* Opens up all other spots for channels to join */
     for (i = 1; i < MAX_CHANNELS; i++)
-    strcpy(subscribed[i], "");
+	strcpy(subscribed[i], "");
 
     /* Send a packet to the server to log user in */
     login_packet.req_type = REQ_LOGIN;
@@ -389,7 +415,6 @@ int main(int argc, char *argv[]) {
     sendto(socket_fd, &login_packet, sizeof(login_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
     /* Send a packet to the server to join the default channel */
-    struct request_join join_packet;
     join_packet.req_type = REQ_JOIN;
     strncpy(join_packet.req_channel, DEFAULT_CHANNEL, (CHANNEL_MAX - 1));
     sendto(socket_fd, &join_packet, sizeof(join_packet), 0,
@@ -410,7 +435,9 @@ int main(int argc, char *argv[]) {
 
 	if (select((socket_fd + 1), &receiver, NULL, NULL, NULL) > 0) {
 	    if (FD_ISSET(socket_fd, &receiver)) {
-	
+		
+		for (i = 0; i < SAY_MAX; i++)
+		    putchar('\b');
 		char in_buff[BUFF_SIZE];
 		recvfrom(socket_fd, in_buff, BUFF_SIZE, 0,
 			(struct sockaddr *)&server, NULL);
