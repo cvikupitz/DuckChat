@@ -12,6 +12,9 @@
 #define BUFF_SIZE 4096
 #define UNUSED __attribute__((unused))
 
+static struct sockaddr_in server;
+
+
 
 /**
  * FIXME
@@ -34,6 +37,11 @@ static void print_error(const char *msg) {
  */
 int main(int argc, char *argv[]) {
 
+    struct hostent *host_end;
+    struct request_login login_packet;
+    fd_set receiver;
+    int port_num, i;
+    char ch;
     char buffer[BUFF_SIZE];
 
     if (argc != 3) {
@@ -50,7 +58,22 @@ int main(int argc, char *argv[]) {
 	print_error(buffer);
     }
 
-    //// FIXME connect server here...
+    /* FIXME */
+    if ((host_end = gethostbyname(argv[1])) == NULL)
+	print_error("Failed to locate the host.");
+    
+    /* Parse port number given by user, assert that it is in valid range */
+    /* Print error message and exit otherwise */
+    /* Port numbers typically go up to 65535 (0-1024 for privileged services) */
+    port_num = atoi(argv[2]);
+    if (port_num < 0 || port_num > 65535)
+	print_error("Server socket must be in the range [0, 65535].");
+
+    /* FIXME */
+    bzero((char *)&server, sizeof(server));
+    server.sin_family = AF_INET;
+    bcopy((char *)host_end->h_addr, (char *)&server.sin_addr.s_addr, host_end->h_length);
+    server.sin_port = htons(port_num);
 
     while (1) {
 	/// FIXME server work here...

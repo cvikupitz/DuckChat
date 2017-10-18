@@ -1,7 +1,6 @@
 /**
  * client.c
  * Author: Cole Vikupitz
- * Last Modified: October 17, 2017
  *
  * FIXME - DESCRIPTION
  */
@@ -20,8 +19,8 @@
 #include "duckchat.h"
 #include "raw.h"
 
-#define BUFF_SIZE 256
-#define MAX_CHANNELS 5
+#define BUFF_SIZE 128
+#define MAX_CHANNELS 10
 #define DEFAULT_CHANNEL "Common"
 
 static struct sockaddr_in server;
@@ -30,20 +29,24 @@ static char active_channel[CHANNEL_MAX];
 static char subscribed[MAX_CHANNELS][CHANNEL_MAX];
 static int socket_fd;
 
-//// FIXME = ERROR CHECK sendto()
-//// FIXME = ERROR CHECK recvfrom()
+//// FIXME - ERROR CHECK sendto()
+//// FIXME - ERROR CHECK recvfrom()
 //// FIXME - recvfrom size; parameters
 //// FIXME - Use bind instead of connect?
 //// FIXME - Add backspace in use input
 //// FIXME - Fix '>' prompt
+//// FIXME - Display text during prompt
 
 /**
- * FIXME
+ * Subscribes the client to the specified channel and the new channel becomes
+ * the client's currently active channe. Returns 1 if successfully joined, or
+ * 0 if not (client is subscribed to maximum number of channels allowed).
  */
 static int join_channel(const char *channel) {
     
     int i;
-
+    /* Search the subscription list to see if client is already subscribed */
+    /* If client is already subscribed, switch it to active channel */
     for (i = 0; i < MAX_CHANNELS; i++) {
 	if (strcmp(subscribed[i], channel) == 0) {
 	    strcpy(active_channel, "");
@@ -52,6 +55,8 @@ static int join_channel(const char *channel) {
 	}
     }
 
+    /* If client not subscribed, search for empty spot in subscription list */
+    /* Add channel if list is not full and return 1, return 0 if list is full */
     for (i = 0; i < MAX_CHANNELS; i++) {
 	if (strcmp(subscribed[i], "") == 0) {
 	    strncpy(subscribed[i], channel, (CHANNEL_MAX - 1));
@@ -64,7 +69,9 @@ static int join_channel(const char *channel) {
 }
 
 /**
- * FIXME
+ * Removes the specified channel from the client's subscription list. If the
+ * client's active channel is the channel being unsubscribed, the active
+ * channel becomes dead (client has no active channel).
  */
 static void leave_channel(const char *channel) {
     
@@ -72,6 +79,7 @@ static void leave_channel(const char *channel) {
     for (i = 0; i < MAX_CHANNELS; i++) {
 	if (strcmp(subscribed[i], channel) == 0) {
 	    strcpy(subscribed[i], "");
+	    /* Check to see if active channel is the one to be left */
 	    if (strcmp(active_channel, channel) == 0)
 		strcpy(active_channel, "");
 	    return;
@@ -80,23 +88,29 @@ static void leave_channel(const char *channel) {
 }
 
 /**
- * FIXME
+ * Sends a packet to the server requesting the client to join a channel.
+ * Invoked when the user enters the command '/join <name>'. The channel
+ * is added to the user's subscription list, only if the client is not
+ * subscribed to the maximum number of channels allowed. Otherwise, the
+ * channel is added and becomes the client's active channel.
  */
 static void client_join_request(const char *request) {
     
+    /* Parse the request, return with error if failed */
     char *channel = strchr(request, ' ');
     if (channel == NULL) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
     }
-
+    /* Attempt to add channel to subscription list */
+    /* Return with error if subscription list is currently full */
     ++channel;
     if (!join_channel(channel)) {
 	fprintf(stdout, "Cannot join channel, subscribed to the maximum allowed (%d)\n",
 		MAX_CHANNELS);
 	return;
     }
-    
+    /* Create & send the join channel packet to the server */
     struct request_join join_packet;
     join_packet.req_type = REQ_JOIN;
     strncpy(join_packet.req_channel, channel, (CHANNEL_MAX - 1));
@@ -105,19 +119,22 @@ static void client_join_request(const char *request) {
 }
 
 /**
- * FIXME
+ * Sends a packet to the server requesting the client to leave the specified
+ * channel. Invoked when the user enters the command '/leave <name>'. The
+ * channel is removed from the user's local subscription list.
  */
 static void client_leave_request(const char *request) {
     
+    /* Parse the request, return with error if failed */
     char *channel = strchr(request, ' ');
     if (channel == NULL) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
     }
-    
+    /* Removes the channel from the subscription list */
     channel++;
     leave_channel(channel);
-
+    /* Create & send the leave packet to the server */
     struct request_leave leave_packet;
     leave_packet.req_type = REQ_LEAVE;
     strncpy(leave_packet.req_channel, channel, (CHANNEL_MAX - 1));
@@ -318,7 +335,7 @@ int main(int argc, char *argv[]) {
 
     /* Assert that path name to unix domain socket does not exceed maximum allowed */
     /* Print error message and exit otherwise */
-    /* Maximum lenght is specified in duckchat.h */
+    /* Maximum length is specified in duckchat.h */
     if (strlen(argv[1]) > UNIX_PATH_MAX) {
 	sprintf(buffer, "Path name to domain socket length exceeds the length allowed (%d).",
 			UNIX_PATH_MAX);
@@ -393,7 +410,7 @@ int main(int argc, char *argv[]) {
 
 	if (select((socket_fd + 1), &receiver, NULL, NULL, NULL) > 0) {
 	    if (FD_ISSET(socket_fd, &receiver)) {
-		
+	
 		char in_buff[BUFF_SIZE];
 		recvfrom(socket_fd, in_buff, BUFF_SIZE, 0,
 			(struct sockaddr *)&server, NULL);
@@ -407,6 +424,7 @@ int main(int argc, char *argv[]) {
 		} else if (packet_type->txt_type == TXT_ERROR) {
 		    server_error_reply(in_buff);
 		} else { /* Do nothing, likely a bogus packet */ }
+
 	    }
 
 	    if (FD_ISSET(STDIN_FILENO, &receiver)) {
@@ -421,21 +439,21 @@ int main(int argc, char *argv[]) {
 		buffer[i] = '\0';
 		fprintf(stdout, "\n");
 		if (buffer[0] == '/') {
-		    if (strncmp(buffer, "/join", 5) == 0) {
+		    if (strncmp(buffer, "/join ", 6) == 0) {
 			client_join_request(buffer);
-		    } else if (strncmp(buffer, "/leave", 6) == 0) {
+		    } else if (strncmp(buffer, "/leave ", 7) == 0) {
 			client_leave_request(buffer);
-		    } else if (strncmp(buffer, "/list", 5) == 0) {
+		    } else if (strcmp(buffer, "/list") == 0) {
 			client_list_request();
-		    } else if (strncmp(buffer, "/who", 4) == 0) {
+		    } else if (strncmp(buffer, "/who ", 5) == 0) {
 			client_who_request(buffer);
-		    } else if (strncmp(buffer, "/switch", 7) == 0) {
+		    } else if (strncmp(buffer, "/switch ", 8) == 0) {
 			client_switch_request(buffer);
-		    } else if (strncmp(buffer, "/subscribed", 11) == 0) {
+		    } else if (strcmp(buffer, "/subscribed") == 0) {
 			client_subscribed_request();
-		    } else if (strncmp(buffer, "/help", 5) == 0) {
+		    } else if (strcmp(buffer, "/help") == 0) {
 			client_help_request();
-		    } else if (strncmp(buffer, "/exit", 5) == 0) {
+		    } else if (strcmp(buffer, "/exit") == 0) {
 			client_logout_request();
 			break;
 		    } else {
@@ -446,7 +464,6 @@ int main(int argc, char *argv[]) {
 		}
 	    }
 	}
-	
     }
 
     return 0;
