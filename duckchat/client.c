@@ -5,25 +5,25 @@
  * FIXME - DESCRIPTION
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/select.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include "duckchat.h"
-#include "raw.h"
+#include <stdio.h>	    /* fprintf, sprintf, getchar */
+#include <stdlib.h>	    /* atoi, exit, atexit */
+#include <string.h>	    /* strchr, strcmp, strncmp, memset, ... */
+#include <unistd.h>	    /* close, STDIN_FILENO */
+#include <sys/time.h>	    /* FIXME */
+#include <sys/types.h>	    /* FIXME */
+#include <sys/select.h>	    /* FIXME */
+#include <sys/socket.h>	    /* FIXME */
+#include <netinet/in.h>	    /* FIXME */
+#include <arpa/inet.h>	    /* FIXME */
+#include <netdb.h>	    /* gethostbyname, hostent struct */
+#include "duckchat.h"	    /* Packet structs, macros for username/channel/message lenghts */
+#include "raw.h"	    /* raw_mode, cooked_mode */
 
-#define BUFF_SIZE 1024
-#define MAX_CHANNELS 10
-#define DEFAULT_CHANNEL "Common"
+#define BUFF_SIZE 4096		    /* Buffer size for messages and packets */
+#define MAX_CHANNELS 10		    /* Maximum channels client may be subscribed to */
+#define DEFAULT_CHANNEL "Common"    /* Default channel to join upon login */
 
-/*  */
+/* Socket address for the server */
 static struct sockaddr_in server;
 /* The username of the client */
 static char username[USERNAME_MAX];
@@ -31,13 +31,12 @@ static char username[USERNAME_MAX];
 static char active_channel[CHANNEL_MAX];
 /* List of channels the client is currently subscribed/listening to */
 static char subscribed[MAX_CHANNELS][CHANNEL_MAX];
-/*  */
+/* File descriptor for the client's socket */
 static int socket_fd;
 
 //// FIXME - ERROR CHECK sendto()
 //// FIXME - ERROR CHECK recvfrom()
 //// FIXME - recvfrom size; parameters
-//// FIXME - Use bind instead of connect?
 //// FIXME - Add backspace in use input
 //// FIXME - Fix '>' prompt
 //// FIXME - Display text during prompt
@@ -109,7 +108,7 @@ static void client_join_request(const char *request) {
     }
     /* Attempt to add channel to subscription list */
     /* Return with error if subscription list is currently full */
-    ++channel;
+    ++channel;	/* Skip leading whitespace character */
     if (!join_channel(channel)) {
 	fprintf(stdout, "Cannot join channel, subscribed to the maximum allowed (%d)\n",
 		MAX_CHANNELS);
@@ -137,7 +136,7 @@ static void client_leave_request(const char *request) {
 	return;
     }
     /* Removes the channel from the subscription list */
-    channel++;
+    ++channel;	/* Skip leading whitespace character */
     leave_channel(channel);
     /* Create & send the leave packet to the server */
     struct request_leave leave_packet;
@@ -230,7 +229,9 @@ static void client_who_request(const char *request) {
 }
 
 /**
- * FIXME
+ * Prints out a list of users who are currently subscribed to the specified
+ * channel. The list is extracted from the packet received from the server
+ * requested from the special command '/who <name>'.
  */
 static void server_who_reply(const char *packet) {
     
@@ -242,25 +243,30 @@ static void server_who_reply(const char *packet) {
 }
 
 /**
- * FIXME
+ * Switched the client's currently active channel to the specified channel.
+ * Invoked when the user enters the special command '/switch <name>'. If the
+ * client is not subscribed to the specified channel, nothing should happen;
+ * just print an error message to the user.
  */
 static void client_switch_request(const char *request) {
     
-    int i;
+    /* Parse the request, return with error if failed */
     char *channel = strchr(request, ' ');
     if (channel == NULL) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
     }
 
-    ++channel;
+    int i;
+    ++channel;	/* Skip leading whitespace character */
     for (i = 0; i < MAX_CHANNELS; i++) {
 	if (strcmp(subscribed[i], channel) == 0) {
+	    /* Channel found in subscription list, switch it to active */
 	    memset(active_channel, 0, sizeof(active_channel));
 	    strncpy(active_channel, channel, (CHANNEL_MAX - 1));
 	    return;
 	}
-    }
+    }	/* Channel not found in list at this point, print status to user */
     fprintf(stdout, "You are not subscribed to the channel %s\n", channel);
 }
 
@@ -312,7 +318,7 @@ static void client_logout_request(void) {
  * received from the server.
  */
 static void server_error_reply(const char *packet) {
-
+    
     struct text_error *error_packet = (struct text_error *) packet;
     fprintf(stdout, "%s\n", error_packet->txt_error);
 }
@@ -322,6 +328,7 @@ static void server_error_reply(const char *packet) {
  * was using and switches terminal back to cooked mode.
  */
 static void cleanup(void) {
+    
     close(socket_fd);
     cooked_mode();
 }
@@ -331,6 +338,7 @@ static void cleanup(void) {
  * message, then terminates the client application.
  */
 static void print_error(const char *msg) {
+    
     fprintf(stderr, "Client: %s\n", msg);
     exit(0);
 }
@@ -344,7 +352,7 @@ int main(int argc, char *argv[]) {
     struct request_login login_packet;
     struct request_join join_packet;
     fd_set receiver;
-    int port_num, i;
+    int port_num, i, j;
     char ch;
     char buffer[BUFF_SIZE];
 
@@ -359,6 +367,10 @@ int main(int argc, char *argv[]) {
     if ((atexit(cleanup)) != 0)
 	print_error("Call to atexit() failed.");
 
+    /* Switch terminal to raw mode, terminate if unable */
+    if (raw_mode() < 0)
+	print_error("Failed to switch terminal to raw mode.");
+
     /* Assert that path name to unix domain socket does not exceed maximum allowed */
     /* Print error message and exit otherwise */
     /* Maximum length is specified in duckchat.h */
@@ -368,7 +380,7 @@ int main(int argc, char *argv[]) {
 	print_error(buffer);
     }
 
-    /* FIXME */
+    /* Obtain the address of the specified host */
     if ((host_end = gethostbyname(argv[1])) == NULL)
 	print_error("Failed to locate the host.");
     
@@ -379,17 +391,16 @@ int main(int argc, char *argv[]) {
     if (port_num < 0 || port_num > 65535)
 	print_error("Server socket must be in the range [0, 65535].");
 
-    /* FIXME */
-    bzero((char *)&server, sizeof(server));
+    /* Create server address struct, set internet family, address, & port number */
+    memset((char *)&server, 0, sizeof(server));
     server.sin_family = AF_INET;
-    bcopy((char *)host_end->h_addr, (char *)&server.sin_addr.s_addr, host_end->h_length);
+    memcpy((char *)host_end->h_addr, (char *)&server.sin_addr.s_addr, host_end->h_length);
     server.sin_port = htons(port_num);
 
-    /* FIXME */
+    /* Create the UDP socket & connect client to server */
     if ((socket_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-	print_error("Failed to open a socket for client.");
-    /* FIXME */
-    if (connect(socket_fd, (struct sockaddr *)&server, sizeof(server)) != 0)
+	print_error("Failed to create a socket for client.");
+    if (connect(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
 	print_error("Failed to connect client to server.");
 
     /* Initialize username string, do not copy more bytes than maximum allowed */
@@ -420,11 +431,7 @@ int main(int argc, char *argv[]) {
     sendto(socket_fd, &join_packet, sizeof(join_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
 
-    /* Switch terminal to raw mode, terminate if unable */
-    if (raw_mode() < 0) {
-	client_logout_request();
-	print_error("Failed to switch the terminal to raw mode.");
-    }
+
 
     while (1) {
 
@@ -432,12 +439,16 @@ int main(int argc, char *argv[]) {
 	FD_ZERO(&receiver);
 	FD_SET(socket_fd, &receiver);
 	FD_SET(STDIN_FILENO, &receiver);
+	memset(buffer, 0, BUFF_SIZE);
+	
+	fprintf(stdout, ">");
+	fflush(stdout);
 
 	if (select((socket_fd + 1), &receiver, NULL, NULL, NULL) > 0) {
 	    if (FD_ISSET(socket_fd, &receiver)) {
 		
-		for (i = 0; i < SAY_MAX; i++)
-		    putchar('\b');
+		for (j = 0; j < SAY_MAX; j++) putchar('\b');
+
 		char in_buff[BUFF_SIZE];
 		recvfrom(socket_fd, in_buff, BUFF_SIZE, 0,
 			(struct sockaddr *)&server, NULL);
@@ -451,7 +462,8 @@ int main(int argc, char *argv[]) {
 		} else if (packet_type->txt_type == TXT_ERROR) {
 		    server_error_reply(in_buff);
 		} else { /* Do nothing, likely a bogus packet */ }
-
+		
+		for (j = 0; j < i; j++) putchar(buffer[j]);
 	    }
 
 	    if (FD_ISSET(STDIN_FILENO, &receiver)) {
@@ -493,5 +505,6 @@ int main(int argc, char *argv[]) {
 	}
     }
 
+    /* User successfully logs off client */
     return 0;
 }
