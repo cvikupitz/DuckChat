@@ -53,6 +53,18 @@ static HashMap *channels = NULL;
 /**
  * FIXME
  */
+static void server_send_error(const char *msg, struct sockaddr_in *client_addr) {
+    
+    struct text_error error_packet;
+    error_packet.txt_type = TXT_ERROR;
+    strncpy(error_packet.txt_error, msg, (SAY_MAX - 1));
+    sendto(socket_fd, &error_packet, sizeof(error_packet), 0,
+		(struct sockaddr *)client_addr, sizeof(client_addr));
+}
+
+/**
+ * FIXME
+ */
 static void server_login_request(const char *packet, char *client_ip,
 				struct sockaddr_in *client_addr) {
 
@@ -61,12 +73,7 @@ static void server_login_request(const char *packet, char *client_ip,
 
     strncpy(username, login_packet->req_username, (USERNAME_MAX - 1));
     if (!hm_put(users, client_ip, strdup(username), NULL)) {
-	struct text_error error_packet;
-	error_packet.txt_type = TXT_ERROR;
-	strncpy(error_packet.txt_error, "Error: Failed to log into the server.",
-		(SAY_MAX - 1));
-	sendto(socket_fd, &error_packet, sizeof(error_packet), 0,
-		(struct sockaddr *)client_addr, sizeof(client_addr));
+	server_send_error("Error: Failed to log into the server.", client_addr);
 	return;
     }
 
@@ -206,7 +213,7 @@ int main(int argc, char *argv[]) {
 		server_logout_request(buffer);
 		break;
 	    case REQ_JOIN:
-		server_join_request(buffer, client_ip);
+		server_join_request(buffer);
 		break;
 	    case REQ_LEAVE:
 		server_leave_request(buffer);
