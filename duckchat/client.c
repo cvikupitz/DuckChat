@@ -2,14 +2,17 @@
  * client.c
  * Author: Cole Vikupitz
  *
- * FIXME - DESCRIPTION
+ * Client side of a chat application using the DuckChat protocol. The client sends
+ * and receives packets from a server using this protocol and handles each of the
+ * packets accordingly.
+ *
+ * Usage: ./client server_socket server_port username
  */
 
 #include <stdio.h> 
 #include <stdlib.h>
 #include <string.h>
 #include <sys/unistd.h>
-#include <sys/fcntl.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/select.h>
@@ -42,10 +45,6 @@ static char subscribed[MAX_CHANNELS][CHANNEL_MAX];
 /* File descriptor for the client's socket */
 static int socket_fd = -1;
 
-//// FIXME - ERROR CHECK sendto()
-//// FIXME - ERROR CHECK recvfrom()
-//// FIXME - recvfrom size; parameters
-//// FIXME - PAcket stays after server terminates
 
 /**
  * Subscribes the client to the specified channel and the new channel becomes
@@ -362,7 +361,7 @@ int main(int argc, char *argv[]) {
     fd_set receiver;
     int port_num, i, j;
     char ch;
-    char buffer[BUFF_SIZE];
+    char buffer[BUFF_SIZE], in_buff[BUFF_SIZE];
 
     /* Assert that the correct number of arguments were given */
     /* Print program usage otherwise */
@@ -410,7 +409,6 @@ int main(int argc, char *argv[]) {
 	print_error("Failed to create a socket for client.");
     if (connect(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
 	print_error("Failed to connect client to server.");
-    fcntl(socket_fd, F_SETFL, O_NONBLOCK);
 
     /* Initialize username string, do not copy more bytes than maximum allowed */
     /* If the length is too long, notify user, but don't exit */
@@ -442,65 +440,81 @@ int main(int argc, char *argv[]) {
 
     /* Displays the title and prompt */
     i = 0;
-    fprintf(stdout, "%s\n", TITLE);
+    fprintf(stdout, "\n%s\n", TITLE);
     fprintf(stdout, "Type '/help' for help, '/exit' to exit.\n\n");
     PROMPT;
 
     /**
-     * FIXME
+     * Main application loop. Sends/receives packets to/from the server.
      */
     while (1) {
 
+	/* Watch either the stdin or the socket stream for input */
 	FD_ZERO(&receiver);
 	FD_SET(socket_fd, &receiver);
 	FD_SET(STDIN_FILENO, &receiver);
 
+	/* Either data arrived in stdin or socket stream */
 	if (select((socket_fd + 1), &receiver, NULL, NULL, NULL)) {
 	    
 	    /**
-	     * FIXME
+	     * Input was received from the socket stream, a message arrived to the client.
+	     *
+	     * The message is received with recv(), and the type of message is parsed by
+	     * the 32-bit identifier. The rest of the packet is then dealt with accordingly.
 	     */
 	    if (FD_ISSET(socket_fd, &receiver)) {
 
-		char in_buff[BUFF_SIZE];
-		recvfrom(socket_fd, in_buff, sizeof(in_buff), 0,
-			    (struct sockaddr *)&server, NULL);
+		/* Receive incoming packet, parse the identifier */
+		memset(in_buff, 0, sizeof(in_buff));
+		if (recv(socket_fd, in_buff, sizeof(in_buff), 0) < 0)
+		    continue;
 		struct text *packet_type = (struct text *) in_buff;
 
+		/* Erases all typed text in the prompt to make space for message */
 		for (j = 0; j < (i + 2); j++) {
-		    putchar('\b');
-		    putchar(' ');
-		    putchar('\b');
+		    putchar('\b'); putchar(' '); putchar('\b');
 		}
 
 		if (packet_type->txt_type == TXT_SAY) {
+		    /* Message received from another client */
 		    server_say_reply(in_buff);
 		} else if (packet_type->txt_type == TXT_LIST) {
+		    /* List server's available channels */
 		    server_list_reply(in_buff);
 		} else if (packet_type->txt_type == TXT_WHO) {
+		    /* List users on a server's channel */
 		    server_who_reply(in_buff);
 		} else if (packet_type->txt_type == TXT_ERROR) {
+		    /* Error message received from the server */
 		    server_error_reply(in_buff);
 		} else {  /* Do nothing, likely a bogus packet */  }
 	
+		/* Redisplays the prompt and all text the user typed in before */
 		PROMPT;
 		for (j = 0; j < i; j++) putchar(buffer[j]);
 		fflush(stdout);
-
 	    }
 
 	    /**
-	     * FIXME
+	     * Input was received from the stdin stream, user entered a character.
+	     *
+	     * The client must output any messages it receives while the user is
+	     * typing in the prompt. To achieve this, the client reads and outputs
+	     * one character at a time. In the tests provided, the client did not
+	     * do this; messages received while the user was typing did not show
+	     * until the user entered the message.
 	     */
 	    if (FD_ISSET(STDIN_FILENO, &receiver)) {
-
 		if ((ch = getchar()) != '\n') {
-		    if (ch == 127 && i != 0) {
+
+		    if (ch == 127) {
+			/* User pressed backspace, erase character from prompt */
+			if (i == 0) continue;
 			i--;
-			putchar('\b');
-			putchar(' ');
-			putchar('\b');
+			putchar('\b'); putchar(' '); putchar('\b');
 		    } else if (i != (SAY_MAX - 1)) {
+			/* Display character on prompt, add to buffer */
 			buffer[i++] = ch;
 			putchar(ch);
 		    } 
@@ -550,7 +564,8 @@ int main(int argc, char *argv[]) {
 		} else {
 		    /* No special command given, send say message to server */
 		    client_say_request(buffer);
-		} PROMPT;
+		}
+		PROMPT;
 	    }
 	}
     }
