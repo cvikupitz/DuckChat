@@ -25,10 +25,12 @@
 
 /* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 10000
-/* FIXME */
+/* Maximum number of channels allowed on the server at a time */
 #define MAX_CHANNELS 100
-/* FIXME */
+/* Maximum number of users allowed on a channel at a time */
 #define MAX_CHANNEL_USERS 50
+/* FIXME */
+#define DEFAULT_CHANNEL "Common"
 /* Refresh rate (in minutes) of the server to forcefully logout inactive users */
 #define REFRESH_RATE 2
 
@@ -50,9 +52,7 @@ UNUSED static void server_join_channel(UNUSED const char *packet) {}
 UNUSED static void server_leave_channel(UNUSED const char *packet) {}
 
 /***/
-UNUSED static void sever_logout_user(UNUSED const char *packet) {
-    
-}
+UNUSED static void sever_logout_user(UNUSED const char *packet) {}
 
 /**
  * Prints the specified message to standard error stream as a program error
@@ -122,8 +122,8 @@ int main(int argc, char *argv[]) {
 
     while (1) {
     
+	
     }
-
 
     return 0;
 }
