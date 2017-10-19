@@ -12,8 +12,8 @@
 #include <stdio.h> 
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <sys/unistd.h>
-#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/select.h>
 #include <sys/socket.h>
@@ -24,7 +24,7 @@
 #include "hashmap.h"
 
 /* Maximum buffer size for messages and packets */
-#define BUFF_SIZE 1024
+#define BUFF_SIZE 10000
 /* FIXME */
 #define MAX_CHANNELS 100
 /* FIXME */
@@ -36,8 +36,23 @@
 
 
 static struct sockaddr_in server;
-static int socket_fd;
+static int socket_fd = -1;
+static HashMap *users = NULL;
 
+
+/***/
+UNUSED static void server_login_user(UNUSED const char *packet) {}
+
+/***/
+UNUSED static void server_join_channel(UNUSED const char *packet) {}
+
+/***/
+UNUSED static void server_leave_channel(UNUSED const char *packet) {}
+
+/***/
+UNUSED static void sever_logout_user(UNUSED const char *packet) {
+    
+}
 
 /**
  * Prints the specified message to standard error stream as a program error
@@ -73,6 +88,10 @@ int main(int argc, char *argv[]) {
 	print_error(buffer);
     }
 
+    /* FIXME */
+    if ((users = hm_create(100L, 0.0f)) == NULL)
+	print_error("");
+
     /* Parse port number given by user, assert that it is in valid range */
     /* Print error message and exit otherwise */
     /* Port numbers typically go up to 65535 (0-1024 for privileged services) */
@@ -96,6 +115,13 @@ int main(int argc, char *argv[]) {
 
     /* FIXME...... */
 
+    time_t clock;
+    time(&clock);
+    fprintf(stdout, "Launched DuckChat server ~ %s", ctime(&clock));
+
+    while (1) {
+    
+    }
 
     return 0;
 }
