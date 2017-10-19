@@ -23,12 +23,12 @@
 /* Buffer size for messages and packets */
 #define BUFF_SIZE 1024
 /* Maximum channels client may be subscribed to */
-#define MAX_CHANNELS 15
+#define MAX_CHANNELS 20
 /* Default channel to join upon login */
 #define DEFAULT_CHANNEL "Common"
 /* Title to display upon successful login */
 #define TITLE "----------  Duck Chat v1.1  ----------"
-/* The user prompt */
+/* Prompt to display to user for input */
 #define PROMPT {fprintf(stdout, "$ ");fflush(stdout);}
 
 /* Socket address for the server */
@@ -416,8 +416,8 @@ int main(int argc, char *argv[]) {
     /* Max length specified in duckchat.h */
     strncpy(username, argv[3], (USERNAME_MAX - 1));
     if (strlen(argv[3]) > USERNAME_MAX) {
-	fprintf(stdout, "* Username length exceeds the length allowed (%d).\n", USERNAME_MAX);
-	fprintf(stdout, "* Your username will be: %s\n", username);
+	fprintf(stdout, "*** Username length exceeds the length allowed (%d).\n", USERNAME_MAX);
+	fprintf(stdout, "*** Your username will be: %s\n", username);
     }
 
     /* Subscribe and join the default channel upon login */
@@ -439,13 +439,15 @@ int main(int argc, char *argv[]) {
     sendto(socket_fd, &join_packet, sizeof(join_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
 
-    /**
-     * FIXME
-     */
+    /* Displays the title and prompt */
     i = 0;
     fprintf(stdout, "%s\n", TITLE);
     PROMPT;
-    for (;;) {
+
+    /**
+     * FIXME
+     */
+    while (1) {
 
 	FD_ZERO(&receiver);
 	FD_SET(socket_fd, &receiver);
@@ -453,6 +455,9 @@ int main(int argc, char *argv[]) {
 
 	if (select((socket_fd + 1), &receiver, NULL, NULL, NULL)) {
 	    
+	    /**
+	     * FIXME
+	     */
 	    if (FD_ISSET(socket_fd, &receiver)) {
 
 		char in_buff[BUFF_SIZE];
@@ -461,7 +466,11 @@ int main(int argc, char *argv[]) {
 		recvfrom(socket_fd, in_buff, BUFF_SIZE, 0,
 			    (struct sockaddr *)&server, NULL);
 
-		for (j = 0; j < SAY_MAX; j++) putchar('\b');
+		for (j = 0; j < (i + 2); j++) {
+		    putchar('\b');
+		    putchar(' ');
+		    putchar('\b');
+		}
 
 		if (packet_type->txt_type == TXT_SAY) {
 		    server_say_reply(in_buff);
@@ -479,6 +488,9 @@ int main(int argc, char *argv[]) {
 
 	    }
 
+	    /**
+	     * FIXME
+	     */
 	    if (FD_ISSET(STDIN_FILENO, &receiver)) {
 
 		if ((ch = getchar()) != '\n') {
@@ -495,37 +507,49 @@ int main(int argc, char *argv[]) {
 		    continue;
 		}
 		
+		/* End user input with null byte for string comparisons */
 		buffer[i] = '\0';
 		i = 0;
 		fprintf(stdout, "\n");
 
+		/* If the first character of input is '/', interpret as special command */
 		if (buffer[0] == '/') {
 		    if (strncmp(buffer, "/join ", 6) == 0) {
+			/* User joins/subscribes to a channel */
 			client_join_request(buffer);
 		    } else if (strncmp(buffer, "/leave ", 7) == 0) {
+			/* User unsubscribes from a channel */
 			client_leave_request(buffer);
 		    } else if (strcmp(buffer, "/list") == 0) {
+			/* User requests list of all channels on server */
 			client_list_request();
 		    } else if (strncmp(buffer, "/who ", 5) == 0) {
+			/* User requests list of users on a channel */
 			client_who_request(buffer);
 		    } else if (strncmp(buffer, "/switch ", 8) == 0) {
+			/* User switches active channel to another channel */
 			client_switch_request(buffer);
 		    } else if (strcmp(buffer, "/subscribed") == 0) {
+			/* User lists their subscribed channels */
 			client_subscribed_request();
 		    } else if (strcmp(buffer, "/clear") == 0) {
+			/* User clears the prompt */
 			system("clear");
 		    } else if (strcmp(buffer, "/help") == 0) {
+			/* User prints help message */
 			client_help_request();
 		    } else if (strcmp(buffer, "/exit") == 0) {
+			/* User exits the client */
 			client_logout_request();
 			break;
 		    } else {
+			/* Unknown special command */
 			fprintf(stdout, "*Unknown command\n");
 		    }
 		} else {
+		    /* No special command given, send say message to server */
 		    client_say_request(buffer);
-		}
-		PROMPT;
+		} PROMPT;
 	    }
 	}
     }
