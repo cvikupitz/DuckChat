@@ -479,20 +479,23 @@ int main(int argc, char *argv[]) {
 		    putchar('\b'); putchar(' '); putchar('\b');
 		}
 
-		if (packet_type->txt_type == TXT_SAY) {
-		    /* Message received from another client */
-		    server_say_reply(in_buff);
-		} else if (packet_type->txt_type == TXT_LIST) {
-		    /* List server's available channels */
-		    server_list_reply(in_buff);
-		} else if (packet_type->txt_type == TXT_WHO) {
-		    /* List users on a server's channel */
-		    server_who_reply(in_buff);
-		} else if (packet_type->txt_type == TXT_ERROR) {
-		    /* Error message received from the server */
-		    server_error_reply(in_buff);
-		} else {  /* Do nothing, likely a bogus packet */  }
-	
+		switch (packet_type->txt_type) {
+		    case TXT_SAY:   /* Message received from another client */
+			server_say_reply(in_buff);
+			break;
+		    case TXT_LIST:  /* List server's available channels */
+			server_list_reply(in_buff);
+			break;
+		    case TXT_WHO:   /* List users on a server's channel */
+			server_who_reply(in_buff);
+			break;
+		    case TXT_ERROR: /* Error message received from the server */
+			server_error_reply(in_buff);
+			break;
+		    default:	/* Do nothing, likely a bogus packet */
+			break;
+		}
+
 		/* Redisplays the prompt and all text the user typed in before */
 		PROMPT;
 		for (j = 0; j < i; j++) putchar(buffer[j]);

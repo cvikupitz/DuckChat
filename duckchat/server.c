@@ -23,6 +23,7 @@
 #include "duckchat.h"
 #include "hashmap.h"
 
+
 /* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 10000
 /* Maximum number of channels allowed on the server at a time */
@@ -41,18 +42,45 @@ static struct sockaddr_in server;
 static int socket_fd = -1;
 static HashMap *users = NULL;
 
+typedef struct user {
+
+} User;
+
 
 /***/
-UNUSED static void server_login_user(UNUSED const char *packet) {}
+static void server_login_request(UNUSED const char *packet) {
+    puts("LOGIN packet received.");
+}
 
 /***/
-UNUSED static void server_join_channel(UNUSED const char *packet) {}
+static void server_join_request(UNUSED const char *packet) {
+    puts("JOIN packet received.");
+}
 
 /***/
-UNUSED static void server_leave_channel(UNUSED const char *packet) {}
+static void server_leave_request(UNUSED const char *packet) {
+    puts("LEAVE packet received.");
+}
 
 /***/
-UNUSED static void sever_logout_user(UNUSED const char *packet) {}
+static void server_say_request(UNUSED const char *packet) {
+    puts("SAY packet received.");
+}
+
+/***/
+static void server_list_request(UNUSED const char *packet) {
+    puts("LIST packet received.");
+}
+
+/***/
+static void server_who_request(UNUSED const char *packet) {
+    puts("WHO packet received.");
+}
+
+/***/
+static void server_logout_request(UNUSED const char *packet) {
+    puts("LOGOUT packet received.");
+}
 
 /**
  * Prints the specified message to standard error stream as a program error
@@ -68,7 +96,11 @@ static void print_error(const char *msg) {
  */
 int main(int argc, char *argv[]) {
 
+    struct sockaddr from_addr;
     struct hostent *host_end;
+    struct tm *timestamp;
+    time_t timer;
+    socklen_t addr_len = sizeof(server);
     int port_num;
     char buffer[BUFF_SIZE];
 
@@ -88,9 +120,7 @@ int main(int argc, char *argv[]) {
 	print_error(buffer);
     }
 
-    /* FIXME */
-    if ((users = hm_create(100L, 0.0f)) == NULL)
-	print_error("");
+    
 
     /* Parse port number given by user, assert that it is in valid range */
     /* Print error message and exit otherwise */
@@ -112,17 +142,50 @@ int main(int argc, char *argv[]) {
     if (bind(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
 	print_error("Failed to assign the requested address.");
 
+    /* FIXME */
+    if ((users = hm_create(250L, 0.0f)) == NULL)
+	print_error("Failed to allocate a sufficient amount of memory.");
 
-    /* FIXME...... */
-
-    time_t clock;
-    time(&clock);
-    fprintf(stdout, "Launched DuckChat server ~ %s", ctime(&clock));
-    fprintf(stdout, "Server assigned to address %s:%d\n", inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+    time(&timer);
+    fprintf(stdout, "* Launched DuckChat server ~ %s", ctime(&timer)); 
+    fprintf(stdout, "* Server assigned to address %s:%d\n", inet_ntoa(server.sin_addr),
+	    ntohs(server.sin_port));
 
     while (1) {
     
-	
+	memset(buffer, 0, sizeof(buffer));
+	recvfrom(socket_fd, buffer, sizeof(buffer), 0, &from_addr, &addr_len);
+	time(&timer);
+	timestamp = localtime(&timer);
+	fprintf(stdout, "[%02d/%02d/%d %02d:%02d] ", timestamp->tm_mon, timestamp->tm_mday,
+		(1900 + timestamp->tm_year), timestamp->tm_hour, timestamp->tm_min);
+	struct text *packet_type = (struct text *) buffer;
+
+	switch (packet_type->txt_type) {
+	    case REQ_LOGIN:
+		server_login_request(buffer);
+		break;
+	    case REQ_LOGOUT:
+		server_logout_request(buffer);
+		break;
+	    case REQ_JOIN:
+		server_join_request(buffer);
+		break;
+	    case REQ_LEAVE:
+		server_leave_request(buffer);
+		break;
+	    case REQ_SAY:
+		server_say_request(buffer);
+		break;
+	    case REQ_LIST:
+		server_list_request(buffer);
+		break;
+	    case REQ_WHO:
+		server_who_request(buffer);
+		break;
+	    default:	/* Do nothing, likey a bogus packet */
+		break;
+	}
     }
 
     return 0;
