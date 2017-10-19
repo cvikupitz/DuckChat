@@ -40,11 +40,37 @@
 
 static struct sockaddr_in server;
 static int socket_fd = -1;
+static HashMap *users = NULL;
+static HashMap *channels = NULL;
+
+/*typedef struct user {
+    char *ip_addr;
+    char *username;
+    int is_alive;
+} User;*/
 
 
-/***/
-static void server_login_request(UNUSED const char *packet) {
-    puts("LOGIN packet received.");
+/**
+ * FIXME
+ */
+static void server_login_request(const char *packet, char *client_ip,
+				struct sockaddr_in *client_addr) {
+
+    char username[USERNAME_MAX];
+    struct request_login *login_packet = (struct request_login *) packet;
+
+    strncpy(username, login_packet->req_username, (USERNAME_MAX - 1));
+    if (!hm_put(users, client_ip, strdup(username), NULL)) {
+	struct text_error error_packet;
+	error_packet.txt_type = TXT_ERROR;
+	strncpy(error_packet.txt_error, "Error: Failed to log into the server.",
+		(SAY_MAX - 1));
+	sendto(socket_fd, &error_packet, sizeof(error_packet), 0,
+		(struct sockaddr *)client_addr, sizeof(client_addr));
+	return;
+    }
+
+    fprintf(stdout, "User %s logged in from %s\n", username, client_ip);
 }
 
 /***/
@@ -98,7 +124,7 @@ int main(int argc, char *argv[]) {
     time_t timer;
     socklen_t addr_len = sizeof(client);
     int port_num;
-    char buffer[BUFF_SIZE];
+    char buffer[BUFF_SIZE], client_ip[128];
 
     /* Assert that the correct number of arguments were given */
     /* Print program usage otherwise */
@@ -139,6 +165,16 @@ int main(int argc, char *argv[]) {
     if (bind(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
 	print_error("Failed to assign the requested address.");
 
+    if ((users = hm_create(100L, 0.0f)) == NULL)
+	print_error("Failed to allocate a sufficient amount of memory.");
+    if ((channels = hm_create(100L, 0.0f)) == NULL)
+	print_error("Failed to allocate a sufficient amount of memory.");
+    LinkedList *default_ll;
+    if ((default_ll = ll_create()) == NULL)
+	print_error("Failed to allocate a sufficient amount of memory.");
+    if (!hm_put(channels, DEFAULT_CHANNEL, default_ll, NULL))
+	print_error("Failed to allocate a sufficient amount of memory.");
+
     /* FIXME */
     time(&timer);
     fprintf(stdout, "* Launched DuckChat server ~ %s", ctime(&timer)); 
@@ -152,27 +188,25 @@ int main(int argc, char *argv[]) {
     
 	/* FIXME */
 	memset(buffer, 0, sizeof(buffer));
-	recvfrom(socket_fd, buffer, sizeof(buffer), 0,
-		(struct sockaddr *)&client, &addr_len);
+	recvfrom(socket_fd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client, &addr_len);
 
 	/* Log the timestamp when packet was received */
 	time(&timer);
 	timestamp = localtime(&timer);
 	fprintf(stdout, "[%02d/%02d/%d %02d:%02d] ", (timestamp->tm_mon + 1), timestamp->tm_mday,
 		(1900 + timestamp->tm_year), timestamp->tm_hour, timestamp->tm_min);
-	fprintf(stdout, "[%s:%d] ", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
-	
+	sprintf(client_ip, "%s:%d", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
 	
 	struct text *packet_type = (struct text *) buffer;
 	switch (packet_type->txt_type) {
 	    case REQ_LOGIN:
-		server_login_request(buffer);
+		server_login_request(buffer, client_ip, &client);
 		break;
 	    case REQ_LOGOUT:
 		server_logout_request(buffer);
 		break;
 	    case REQ_JOIN:
-		server_join_request(buffer);
+		server_join_request(buffer, client_ip);
 		break;
 	    case REQ_LEAVE:
 		server_leave_request(buffer);
