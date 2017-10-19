@@ -118,10 +118,12 @@ int main(int argc, char *argv[]) {
     time_t clock;
     time(&clock);
     fprintf(stdout, "Launched DuckChat server ~ %s", ctime(&clock));
+    fprintf(stdout, "Server assigned to address %s:%d\n", inet_ntoa(server.sin_addr), ntohs(server.sin_port));
 
     while (1) {
     
     }
+
 
     return 0;
 }
