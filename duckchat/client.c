@@ -21,7 +21,7 @@
 #include "raw.h"
 
 #define BUFF_SIZE 1024		    /* Buffer size for messages and packets */
-#define MAX_CHANNELS 10		    /* Maximum channels client may be subscribed to */
+#define MAX_CHANNELS 15		    /* Maximum channels client may be subscribed to */
 #define DEFAULT_CHANNEL "Common"    /* Default channel to join upon login */
 
 /* Socket address for the server */
@@ -33,12 +33,12 @@ static char active_channel[CHANNEL_MAX];
 /* List of channels the client is currently subscribed/listening to */
 static char subscribed[MAX_CHANNELS][CHANNEL_MAX];
 /* File descriptor for the client's socket */
-static int socket_fd;
+static int socket_fd = -1;
 
 //// FIXME - ERROR CHECK sendto()
 //// FIXME - ERROR CHECK recvfrom()
 //// FIXME - recvfrom size; parameters
-//// FIXME - Display text during prompt
+//// FIXME - Non-block meg receive - use fcntl?
 
 /**
  * Subscribes the client to the specified channel and the new channel becomes
@@ -328,7 +328,8 @@ static void server_error_reply(const char *packet) {
  */
 static void cleanup(void) {
     
-    close(socket_fd);
+    if (socket_fd != -1)
+	close(socket_fd);
     cooked_mode();
 }
 
@@ -430,8 +431,9 @@ int main(int argc, char *argv[]) {
     sendto(socket_fd, &join_packet, sizeof(join_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
 
-
-    
+    /**
+     * FIXME
+     */
     while (1) {
 
 	i = 0;
@@ -444,13 +446,15 @@ int main(int argc, char *argv[]) {
 
 	if (select((socket_fd + 1), &receiver, NULL, NULL, NULL)) {
 	    if (FD_ISSET(socket_fd, &receiver)) {
-		
-		for (j = 0; j < SAY_MAX; j++) putchar('\b');
 
 		char in_buff[BUFF_SIZE];
+		struct text *packet_type = (struct text *) in_buff;
+		
 		recvfrom(socket_fd, in_buff, BUFF_SIZE, 0,
 			    (struct sockaddr *)&server, NULL);
-		struct text *packet_type = (struct text *) in_buff;
+
+		for (j = 0; j < SAY_MAX; j++) putchar('\b');
+
 		if (packet_type->txt_type == TXT_SAY) {
 		    server_say_reply(in_buff);
 		} else if (packet_type->txt_type == TXT_LIST) {
@@ -472,8 +476,7 @@ int main(int argc, char *argv[]) {
 			putchar('\b');
 			putchar(' ');
 			putchar('\b');
-		    }
-		    else if (i != (SAY_MAX - 1)) {
+		    } else if (i != (SAY_MAX - 1)) {
 			buffer[i++] = ch;
 			putchar(ch);
 		    }
@@ -481,6 +484,7 @@ int main(int argc, char *argv[]) {
 		
 		buffer[i] = '\0';
 		fprintf(stdout, "\n");
+
 		if (buffer[0] == '/') {
 		    if (strncmp(buffer, "/join ", 6) == 0) {
 			client_join_request(buffer);

@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-Wall -W -g
 
-FILES=Makefile client.c server.c
+FILES=Makefile client.c server.c raw.h raw.c duckchat.h
 OBJECTS=client.o server.o raw.o
 EXECS=client server
 
