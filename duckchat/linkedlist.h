@@ -39,8 +39,6 @@
  * duplicate methods removed
  */
 
-#include "iterator.h"
-
 typedef struct linkedlist LinkedList;		/* opaque type definition */
 
 /*

@@ -22,6 +22,7 @@
 #include <netdb.h>
 #include "duckchat.h"
 #include "hashmap.h"
+#include "linkedlist.h"
 
 ///FIXME - Ensure byte order, htonl/s()....
 
