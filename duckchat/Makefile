@@ -6,8 +6,9 @@
 CC=gcc
 CFLAGS=-Wall -W -g
 
-FILES=Makefile client.c server.c raw.h raw.c duckchat.h
-OBJECTS=client.o server.o raw.o
+FILES=Makefile client.c server.c raw.h raw.c duckchat.h\
+	hashmap.h hashmap.c
+OBJECTS=client.o server.o raw.o hashmap.o
 EXECS=client server
 
 
@@ -16,8 +17,8 @@ all: $(EXECS)
 client: client.o raw.o
 	$(CC) $(CFLAGS) client.o raw.o -o client
 
-server: server.o
-	$(CC) $(CFLAGS) server.o -o server
+server: server.o hashmap.o
+	$(CC) $(CFLAGS) server.o hashmap.o -o server
 
 tarfile:
 	mkdir duckchat/
@@ -41,4 +42,5 @@ clean:
 client.o: client.c duckchat.h raw.h
 server.o: server.c duckchat.h
 raw.o: raw.c raw.h
+hashmap.o: hashmap.c hashmap.h
 

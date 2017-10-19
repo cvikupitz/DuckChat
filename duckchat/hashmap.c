@@ -350,18 +350,6 @@ long hm_size(HashMap *hm) {
     return hm->size;
 }
 
-Iterator *hm_it_create(HashMap *hm) {
-    Iterator *it = NULL;
-    void **tmp = (void **)entries(hm);
-
-    if (tmp != NULL) {
-        it = it_create(hm->size, tmp);
-        if (it == NULL)
-            free(tmp);
-    }
-    return it;
-}
-
 char *hmentry_key(HMEntry *hme) {
     return hme->key;
 }

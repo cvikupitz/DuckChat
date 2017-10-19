@@ -32,8 +32,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "iterator.h"
-
 /*
  * interface definition for generic hashmap implementation
  *
@@ -130,14 +128,6 @@ int hm_remove(HashMap *hm, char *key, void **element);
  * returns the number of mappings in the hashmap
  */
 long hm_size(HashMap *hm);
-
-/*
- * create generic iterator to this hashmap
- * note that iterator will return pointers to HMEntry's
- *
- * returns pointer to the Iterator or NULL if failure
- */
-Iterator *hm_it_create(HashMap *hm);
 
 /*
  * accessor methods for obtaining key and value from an HMEntry

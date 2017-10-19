@@ -21,11 +21,17 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include "duckchat.h"
+#include "hashmap.h"
 
 /* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 1024
+/* FIXME */
+#define MAX_CHANNELS 100
+/* FIXME */
+#define MAX_CHANNEL_USERS 50
 /* Refresh rate (in minutes) of the server to forcefully logout inactive users */
 #define REFRESH_RATE 2
+
 #define UNUSED __attribute__((unused))
 
 
@@ -85,9 +91,8 @@ int main(int argc, char *argv[]) {
     if ((socket_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	print_error("Failed to create a socket for the server.");
     if (bind(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
-	perror("Failed to assign the requested address.");
+	print_error("Failed to assign the requested address.");
 
-    
 
     /* FIXME...... */
 
