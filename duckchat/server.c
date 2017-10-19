@@ -23,13 +23,12 @@
 #include "duckchat.h"
 #include "hashmap.h"
 
+///FIXME - Ensure byte order, htonl/s()....
 
 /* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 10000
 /* Maximum number of channels allowed on the server at a time */
-#define MAX_CHANNELS 100
-/* Maximum number of users allowed on a channel at a time */
-#define MAX_CHANNEL_USERS 50
+#define MAX_CHANNELS 50
 /* FIXME */
 #define DEFAULT_CHANNEL "Common"
 /* Refresh rate (in minutes) of the server to forcefully logout inactive users */
@@ -40,11 +39,6 @@
 
 static struct sockaddr_in server;
 static int socket_fd = -1;
-static HashMap *users = NULL;
-
-typedef struct user {
-
-} User;
 
 
 /***/
@@ -69,6 +63,7 @@ static void server_say_request(UNUSED const char *packet) {
 
 /***/
 static void server_list_request(UNUSED const char *packet) {
+    
     puts("LIST packet received.");
 }
 
@@ -96,11 +91,11 @@ static void print_error(const char *msg) {
  */
 int main(int argc, char *argv[]) {
 
-    struct sockaddr from_addr;
+    struct sockaddr_in client;
     struct hostent *host_end;
     struct tm *timestamp;
     time_t timer;
-    socklen_t addr_len = sizeof(server);
+    socklen_t addr_len = sizeof(client);
     int port_num;
     char buffer[BUFF_SIZE];
 
@@ -120,8 +115,6 @@ int main(int argc, char *argv[]) {
 	print_error(buffer);
     }
 
-    
-
     /* Parse port number given by user, assert that it is in valid range */
     /* Print error message and exit otherwise */
     /* Port numbers typically go up to 65535 (0-1024 for privileged services) */
@@ -129,38 +122,47 @@ int main(int argc, char *argv[]) {
     if (port_num < 0 || port_num > 65535)
 	print_error("Server socket must be in the range [0, 65535].");
 
+    /* FIXME */
     if ((host_end = gethostbyname(argv[1])) == NULL)
 	print_error("Failed to locate the host.");
 
+    /* FIXME */
     bzero((char *)&server, sizeof(server));
     server.sin_family = AF_INET;
     bcopy((char *)host_end->h_addr, (char *)&server.sin_addr.s_addr, host_end->h_length);
     server.sin_port = htons(port_num);
 
+    /* FIXME */
     if ((socket_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	print_error("Failed to create a socket for the server.");
     if (bind(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
 	print_error("Failed to assign the requested address.");
 
     /* FIXME */
-    if ((users = hm_create(250L, 0.0f)) == NULL)
-	print_error("Failed to allocate a sufficient amount of memory.");
-
     time(&timer);
     fprintf(stdout, "* Launched DuckChat server ~ %s", ctime(&timer)); 
     fprintf(stdout, "* Server assigned to address %s:%d\n", inet_ntoa(server.sin_addr),
 	    ntohs(server.sin_port));
 
+    /**
+     * FIXME
+     */
     while (1) {
     
+	/* FIXME */
 	memset(buffer, 0, sizeof(buffer));
-	recvfrom(socket_fd, buffer, sizeof(buffer), 0, &from_addr, &addr_len);
+	recvfrom(socket_fd, buffer, sizeof(buffer), 0,
+		(struct sockaddr *)&client, &addr_len);
+
+	/* Log the timestamp when packet was received */
 	time(&timer);
 	timestamp = localtime(&timer);
-	fprintf(stdout, "[%02d/%02d/%d %02d:%02d] ", timestamp->tm_mon, timestamp->tm_mday,
+	fprintf(stdout, "[%02d/%02d/%d %02d:%02d] ", (timestamp->tm_mon + 1), timestamp->tm_mday,
 		(1900 + timestamp->tm_year), timestamp->tm_hour, timestamp->tm_min);
+	fprintf(stdout, "[%s:%d] ", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
+	
+	
 	struct text *packet_type = (struct text *) buffer;
-
 	switch (packet_type->txt_type) {
 	    case REQ_LOGIN:
 		server_login_request(buffer);

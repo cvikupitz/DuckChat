@@ -443,7 +443,6 @@ int main(int argc, char *argv[]) {
     /* Displays the title and prompt */
     i = 0;
     fprintf(stdout, "%s\n", TITLE);
-    fprintf(stdout, "Connected to %s:%d\n", inet_ntoa(server.sin_addr), ntohs(server.sin_port));
     fprintf(stdout, "Type '/help' for help, '/exit' to exit.\n");
     PROMPT;
 
