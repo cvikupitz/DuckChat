@@ -25,9 +25,9 @@
 
 /// FIXME - USE htons(), hotl().. for byte order....
 
-/* Buffer size for messages and packets */
-#define BUFF_SIZE 1024
-/* Maximum channels client may be subscribed to */
+/* Maximum buffer size for messages and packets */
+#define BUFF_SIZE 10000
+/* Maximum channels client may be subscribed to at once */
 #define MAX_CHANNELS 20
 /* Default channel to join upon login */
 #define DEFAULT_CHANNEL "Common"
@@ -355,9 +355,11 @@ static void print_error(const char *msg) {
  */
 int main(int argc, char *argv[]) {
 
+    struct sockaddr from_addr;
     struct hostent *host_end;
     struct request_login login_packet;
     struct request_join join_packet;
+    socklen_t addr_len = sizeof(server);
     fd_set receiver;
     int port_num, i, j;
     char ch;
@@ -387,16 +389,16 @@ int main(int argc, char *argv[]) {
 	print_error(buffer);
     }
 
-    /* Obtain the address of the specified host */
-    if ((host_end = gethostbyname(argv[1])) == NULL)
-	print_error("Failed to locate the host.");
-    
     /* Parse port number given by user, assert that it is in valid range */
     /* Print error message and exit otherwise */
     /* Port numbers typically go up to 65535 (0-1024 for privileged services) */
     port_num = atoi(argv[2]);
     if (port_num < 0 || port_num > 65535)
 	print_error("Server socket must be in the range [0, 65535].");
+
+    /* Obtain the address of the specified host */
+    if ((host_end = gethostbyname(argv[1])) == NULL)
+	print_error("Failed to locate the host.");
 
     /* Create server address struct, set internet family, address, & port number */
     memset((char *)&server, 0, sizeof(server));
@@ -440,7 +442,7 @@ int main(int argc, char *argv[]) {
 
     /* Displays the title and prompt */
     i = 0;
-    fprintf(stdout, "\n%s\n", TITLE);
+    fprintf(stdout, "%s\n", TITLE);
     fprintf(stdout, "Type '/help' for help, '/exit' to exit.\n\n");
     PROMPT;
 
@@ -460,15 +462,15 @@ int main(int argc, char *argv[]) {
 	    /**
 	     * Input was received from the socket stream, a message arrived to the client.
 	     *
-	     * The message is received with recv(), and the type of message is parsed by
+	     * The message is received with recvfrom(), and the type of message is parsed by
 	     * the 32-bit identifier. The rest of the packet is then dealt with accordingly.
 	     */
 	    if (FD_ISSET(socket_fd, &receiver)) {
 
 		/* Receive incoming packet, parse the identifier */
 		memset(in_buff, 0, sizeof(in_buff));
-		if (recv(socket_fd, in_buff, sizeof(in_buff), 0) < 0)
-		    continue;
+		if (recvfrom(socket_fd, in_buff, sizeof(in_buff), 0,
+				&from_addr, &addr_len) < 0) continue;
 		struct text *packet_type = (struct text *) in_buff;
 
 		/* Erases all typed text in the prompt to make space for message */
@@ -525,7 +527,7 @@ int main(int argc, char *argv[]) {
 		/* End user input with null byte for string comparisons */
 		buffer[i] = '\0';
 		i = 0;
-		fprintf(stdout, "\n");
+		putchar('\n');
 
 		/* If the first character of input is '/', interpret as special command */
 		if (buffer[0] == '/') {

@@ -9,17 +9,28 @@
  * Usage: ./server domain_name port_num
  */
 
-#include <stdio.h>
+#include <stdio.h> 
 #include <stdlib.h>
 #include <string.h>
+#include <sys/unistd.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 #include "duckchat.h"
 
-/* Buffer size for messages and packets */
+/* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 1024
-/* FIXME */
+/* Refresh rate (in minutes) of the server to forcefully logout inactive users */
 #define REFRESH_RATE 2
 #define UNUSED __attribute__((unused))
 
+
+static struct sockaddr_in server;
+static int socket_fd;
 
 
 /**
@@ -36,6 +47,7 @@ static void print_error(const char *msg) {
  */
 int main(int argc, char *argv[]) {
 
+    struct hostent *host_end;
     int port_num;
     char buffer[BUFF_SIZE];
 
@@ -62,7 +74,21 @@ int main(int argc, char *argv[]) {
     if (port_num < 0 || port_num > 65535)
 	print_error("Server socket must be in the range [0, 65535].");
 
+    if ((host_end = gethostbyname(argv[1])) == NULL)
+	print_error("Failed to locate the host.");
+
+    bzero((char *)&server, sizeof(server));
+    server.sin_family = AF_INET;
+    bcopy((char *)host_end->h_addr, (char *)&server.sin_addr.s_addr, host_end->h_length);
+    server.sin_port = htons(port_num);
+
+    if ((socket_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+	print_error("Failed to create a socket for the server.");
+    if (bind(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
+	perror("Failed to assign the requested address.");
+
     
+
     /* FIXME...... */
 
 
