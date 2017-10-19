@@ -27,9 +27,9 @@
 /* Default channel to join upon login */
 #define DEFAULT_CHANNEL "Common"
 /* Title to display upon successful login */
-#define TITLE "----------  Duck Chat v1.1  ----------"
+#define TITLE "------------  Duck Chat v1.1  ------------"
 /* Prompt to display to user for input */
-#define PROMPT {fprintf(stdout, "$ ");fflush(stdout);}
+#define PROMPT {fprintf(stdout, "# ");fflush(stdout);}
 
 /* Socket address for the server */
 static struct sockaddr_in server;
@@ -45,10 +45,11 @@ static int socket_fd = -1;
 //// FIXME - ERROR CHECK sendto()
 //// FIXME - ERROR CHECK recvfrom()
 //// FIXME - recvfrom size; parameters
+//// FIXME - PAcket stays after server terminates
 
 /**
  * Subscribes the client to the specified channel and the new channel becomes
- * the client's currently active channe. Returns 1 if successfully joined, or
+ * the client's currently active channel. Returns 1 if successfully joined, or
  * 0 if not (client is subscribed to maximum number of channels allowed).
  */
 static int join_channel(const char *channel) {
@@ -442,6 +443,7 @@ int main(int argc, char *argv[]) {
     /* Displays the title and prompt */
     i = 0;
     fprintf(stdout, "%s\n", TITLE);
+    fprintf(stdout, "Type '/help' for help, '/exit' to exit.\n\n");
     PROMPT;
 
     /**
@@ -461,10 +463,9 @@ int main(int argc, char *argv[]) {
 	    if (FD_ISSET(socket_fd, &receiver)) {
 
 		char in_buff[BUFF_SIZE];
-		struct text *packet_type = (struct text *) in_buff;
-		
-		recvfrom(socket_fd, in_buff, BUFF_SIZE, 0,
+		recvfrom(socket_fd, in_buff, sizeof(in_buff), 0,
 			    (struct sockaddr *)&server, NULL);
+		struct text *packet_type = (struct text *) in_buff;
 
 		for (j = 0; j < (i + 2); j++) {
 		    putchar('\b');
