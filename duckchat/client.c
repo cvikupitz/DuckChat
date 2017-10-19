@@ -20,9 +20,16 @@
 #include "duckchat.h"
 #include "raw.h"
 
-#define BUFF_SIZE 1024		    /* Buffer size for messages and packets */
-#define MAX_CHANNELS 15		    /* Maximum channels client may be subscribed to */
-#define DEFAULT_CHANNEL "Common"    /* Default channel to join upon login */
+/* Buffer size for messages and packets */
+#define BUFF_SIZE 1024
+/* Maximum channels client may be subscribed to */
+#define MAX_CHANNELS 15
+/* Default channel to join upon login */
+#define DEFAULT_CHANNEL "Common"
+/* Title to display upon successful login */
+#define TITLE "----------  Duck Chat v1.1  ----------"
+/* The user prompt */
+#define PROMPT {fprintf(stdout, "$ ");fflush(stdout);}
 
 /* Socket address for the server */
 static struct sockaddr_in server;
@@ -38,7 +45,6 @@ static int socket_fd = -1;
 //// FIXME - ERROR CHECK sendto()
 //// FIXME - ERROR CHECK recvfrom()
 //// FIXME - recvfrom size; parameters
-//// FIXME - Non-block meg receive - use fcntl?
 
 /**
  * Subscribes the client to the specified channel and the new channel becomes
@@ -328,7 +334,7 @@ static void server_error_reply(const char *packet) {
  * was using and switches terminal back to cooked mode.
  */
 static void cleanup(void) {
-    
+   
     if (socket_fd != -1)
 	close(socket_fd);
     cooked_mode();
@@ -403,6 +409,7 @@ int main(int argc, char *argv[]) {
 	print_error("Failed to create a socket for client.");
     if (connect(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
 	print_error("Failed to connect client to server.");
+    fcntl(socket_fd, F_SETFL, O_NONBLOCK);
 
     /* Initialize username string, do not copy more bytes than maximum allowed */
     /* If the length is too long, notify user, but don't exit */
@@ -435,17 +442,17 @@ int main(int argc, char *argv[]) {
     /**
      * FIXME
      */
-    while (1) {
+    i = 0;
+    fprintf(stdout, "%s\n", TITLE);
+    PROMPT;
+    for (;;) {
 
-	i = 0;
 	FD_ZERO(&receiver);
 	FD_SET(socket_fd, &receiver);
 	FD_SET(STDIN_FILENO, &receiver);
-	
-	fprintf(stdout, ">");
-	fflush(stdout);
 
 	if (select((socket_fd + 1), &receiver, NULL, NULL, NULL)) {
+	    
 	    if (FD_ISSET(socket_fd, &receiver)) {
 
 		char in_buff[BUFF_SIZE];
@@ -464,14 +471,17 @@ int main(int argc, char *argv[]) {
 		    server_who_reply(in_buff);
 		} else if (packet_type->txt_type == TXT_ERROR) {
 		    server_error_reply(in_buff);
-		} else { /* Do nothing, likely a bogus packet */ }
-		
+		} else {  /* Do nothing, likely a bogus packet */  }
+	
+		PROMPT;
 		for (j = 0; j < i; j++) putchar(buffer[j]);
+		fflush(stdout);
+
 	    }
 
 	    if (FD_ISSET(STDIN_FILENO, &receiver)) {
 
-		while ((ch = getchar()) != '\n') {
+		if ((ch = getchar()) != '\n') {
 		    if (ch == 127 && i != 0) {
 			i--;
 			putchar('\b');
@@ -480,10 +490,13 @@ int main(int argc, char *argv[]) {
 		    } else if (i != (SAY_MAX - 1)) {
 			buffer[i++] = ch;
 			putchar(ch);
-		    }
+		    } 
+		    fflush(stdout);
+		    continue;
 		}
 		
 		buffer[i] = '\0';
+		i = 0;
 		fprintf(stdout, "\n");
 
 		if (buffer[0] == '/') {
@@ -512,6 +525,7 @@ int main(int argc, char *argv[]) {
 		} else {
 		    client_say_request(buffer);
 		}
+		PROMPT;
 	    }
 	}
     }
