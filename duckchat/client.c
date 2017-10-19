@@ -8,9 +8,10 @@
 #include <stdio.h>	    /* fprintf, sprintf, getchar */
 #include <stdlib.h>	    /* atoi, exit, atexit */
 #include <string.h>	    /* strchr, strcmp, strncmp, memset, ... */
-#include <unistd.h>	    /* close, STDIN_FILENO */
+#include <sys/unistd.h>	    /* close, STDIN_FILENO */
 #include <sys/time.h>	    /* FIXME */
 #include <sys/types.h>	    /* FIXME */
+#include <fcntl.h>	    /* FIXME */
 #include <sys/select.h>	    /* FIXME */
 #include <sys/socket.h>	    /* FIXME */
 #include <netinet/in.h>	    /* FIXME */
@@ -19,7 +20,7 @@
 #include "duckchat.h"	    /* Packet structs, macros for username/channel/message lenghts */
 #include "raw.h"	    /* raw_mode, cooked_mode */
 
-#define BUFF_SIZE 4096		    /* Buffer size for messages and packets */
+#define BUFF_SIZE 1024		    /* Buffer size for messages and packets */
 #define MAX_CHANNELS 10		    /* Maximum channels client may be subscribed to */
 #define DEFAULT_CHANNEL "Common"    /* Default channel to join upon login */
 
@@ -38,7 +39,6 @@ static int socket_fd;
 //// FIXME - ERROR CHECK recvfrom()
 //// FIXME - recvfrom size; parameters
 //// FIXME - Add backspace in use input
-//// FIXME - Fix '>' prompt
 //// FIXME - Display text during prompt
 
 /**
@@ -363,13 +363,13 @@ int main(int argc, char *argv[]) {
 	return 0;
     }
 
-    /* Register the cleanup() function to be invoked upon program termination */
-    if ((atexit(cleanup)) != 0)
-	print_error("Call to atexit() failed.");
-
     /* Switch terminal to raw mode, terminate if unable */
     if (raw_mode() < 0)
 	print_error("Failed to switch terminal to raw mode.");
+
+    /* Register the cleanup() function to be invoked upon program termination */
+    if ((atexit(cleanup)) != 0)
+	print_error("Call to atexit() failed.");
 
     /* Assert that path name to unix domain socket does not exceed maximum allowed */
     /* Print error message and exit otherwise */
@@ -403,6 +403,10 @@ int main(int argc, char *argv[]) {
     if (connect(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
 	print_error("Failed to connect client to server.");
 
+    /* Set the socket to be non-blocking */
+    /* Allows messages received from other clients to be displayed immediately */
+    fcntl(socket_fd, F_SETFL, O_NONBLOCK);
+
     /* Initialize username string, do not copy more bytes than maximum allowed */
     /* If the length is too long, notify user, but don't exit */
     /* Max length specified in duckchat.h */
@@ -432,7 +436,7 @@ int main(int argc, char *argv[]) {
 		(struct sockaddr *)&server, sizeof(server));
 
 
-
+    
     while (1) {
 
 	i = 0;
@@ -444,14 +448,14 @@ int main(int argc, char *argv[]) {
 	fprintf(stdout, ">");
 	fflush(stdout);
 
-	if (select((socket_fd + 1), &receiver, NULL, NULL, NULL) > 0) {
+	if (select((socket_fd + 1), &receiver, NULL, NULL, NULL)) {
 	    if (FD_ISSET(socket_fd, &receiver)) {
 		
 		for (j = 0; j < SAY_MAX; j++) putchar('\b');
 
 		char in_buff[BUFF_SIZE];
 		recvfrom(socket_fd, in_buff, BUFF_SIZE, 0,
-			(struct sockaddr *)&server, NULL);
+			    (struct sockaddr *)&server, NULL);
 		struct text *packet_type = (struct text *) in_buff;
 		if (packet_type->txt_type == TXT_SAY) {
 		    server_say_reply(in_buff);
@@ -469,7 +473,10 @@ int main(int argc, char *argv[]) {
 	    if (FD_ISSET(STDIN_FILENO, &receiver)) {
 
 		while ((ch = getchar()) != '\n') {
-		    if (i != (SAY_MAX - 1)) {
+		    if (ch == 127 && i != 0) {
+			/* FIXME DELETE */
+		    }
+		    else if (i != (SAY_MAX - 1)) {
 			buffer[i++] = ch;
 			putchar(ch);
 		    }
