@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include "duckchat.h"
 
-#define BUFF_SIZE 4096
+#define BUFF_SIZE 1024
 #define UNUSED __attribute__((unused))
 
 static struct sockaddr_in server;

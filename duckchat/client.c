@@ -296,6 +296,7 @@ static void client_help_request(void) {
     fprintf(stdout, "  /who <channel>: Lists all users who are on the named channel.\n");
     fprintf(stdout, "  /switch <channel>: Switch to the named channel you are subscribed to.\n");
     fprintf(stdout, "  /subscribed: Lists the names of all the channels you're subscribed to.\n");
+    fprintf(stdout, "  /clear: Clears the terminal screen.\n");
     fprintf(stdout, "  /help: Lists all available commands.\n");
     fprintf(stdout, "  /exit: Logout and exit the client software.\n");
 }
@@ -498,6 +499,8 @@ int main(int argc, char *argv[]) {
 			client_switch_request(buffer);
 		    } else if (strcmp(buffer, "/subscribed") == 0) {
 			client_subscribed_request();
+		    } else if (strcmp(buffer, "/clear") == 0) {
+			system("clear");
 		    } else if (strcmp(buffer, "/help") == 0) {
 			client_help_request();
 		    } else if (strcmp(buffer, "/exit") == 0) {
