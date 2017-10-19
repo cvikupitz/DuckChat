@@ -5,20 +5,20 @@
  * FIXME - DESCRIPTION
  */
 
-#include <stdio.h>	    /* fprintf, sprintf, getchar */
-#include <stdlib.h>	    /* atoi, exit, atexit */
-#include <string.h>	    /* strchr, strcmp, strncmp, memset, ... */
-#include <sys/unistd.h>	    /* close, STDIN_FILENO */
-#include <sys/time.h>	    /* FIXME */
-#include <sys/types.h>	    /* FIXME */
-#include <fcntl.h>	    /* FIXME */
-#include <sys/select.h>	    /* FIXME */
-#include <sys/socket.h>	    /* FIXME */
-#include <netinet/in.h>	    /* FIXME */
-#include <arpa/inet.h>	    /* FIXME */
-#include <netdb.h>	    /* gethostbyname, hostent struct */
-#include "duckchat.h"	    /* Packet structs, macros for username/channel/message lenghts */
-#include "raw.h"	    /* raw_mode, cooked_mode */
+#include <stdio.h> 
+#include <stdlib.h>
+#include <string.h>
+#include <sys/unistd.h>
+#include <sys/fcntl.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include "duckchat.h"
+#include "raw.h"
 
 #define BUFF_SIZE 1024		    /* Buffer size for messages and packets */
 #define MAX_CHANNELS 10		    /* Maximum channels client may be subscribed to */
@@ -38,7 +38,6 @@ static int socket_fd;
 //// FIXME - ERROR CHECK sendto()
 //// FIXME - ERROR CHECK recvfrom()
 //// FIXME - recvfrom size; parameters
-//// FIXME - Add backspace in use input
 //// FIXME - Display text during prompt
 
 /**
@@ -403,10 +402,6 @@ int main(int argc, char *argv[]) {
     if (connect(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
 	print_error("Failed to connect client to server.");
 
-    /* Set the socket to be non-blocking */
-    /* Allows messages received from other clients to be displayed immediately */
-    fcntl(socket_fd, F_SETFL, O_NONBLOCK);
-
     /* Initialize username string, do not copy more bytes than maximum allowed */
     /* If the length is too long, notify user, but don't exit */
     /* Max length specified in duckchat.h */
@@ -443,7 +438,6 @@ int main(int argc, char *argv[]) {
 	FD_ZERO(&receiver);
 	FD_SET(socket_fd, &receiver);
 	FD_SET(STDIN_FILENO, &receiver);
-	memset(buffer, 0, BUFF_SIZE);
 	
 	fprintf(stdout, ">");
 	fflush(stdout);
@@ -474,7 +468,10 @@ int main(int argc, char *argv[]) {
 
 		while ((ch = getchar()) != '\n') {
 		    if (ch == 127 && i != 0) {
-			/* FIXME DELETE */
+			i--;
+			putchar('\b');
+			putchar(' ');
+			putchar('\b');
 		    }
 		    else if (i != (SAY_MAX - 1)) {
 			buffer[i++] = ch;
@@ -512,6 +509,5 @@ int main(int argc, char *argv[]) {
 	}
     }
 
-    /* User successfully logs off client */
     return 0;
 }
