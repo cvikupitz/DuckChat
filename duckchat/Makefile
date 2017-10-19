@@ -1,3 +1,8 @@
+#
+# Duckchat Makefile
+# Author: Cole Vikupitz
+#
+
 CC=gcc
 CFLAGS=-Wall -W -g
 

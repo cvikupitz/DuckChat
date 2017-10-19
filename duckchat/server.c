@@ -2,64 +2,59 @@
  * server.c
  * Author: Cole Vikupitz
  *
- * FIXME - DESCRIPTION
+ * Server side of a chat application using the DuckChat protocol. The server receives
+ * and sends packets to and from clients using this protocol and handles each of the
+ * packets accordingly.
+ *
+ * Usage: ./server domain_name port_num
  */
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "duckchat.h"
 
+/* Buffer size for messages and packets */
 #define BUFF_SIZE 1024
+/* FIXME */
+#define REFRESH_RATE 2
 #define UNUSED __attribute__((unused))
 
 
 
 /**
- * FIXME
- */
-static void cleanup(void) {
-    /////
-}
-
-/**
- * FIXME
+ * Prints the specified message to standard error stream as a program error
+ * message, then terminates the server application.
  */
 static void print_error(const char *msg) {
     fprintf(stderr, "Server: %s\n", msg);
     exit(-1);
 }
 
-
 /**
- * FIXME
+ * Runs the Duckchat server.
  */
 int main(int argc, char *argv[]) {
 
-    struct hostent *host_end;
-    struct request_login login_packet;
-    fd_set receiver;
-    int port_num, i;
-    char ch;
+    int port_num;
     char buffer[BUFF_SIZE];
 
+    /* Assert that the correct number of arguments were given */
+    /* Print program usage otherwise */
     if (argc != 3) {
 	fprintf(stdout, "Usage: %s domain_name port_num\n", argv[0]);
 	return 0;
     }
 
-    if (atexit(cleanup) != 0)
-	print_error("Call to atexit() failed.");
-
+    /* Assert that path name to unix domain socket does not exceed maximum allowed */
+    /* Print error message and exit otherwise */
+    /* Maximum length is specified in duckchat.h */
     if (strlen(argv[1]) > UNIX_PATH_MAX) {
 	sprintf(buffer, "Path name to domain socket length exceeds the length allowed (%d).",
 			UNIX_PATH_MAX);
 	print_error(buffer);
     }
 
-    /* FIXME */
-    if ((host_end = gethostbyname(argv[1])) == NULL)
-	print_error("Failed to locate the host.");
-    
     /* Parse port number given by user, assert that it is in valid range */
     /* Print error message and exit otherwise */
     /* Port numbers typically go up to 65535 (0-1024 for privileged services) */
@@ -67,15 +62,9 @@ int main(int argc, char *argv[]) {
     if (port_num < 0 || port_num > 65535)
 	print_error("Server socket must be in the range [0, 65535].");
 
-    /* FIXME */
-    bzero((char *)&server, sizeof(server));
-    server.sin_family = AF_INET;
-    bcopy((char *)host_end->h_addr, (char *)&server.sin_addr.s_addr, host_end->h_length);
-    server.sin_port = htons(port_num);
+    
+    /* FIXME...... */
 
-    while (1) {
-	/// FIXME server work here...
-    }
 
     return 0;
 }

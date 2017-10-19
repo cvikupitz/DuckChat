@@ -23,6 +23,8 @@
 #include "duckchat.h"
 #include "raw.h"
 
+/// FIXME - USE htons(), hotl().. for byte order....
+
 /* Buffer size for messages and packets */
 #define BUFF_SIZE 1024
 /* Maximum channels client may be subscribed to */
@@ -58,7 +60,6 @@ static int join_channel(const char *channel) {
     /* If client is already subscribed, switch it to active channel */
     for (i = 0; i < MAX_CHANNELS; i++) {
 	if (strcmp(subscribed[i], channel) == 0) {
-	    strcpy(active_channel, "");
 	    strncpy(active_channel, subscribed[i], (CHANNEL_MAX - 1));
 	    return 1;
 	}
@@ -69,7 +70,6 @@ static int join_channel(const char *channel) {
     for (i = 0; i < MAX_CHANNELS; i++) {
 	if (strcmp(subscribed[i], "") == 0) {
 	    strncpy(subscribed[i], channel, (CHANNEL_MAX - 1));
-	    strcpy(active_channel, "");
 	    strncpy(active_channel, channel, (CHANNEL_MAX - 1));
 	    return 1;
 	}
