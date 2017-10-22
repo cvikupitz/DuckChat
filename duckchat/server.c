@@ -42,7 +42,7 @@
 static struct sockaddr_in server;
 static int socket_fd = -1;
 static HashMap *users = NULL;
-//static HashMap *channels = NULL;
+static HashMap *channels = NULL;
 
 
 /**
@@ -100,19 +100,10 @@ static void free_user(User *user) {
 	user->ip_addr = NULL;
 	free(user->username);
 	user->username = NULL;
+	memset(&user->addr, 0, user->len);
 	free(user);
 	user = NULL;
-	memset(&user->addr, 0, user->len);
     }
-}
-
-/**
- * FIXME
- */
-UNUSED static int user_logged_in(char *ip) {
-    
-    User *user;
-    return hm_get(users, ip, (void **)&user);
 }
 
 /**
@@ -131,8 +122,6 @@ static void server_send_error(struct sockaddr_in addr, socklen_t len, const char
     strncpy(error_packet.txt_error, msg, (SAY_MAX - 1));
     sendto(socket_fd, &error_packet, sizeof(error_packet), 0,
 		(struct sockaddr *)&addr, len);
-    /*sendto(socket_fd, &error_packet, sizeof(error_packet), 0,
-		(struct sockaddr *)user->addr, user->len);*/
 }
 
 /**
@@ -152,14 +141,23 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
 	return;
     }
 
-    server_send_error(user->addr, user->len, "Logged in!!!");
-    puts("LOGIN packet received.");
+    //server_send_error(user->addr, user->len, "Logged in!!!"); FIXME
+    fprintf(stdout, "User %s logged in from %s\n", user->username, user->ip_addr);
 }
 
 /**
  * FIXME
  */
-static void server_join_request(UNUSED const char *packet) {
+static void server_join_request(const char *packet, char *client_ip, struct sockaddr_in *addr, socklen_t len) {
+    
+    User *user;
+    struct request_join *join_packet = (struct request_join *) packet;
+
+    if (!hm_get(users, client_ip, (void **)&user)) {
+	server_send_error(*addr, len, "Error: You are not currently logged in.");
+	return;
+    }
+
     puts("JOIN packet received.");
 }
 
@@ -207,6 +205,8 @@ static void cleanup(void) {
 	close(socket_fd);
     if (users != NULL)
 	hm_destroy(users, (void *)free_user);
+    if (channels != NULL)
+	hm_destroy(channels, (void *)ll_destroy);
 }
 
 /**
@@ -290,11 +290,18 @@ int main(int argc, char *argv[]) {
     /* Create & initialize ADTs for server to use */
     if ((users = hm_create(100L, 0.0f)) == NULL)
 	print_error("Failed to allocate a sufficient amount of memory.");
+    if ((channels = hm_create(100L, 0.0f)) == NULL)
+	print_error("Failed to allocate a sufficient amount of memory.");
+    LinkedList *default_ll;
+    if ((default_ll = ll_create()) == NULL)
+	print_error("Failed to allocate a sufficient amount of memory.");
+    if (!hm_put(channels, DEFAULT_CHANNEL, default_ll, NULL))
+	print_error("Failed to allocate a sufficient amount of memory.");
 
     /* Display successful launch title, timestamp & address */
     time(&timer);
-    fprintf(stdout, "***** Launched DuckChat server ~ %s", ctime(&timer)); 
-    fprintf(stdout, "***** Server assigned to address %s:%d\n", inet_ntoa(server.sin_addr),
+    fprintf(stdout, "------ Launched DuckChat server ~ %s", ctime(&timer)); 
+    fprintf(stdout, "------ Server assigned to address %s:%d\n", inet_ntoa(server.sin_addr),
 	    ntohs(server.sin_port));
 
     /**
@@ -302,7 +309,6 @@ int main(int argc, char *argv[]) {
      */
     while (1) {
     
-	/* FIXME */
 	memset(buffer, 0, sizeof(buffer));
 	recvfrom(socket_fd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client, &addr_len);
 
@@ -315,25 +321,25 @@ int main(int argc, char *argv[]) {
 	
 	struct text *packet_type = (struct text *) buffer;
 	switch (packet_type->txt_type) {
-	    case REQ_LOGIN:
+	    case REQ_LOGIN:	/**/
 		server_login_request(buffer, client_ip, &client, addr_len);
 		break;
-	    case REQ_LOGOUT:
+	    case REQ_LOGOUT:	/**/
 		server_logout_request(client_ip);
 		break;
-	    case REQ_JOIN:
-		server_join_request(buffer);
+	    case REQ_JOIN:  /**/
+		server_join_request(buffer, client_ip, &client, addr_len);
 		break;
-	    case REQ_LEAVE:
+	    case REQ_LEAVE: /**/
 		server_leave_request(buffer);
 		break;
-	    case REQ_SAY:
+	    case REQ_SAY:   /**/
 		server_say_request(buffer);
 		break;
-	    case REQ_LIST:
+	    case REQ_LIST:  /**/
 		server_list_request(client_ip);
 		break;
-	    case REQ_WHO:
+	    case REQ_WHO:   /**/
 		server_who_request(buffer);
 		break;
 	    default:	/* Do nothing, likey a bogus packet */
