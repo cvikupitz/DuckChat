@@ -27,6 +27,8 @@
 
 ///FIXME - Ensure byte order, htonl/s()....
 
+/* Suppress compiler warnings for unused parameters */
+#define UNUSED __attribute__((unused))
 /* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 10000
 /* Maximum number of channels allowed on the server at a time */
@@ -36,10 +38,9 @@
 /* Refresh rate (in minutes) of the server to forcefully logout inactive users */
 #define REFRESH_RATE 2
 
-#define UNUSED __attribute__((unused))
-
 
 static struct sockaddr_in server;
+static struct sockaddr_in client;
 static int socket_fd = -1;
 static HashMap *users = NULL;
 static HashMap *channels = NULL;
@@ -87,7 +88,7 @@ static User *malloc_user(const char *ip, const char *name) {
 /**
  * FIXME
  */
-UNUSED static void free_user(User *user) {
+static void free_user(User *user) {
     
     if (user != NULL) {
 	ll_destroy(user->channels, free);
@@ -104,30 +105,54 @@ UNUSED static void free_user(User *user) {
 /**
  * FIXME
  */
-static void server_send_error(struct sockaddr_in *client_addr, const char *msg) {
+static int user_logged_in(char *ip) {
+    
+    User *user;
+    return hm_get(users, ip, (void **)&user);
+}
+
+/***/
+static void remove_user_from_channel(char *ip, LinkedList *channel) {
+    
+    long i;
+    char *user;
+
+    for (i = 0L; i < ll_size(channel); i++) {
+	(void)ll_get(channel, i, (void **)&user);
+	if (strcmp(ip, user) == 0) {
+	    (void)ll_remove(channel, i, (void **)&user);
+	    return;
+	}
+    }
+}
+
+/**
+ * FIXME
+ */
+static void server_send_error(const char *msg) {
     
     struct text_error error_packet;
     memset(&error_packet, 0, sizeof(error_packet));
     error_packet.txt_type = TXT_ERROR;
     strncpy(error_packet.txt_error, msg, (SAY_MAX - 1));
     sendto(socket_fd, &error_packet, sizeof(error_packet), 0,
-		(struct sockaddr *)client_addr, sizeof(client_addr));
+		(struct sockaddr *)&client, sizeof(client));
 }
 
 /**
  * FIXME
  */
-static void server_login_request(const char *packet, char *client_ip, struct sockaddr_in *client_addr) {
+static void server_login_request(const char *packet, char *client_ip) {
 
     User *new_user;
     struct request_login *login_packet = (struct request_login *) packet;
 
     if ((new_user = malloc_user(client_ip, login_packet->req_username)) == NULL) {
-	server_send_error(client_addr, "Error: Failed to log into the server.");
+	server_send_error("Error: Failed to log into the server.");
 	return;
     }
     if (!hm_put(users, client_ip, new_user, NULL)) {
-	server_send_error(client_addr, "Error: Failed to log into the server.");
+	server_send_error("Error: Failed to log into the server.");
 	free_user(new_user);
 	return;
     }
@@ -140,6 +165,7 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
  */
 static void server_join_request(UNUSED const char *packet) {
     puts("JOIN packet received.");
+    server_send_error("Server received your join request...");
 }
 
 /**
@@ -147,6 +173,7 @@ static void server_join_request(UNUSED const char *packet) {
  */
 static void server_leave_request(UNUSED const char *packet) {
     puts("LEAVE packet received.");
+    server_send_error("Server received your leave request...");
 }
 
 /**
@@ -154,38 +181,15 @@ static void server_leave_request(UNUSED const char *packet) {
  */
 static void server_say_request(UNUSED const char *packet) {
     puts("SAY packet received.");
+    server_send_error("Server received your say request...");
 }
 
 /**
  * FIXME
  */
-static void server_list_request(struct sockaddr_in *client_addr) {
-
-    struct text_list list_packet;
-    struct channel_info channel_packet;
-    long i, len;
-    char **channel_list;
-    
-    if ((channel_list = hm_keyArray(channels, &len)) == NULL) {
-	server_send_error(client_addr, "Error: Server failed to list the channels.");
-	return;
-    }
-
-    /*memset(&list_packet, 0, sizeof(list_packet));
-    list_packet.txt_type = TXT_LIST;
-    list_packet.txt_nchannels = len;
-    for (i = 0L; i < len; i++) {
-	
-	memset(&channel_packet, 0, sizeof(channel_packet));
-	strncpy(channel_packet.ch_channel, channel_list[i], (CHANNEL_MAX - 1));
-	memcpy(&list_packet.txt_channels[i], &channel_packet, sizeof(channel_packet));
-    }
-
-    sendto(socket_fd, &list_packet, sizeof(list_packet), 0,
-		(struct sockaddr *)client_addr, sizeof(client_addr));*/
-
-    free(channel_list);
+static void server_list_request(UNUSED char *client_ip) {
     puts("LIST packet received.");
+    server_send_error("Server received your list request...");
 }
 
 /**
@@ -193,27 +197,43 @@ static void server_list_request(struct sockaddr_in *client_addr) {
  */
 static void server_who_request(UNUSED const char *packet) {
     puts("WHO packet received.");
+    server_send_error("Server received your who request...");
 }
 
 /**
  * FIXME
  */
-static void server_logout_request(UNUSED char *client_ip) {
-    puts("LOGOUT packet received.");   
+static void server_logout_request(char *client_ip) {
+
+    User *user;
+    char *channel;
+
+    if (!user_logged_in(client_ip))
+	return;
+    (void)hm_remove(users, client_ip, (void **)&user);
+
+    while (ll_removeFirst(user->channels, (void **)&channel)) {
+	
+	remove_user_from_channel
+    }
+    
+    fprintf(stdout, "User %s logged off\n", user->username); 
+    free_user(user);
 }
 
 /**
  * FIXME
  */
 static void free_ll(LinkedList *ll) {
-    if (ll != NULL)
-	ll_destroy(ll, (void *)free_user);
+    
+    if (ll != NULL) ll_destroy(ll, free);
 }
 
 /**
  * FIXME
  */
 static void cleanup(void) {
+    
     if (socket_fd != -1)
 	close(socket_fd);
     if (users != NULL)
@@ -227,6 +247,7 @@ static void cleanup(void) {
  * message, then terminates the server application.
  */
 static void print_error(const char *msg) {
+    
     fprintf(stderr, "Server: %s\n", msg);
     exit(0);
 }
@@ -235,6 +256,7 @@ static void print_error(const char *msg) {
  * FIXME
  */
 static void sig_handler(UNUSED int signo) {
+    
     fprintf(stdout, "\n\nShutting down server...\n");
     exit(0);
 }
@@ -244,7 +266,6 @@ static void sig_handler(UNUSED int signo) {
  */
 int main(int argc, char *argv[]) {
 
-    struct sockaddr_in client;
     struct hostent *host_end;
     struct tm *timestamp;
     time_t timer;
@@ -334,7 +355,7 @@ int main(int argc, char *argv[]) {
 	struct text *packet_type = (struct text *) buffer;
 	switch (packet_type->txt_type) {
 	    case REQ_LOGIN:
-		server_login_request(buffer, client_ip, &client);
+		server_login_request(buffer, client_ip);
 		break;
 	    case REQ_LOGOUT:
 		server_logout_request(client_ip);
@@ -349,7 +370,7 @@ int main(int argc, char *argv[]) {
 		server_say_request(buffer);
 		break;
 	    case REQ_LIST:
-		server_list_request(&client);
+		server_list_request(client_ip);
 		break;
 	    case REQ_WHO:
 		server_who_request(buffer);
