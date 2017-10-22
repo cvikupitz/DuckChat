@@ -1,0 +1,2 @@
+valgrind --leak-check=full --leak-resolution=high --show-leak-kinds=all \
+./client localhost 8080 $1

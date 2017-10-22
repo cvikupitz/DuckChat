@@ -67,7 +67,14 @@ static User *malloc_user(const char *ip, const char *name) {
 	int name_len = ((strlen(name) > (USERNAME_MAX - 1)) ? (USERNAME_MAX - 1) : strlen(name));
 	new_user->username = (char *)malloc(name_len + 1);
 
-	//FIXME-ERROR CHECK
+	if (new_user->channels == NULL ||
+	    new_user->ip_addr == NULL ||
+	    new_user->username == NULL) {
+	    if (new_user->channels != NULL) ll_destroy(new_user->channels, free);
+	    if (new_user->ip_addr != NULL) free(new_user->ip_addr);
+	    if (new_user->username != NULL) free(new_user->username);
+	    return NULL;
+	}
 
 	strcpy(new_user->ip_addr, ip);
 	memcpy(new_user->username, name, name_len);
@@ -97,9 +104,10 @@ UNUSED static void free_user(User *user) {
 /**
  * FIXME
  */
-UNUSED static void server_send_error(struct sockaddr_in *client_addr, const char *msg) {
+static void server_send_error(struct sockaddr_in *client_addr, const char *msg) {
     
     struct text_error error_packet;
+    memset(&error_packet, 0, sizeof(error_packet));
     error_packet.txt_type = TXT_ERROR;
     strncpy(error_packet.txt_error, msg, (SAY_MAX - 1));
     sendto(socket_fd, &error_packet, sizeof(error_packet), 0,
@@ -109,9 +117,22 @@ UNUSED static void server_send_error(struct sockaddr_in *client_addr, const char
 /**
  * FIXME
  */
-static void server_login_request(UNUSED const char *packet, UNUSED char *client_ip,
-				UNUSED struct sockaddr_in *client_addr) {
-    puts("LOGIN packet received.");
+static void server_login_request(const char *packet, char *client_ip, struct sockaddr_in *client_addr) {
+
+    User *new_user;
+    struct request_login *login_packet = (struct request_login *) packet;
+
+    if ((new_user = malloc_user(client_ip, login_packet->req_username)) == NULL) {
+	server_send_error(client_addr, "Error: Failed to log into the server.");
+	return;
+    }
+    if (!hm_put(users, client_ip, new_user, NULL)) {
+	server_send_error(client_addr, "Error: Failed to log into the server.");
+	free_user(new_user);
+	return;
+    }
+
+    fprintf(stdout, "User %s logged in from %s\n", new_user->username, new_user->ip_addr);
 }
 
 /**
@@ -138,7 +159,32 @@ static void server_say_request(UNUSED const char *packet) {
 /**
  * FIXME
  */
-static void server_list_request(UNUSED const char *packet) {
+static void server_list_request(struct sockaddr_in *client_addr) {
+
+    struct text_list list_packet;
+    struct channel_info channel_packet;
+    long i, len;
+    char **channel_list;
+    
+    if ((channel_list = hm_keyArray(channels, &len)) == NULL) {
+	server_send_error(client_addr, "Error: Server failed to list the channels.");
+	return;
+    }
+
+    /*memset(&list_packet, 0, sizeof(list_packet));
+    list_packet.txt_type = TXT_LIST;
+    list_packet.txt_nchannels = len;
+    for (i = 0L; i < len; i++) {
+	
+	memset(&channel_packet, 0, sizeof(channel_packet));
+	strncpy(channel_packet.ch_channel, channel_list[i], (CHANNEL_MAX - 1));
+	memcpy(&list_packet.txt_channels[i], &channel_packet, sizeof(channel_packet));
+    }
+
+    sendto(socket_fd, &list_packet, sizeof(list_packet), 0,
+		(struct sockaddr *)client_addr, sizeof(client_addr));*/
+
+    free(channel_list);
     puts("LIST packet received.");
 }
 
@@ -153,7 +199,7 @@ static void server_who_request(UNUSED const char *packet) {
  * FIXME
  */
 static void server_logout_request(UNUSED char *client_ip) {
-    puts("LOGOUT packet received.");    
+    puts("LOGOUT packet received.");   
 }
 
 /**
@@ -265,8 +311,8 @@ int main(int argc, char *argv[]) {
 
     /* Display successful launch title, timestamp & address */
     time(&timer);
-    fprintf(stdout, "*** Launched DuckChat server ~ %s", ctime(&timer)); 
-    fprintf(stdout, "*** Server assigned to address %s:%d\n", inet_ntoa(server.sin_addr),
+    fprintf(stdout, "***** Launched DuckChat server ~ %s", ctime(&timer)); 
+    fprintf(stdout, "***** Server assigned to address %s:%d\n", inet_ntoa(server.sin_addr),
 	    ntohs(server.sin_port));
 
     /**
@@ -303,7 +349,7 @@ int main(int argc, char *argv[]) {
 		server_say_request(buffer);
 		break;
 	    case REQ_LIST:
-		server_list_request(buffer);
+		server_list_request(&client);
 		break;
 	    case REQ_WHO:
 		server_who_request(buffer);

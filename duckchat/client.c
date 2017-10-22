@@ -12,6 +12,7 @@
 #include <stdio.h> 
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <sys/unistd.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -25,6 +26,8 @@
 
 /// FIXME - USE htons(), hotl().. for byte order....
 
+/* Suppress compiler warnings for unused parameters */
+#define UNUSED __attribute__((unused))
 /* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 10000
 /* Maximum channels client may be subscribed to at once */
@@ -340,10 +343,19 @@ static void server_error_reply(const char *packet) {
  * was using and switches terminal back to cooked mode.
  */
 static void cleanup(void) {
-   
+    
     if (socket_fd != -1)
 	close(socket_fd);
     cooked_mode();
+}
+
+/**
+ * FIXME
+ */
+static void sig_handler(UNUSED int signo) {
+    
+    cleanup();
+    exit(0);
 }
 
 /**
@@ -382,7 +394,10 @@ int main(int argc, char *argv[]) {
     if (raw_mode() < 0)
 	print_error("Failed to switch terminal to raw mode.");
 
-    /* Register the cleanup() function to be invoked upon program termination */
+    /* Register function to cleanup when user stops the client */
+    /* Also register the cleanup() function to be invoked upon program termination */
+    if (signal(SIGINT, sig_handler))
+	print_error("Failed to catch SIGINT.");
     if ((atexit(cleanup)) != 0)
 	print_error("Call to atexit() failed.");
 
