@@ -12,6 +12,7 @@
 #include <stdio.h> 
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <time.h>
 #include <sys/unistd.h>
 #include <sys/types.h>
@@ -43,17 +44,52 @@ static int socket_fd = -1;
 static HashMap *users = NULL;
 static HashMap *channels = NULL;
 
-/*typedef struct user {
+typedef struct user {
     char *ip_addr;
     char *username;
     int is_alive;
-} User;*/
+} User;
 
 
 /**
  * FIXME
  */
-static void server_send_error(const char *msg, struct sockaddr_in *client_addr) {
+static User *malloc_user(const char *ip, const char *name) {
+    
+    User *new_user;
+    if ((new_user = (User *)malloc(sizeof(User))) != NULL) {
+
+	new_user->ip_addr = (char *)malloc(strlen(ip) + 1);
+	new_user->username = (char *)malloc(strlen(name) + 1);
+	if (new_user->ip_addr == NULL || new_user->username == NULL) {
+	    if (new_user->ip_addr != NULL) free(new_user->ip_addr);
+	    if (new_user->username != NULL) free(new_user->username);
+	    free(new_user);
+	    return NULL;
+	}
+
+	strcpy(new_user->ip_addr, ip);
+	strncpy(new_user->username, name, (USERNAME_MAX - 1));
+	new_user->is_alive = 1;
+    }
+    return new_user;
+}
+
+/**
+ * FIXME
+ */
+static void free_user(User *user) {
+    if (user != NULL) {
+	free(user->ip_addr);
+	free(user->username);
+	free(user);
+    }
+}
+
+/**
+ * FIXME
+ */
+static void server_send_error(struct sockaddr_in *client_addr, const char *msg) {
     
     struct text_error error_packet;
     error_packet.txt_type = TXT_ERROR;
@@ -68,16 +104,21 @@ static void server_send_error(const char *msg, struct sockaddr_in *client_addr) 
 static void server_login_request(const char *packet, char *client_ip,
 				struct sockaddr_in *client_addr) {
 
-    char username[USERNAME_MAX];
+    User *new_user;
     struct request_login *login_packet = (struct request_login *) packet;
 
-    strncpy(username, login_packet->req_username, (USERNAME_MAX - 1));
-    if (!hm_put(users, client_ip, strdup(username), NULL)) {
-	server_send_error("Error: Failed to log into the server.", client_addr);
+    if ((new_user = malloc_user(client_ip, login_packet->req_username)) == NULL) {
+	server_send_error(client_addr, "Error: Failed to log into the server.");
+	return;
+    }
+    if (!hm_put(users, client_ip, new_user, NULL)) {
+	server_send_error(client_addr, "Error: Failed to log into the server.");
+	free_user(new_user);
 	return;
     }
 
-    fprintf(stdout, "User %s logged in from %s\n", username, client_ip);
+    fprintf(stdout, "User %s logged in from %s\n", new_user->username,
+		new_user->ip_addr);
 }
 
 /***/
@@ -107,8 +148,16 @@ static void server_who_request(UNUSED const char *packet) {
 }
 
 /***/
-static void server_logout_request(UNUSED const char *packet) {
-    puts("LOGOUT packet received.");
+static void server_logout_request(char *client_ip) {
+    
+    User *user;
+
+    (void)hm_remove(users, client_ip, (void **)&user);
+    char *username = ((user != NULL) ? user->username : "<UNKNOWN>");
+    if (user != NULL) free(user);
+    /// FIXME-Remove user from all channels
+
+    fprintf(stdout, "User %s logged out\n", username);
 }
 
 /**
@@ -118,6 +167,22 @@ static void server_logout_request(UNUSED const char *packet) {
 static void print_error(const char *msg) {
     fprintf(stderr, "Server: %s\n", msg);
     exit(-1);
+}
+
+/***/
+static void free_ll(LinkedList *ll) {
+    if (ll != NULL)
+	ll_destroy(ll, (void *)free_user);
+}
+
+/***/
+static void sig_handler(UNUSED int signo) {
+    fprintf(stdout, "\n\nShutting down server...\n");
+    if (users != NULL)
+	hm_destroy(users, (void *)free_user);
+    if (channels != NULL)
+	hm_destroy(channels, (void *)free_ll);
+    exit(0);
 }
 
 /**
@@ -139,6 +204,10 @@ int main(int argc, char *argv[]) {
 	fprintf(stdout, "Usage: %s domain_name port_num\n", argv[0]);
 	return 0;
     }
+
+    /* FIXME */
+    if (signal(SIGINT, sig_handler))
+	print_error("Failed to catch SIGINT.");
 
     /* Assert that path name to unix domain socket does not exceed maximum allowed */
     /* Print error message and exit otherwise */
@@ -210,7 +279,7 @@ int main(int argc, char *argv[]) {
 		server_login_request(buffer, client_ip, &client);
 		break;
 	    case REQ_LOGOUT:
-		server_logout_request(buffer);
+		server_logout_request(client_ip);
 		break;
 	    case REQ_JOIN:
 		server_join_request(buffer);
