@@ -40,10 +40,9 @@
 
 
 static struct sockaddr_in server;
-static struct sockaddr_in client;
 static int socket_fd = -1;
 static HashMap *users = NULL;
-static HashMap *channels = NULL;
+//static HashMap *channels = NULL;
 
 
 /**
@@ -51,6 +50,8 @@ static HashMap *channels = NULL;
  */
 typedef struct user {
     LinkedList *channels;
+    struct sockaddr_in addr;
+    socklen_t len;
     char *ip_addr;
     char *username;
     int is_alive;
@@ -59,7 +60,7 @@ typedef struct user {
 /**
  * FIXME
  */
-static User *malloc_user(const char *ip, const char *name) {
+static User *malloc_user(const char *ip, const char *name, struct sockaddr_in *addr, socklen_t len) {
 
     User *new_user;
     if ((new_user = (User *)malloc(sizeof(User))) != NULL) {
@@ -80,6 +81,8 @@ static User *malloc_user(const char *ip, const char *name) {
 	strcpy(new_user->ip_addr, ip);
 	memcpy(new_user->username, name, name_len);
 	new_user->username[name_len] = '\0';
+	memcpy(&new_user->addr, addr, len);
+	new_user->len = len;
     }
 
     return new_user;    
@@ -99,65 +102,58 @@ static void free_user(User *user) {
 	user->username = NULL;
 	free(user);
 	user = NULL;
+	memset(&user->addr, 0, user->len);
     }
 }
 
 /**
  * FIXME
  */
-static int user_logged_in(char *ip) {
+UNUSED static int user_logged_in(char *ip) {
     
     User *user;
     return hm_get(users, ip, (void **)&user);
 }
 
-/***/
-static void remove_user_from_channel(char *ip, LinkedList *channel) {
-    
-    long i;
-    char *user;
-
-    for (i = 0L; i < ll_size(channel); i++) {
-	(void)ll_get(channel, i, (void **)&user);
-	if (strcmp(ip, user) == 0) {
-	    (void)ll_remove(channel, i, (void **)&user);
-	    return;
-	}
-    }
-}
+/**
+ * FIXME
+ */
+UNUSED static void remove_user_from_channel(UNUSED char *ip, UNUSED LinkedList *channel) {}
 
 /**
  * FIXME
  */
-static void server_send_error(const char *msg) {
+static void server_send_error(struct sockaddr_in addr, socklen_t len, const char *msg) {
     
     struct text_error error_packet;
     memset(&error_packet, 0, sizeof(error_packet));
     error_packet.txt_type = TXT_ERROR;
     strncpy(error_packet.txt_error, msg, (SAY_MAX - 1));
     sendto(socket_fd, &error_packet, sizeof(error_packet), 0,
-		(struct sockaddr *)&client, sizeof(client));
+		(struct sockaddr *)&addr, len);
+    /*sendto(socket_fd, &error_packet, sizeof(error_packet), 0,
+		(struct sockaddr *)user->addr, user->len);*/
 }
 
 /**
  * FIXME
  */
-static void server_login_request(const char *packet, char *client_ip) {
+static void server_login_request(const char *packet, char *client_ip, struct sockaddr_in *addr, socklen_t len) {
 
-    User *new_user;
+    User *user;
     struct request_login *login_packet = (struct request_login *) packet;
-
-    if ((new_user = malloc_user(client_ip, login_packet->req_username)) == NULL) {
-	server_send_error("Error: Failed to log into the server.");
+    if ((user = malloc_user(client_ip, login_packet->req_username, addr, len)) == NULL) {
+	server_send_error(*addr, len, "Error: Failed to log into the server.");
 	return;
     }
-    if (!hm_put(users, client_ip, new_user, NULL)) {
-	server_send_error("Error: Failed to log into the server.");
-	free_user(new_user);
+    if (!hm_put(users, client_ip, user, NULL)) {
+	server_send_error(*addr, len, "Error: Failed to log into the server.");
+	free(user);
 	return;
     }
 
-    fprintf(stdout, "User %s logged in from %s\n", new_user->username, new_user->ip_addr);
+    server_send_error(user->addr, user->len, "Logged in!!!");
+    puts("LOGIN packet received.");
 }
 
 /**
@@ -165,7 +161,6 @@ static void server_login_request(const char *packet, char *client_ip) {
  */
 static void server_join_request(UNUSED const char *packet) {
     puts("JOIN packet received.");
-    server_send_error("Server received your join request...");
 }
 
 /**
@@ -173,7 +168,6 @@ static void server_join_request(UNUSED const char *packet) {
  */
 static void server_leave_request(UNUSED const char *packet) {
     puts("LEAVE packet received.");
-    server_send_error("Server received your leave request...");
 }
 
 /**
@@ -181,7 +175,6 @@ static void server_leave_request(UNUSED const char *packet) {
  */
 static void server_say_request(UNUSED const char *packet) {
     puts("SAY packet received.");
-    server_send_error("Server received your say request...");
 }
 
 /**
@@ -189,7 +182,6 @@ static void server_say_request(UNUSED const char *packet) {
  */
 static void server_list_request(UNUSED char *client_ip) {
     puts("LIST packet received.");
-    server_send_error("Server received your list request...");
 }
 
 /**
@@ -197,36 +189,13 @@ static void server_list_request(UNUSED char *client_ip) {
  */
 static void server_who_request(UNUSED const char *packet) {
     puts("WHO packet received.");
-    server_send_error("Server received your who request...");
 }
 
 /**
  * FIXME
  */
-static void server_logout_request(char *client_ip) {
-
-    User *user;
-    char *channel;
-
-    if (!user_logged_in(client_ip))
-	return;
-    (void)hm_remove(users, client_ip, (void **)&user);
-
-    while (ll_removeFirst(user->channels, (void **)&channel)) {
-	
-	remove_user_from_channel
-    }
-    
-    fprintf(stdout, "User %s logged off\n", user->username); 
-    free_user(user);
-}
-
-/**
- * FIXME
- */
-static void free_ll(LinkedList *ll) {
-    
-    if (ll != NULL) ll_destroy(ll, free);
+static void server_logout_request(UNUSED char *client_ip) {
+    puts("LOGOUT packet received.");
 }
 
 /**
@@ -238,8 +207,6 @@ static void cleanup(void) {
 	close(socket_fd);
     if (users != NULL)
 	hm_destroy(users, (void *)free_user);
-    if (channels != NULL)
-	hm_destroy(channels, (void *)free_ll);
 }
 
 /**
@@ -266,6 +233,7 @@ static void sig_handler(UNUSED int signo) {
  */
 int main(int argc, char *argv[]) {
 
+    struct sockaddr_in client;
     struct hostent *host_end;
     struct tm *timestamp;
     time_t timer;
@@ -322,13 +290,6 @@ int main(int argc, char *argv[]) {
     /* Create & initialize ADTs for server to use */
     if ((users = hm_create(100L, 0.0f)) == NULL)
 	print_error("Failed to allocate a sufficient amount of memory.");
-    if ((channels = hm_create(100L, 0.0f)) == NULL)
-	print_error("Failed to allocate a sufficient amount of memory.");
-    LinkedList *default_ll;
-    if ((default_ll = ll_create()) == NULL)
-	print_error("Failed to allocate a sufficient amount of memory.");
-    if (!hm_put(channels, DEFAULT_CHANNEL, default_ll, NULL))
-	print_error("Failed to allocate a sufficient amount of memory.");
 
     /* Display successful launch title, timestamp & address */
     time(&timer);
@@ -355,7 +316,7 @@ int main(int argc, char *argv[]) {
 	struct text *packet_type = (struct text *) buffer;
 	switch (packet_type->txt_type) {
 	    case REQ_LOGIN:
-		server_login_request(buffer, client_ip);
+		server_login_request(buffer, client_ip, &client, addr_len);
 		break;
 	    case REQ_LOGOUT:
 		server_logout_request(client_ip);
