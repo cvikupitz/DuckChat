@@ -44,12 +44,16 @@ static int socket_fd = -1;
 static HashMap *users = NULL;
 static HashMap *channels = NULL;
 
+
+/**
+ * 
+ */
 typedef struct user {
+    LinkedList *channels;
     char *ip_addr;
     char *username;
     int is_alive;
 } User;
-
 
 /**
  * FIXME
@@ -59,9 +63,12 @@ static User *malloc_user(const char *ip, const char *name) {
     User *new_user;
     if ((new_user = (User *)malloc(sizeof(User))) != NULL) {
 
+	new_user->channels = ll_create();
 	new_user->ip_addr = (char *)malloc(strlen(ip) + 1);
 	new_user->username = (char *)malloc(strlen(name) + 1);
-	if (new_user->ip_addr == NULL || new_user->username == NULL) {
+	if (new_user->channels == NULL || new_user->ip_addr == NULL ||
+	    new_user->username == NULL) {
+	    if (new_user->channels != NULL) ll_destroy(new_user->channels, free);
 	    if (new_user->ip_addr != NULL) free(new_user->ip_addr);
 	    if (new_user->username != NULL) free(new_user->username);
 	    free(new_user);
@@ -80,6 +87,7 @@ static User *malloc_user(const char *ip, const char *name) {
  */
 static void free_user(User *user) {
     if (user != NULL) {
+	ll_destroy(user->channels, free);
 	free(user->ip_addr);
 	free(user->username);
 	free(user);
@@ -121,33 +129,44 @@ static void server_login_request(const char *packet, char *client_ip,
 		new_user->ip_addr);
 }
 
-/***/
+/**
+ * FIXME
+ */
 static void server_join_request(UNUSED const char *packet) {
     puts("JOIN packet received.");
 }
 
-/***/
+/**
+ * FIXME
+ */
 static void server_leave_request(UNUSED const char *packet) {
     puts("LEAVE packet received.");
 }
 
-/***/
+/**
+ * FIXME
+ */
 static void server_say_request(UNUSED const char *packet) {
     puts("SAY packet received.");
 }
 
-/***/
+/**
+ * FIXME
+ */
 static void server_list_request(UNUSED const char *packet) {
-    
     puts("LIST packet received.");
 }
 
-/***/
+/**
+ * FIXME
+ */
 static void server_who_request(UNUSED const char *packet) {
     puts("WHO packet received.");
 }
 
-/***/
+/**
+ * FIXME
+ */
 static void server_logout_request(char *client_ip) {
     
     User *user;
@@ -169,15 +188,21 @@ static void print_error(const char *msg) {
     exit(-1);
 }
 
-/***/
+/**
+ * FIXME
+ */
 static void free_ll(LinkedList *ll) {
     if (ll != NULL)
 	ll_destroy(ll, (void *)free_user);
 }
 
-/***/
+/**
+ * FIXME
+ */
 static void sig_handler(UNUSED int signo) {
     fprintf(stdout, "\n\nShutting down server...\n");
+    if (socket_fd != -1)
+	close(socket_fd);
     if (users != NULL)
 	hm_destroy(users, (void *)free_user);
     if (channels != NULL)

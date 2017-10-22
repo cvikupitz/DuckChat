@@ -115,12 +115,13 @@ static void client_join_request(const char *request) {
     /* Return with error if subscription list is currently full */
     ++channel;	/* Skip leading whitespace character */
     if (!join_channel(channel)) {
-	fprintf(stdout, "Cannot join channel, subscribed to the maximum allowed (%d)\n",
+	fprintf(stdout, "Cannot join channel, subscribed to the maximum allowed (%d).\n",
 		MAX_CHANNELS);
 	return;
     }
     /* Create & send the join channel packet to the server */
     struct request_join join_packet;
+    memset(&join_packet, 0, sizeof(join_packet));
     join_packet.req_type = REQ_JOIN;
     strncpy(join_packet.req_channel, channel, (CHANNEL_MAX - 1));
     sendto(socket_fd, &join_packet, sizeof(join_packet), 0,
@@ -145,6 +146,7 @@ static void client_leave_request(const char *request) {
     leave_channel(channel);
     /* Create & send the leave packet to the server */
     struct request_leave leave_packet;
+    memset(&leave_packet, 0, sizeof(leave_packet));
     leave_packet.req_type = REQ_LEAVE;
     strncpy(leave_packet.req_channel, channel, (CHANNEL_MAX - 1));
     sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
@@ -166,6 +168,7 @@ static void client_say_request(const char *request) {
     /* Create & send the say packet to the server */
     /* Packet should contain the message and active channel */
     struct request_say say_packet;
+    memset(&say_packet, 0, sizeof(say_packet));
     say_packet.req_type = REQ_SAY;
     strncpy(say_packet.req_channel, active_channel, (CHANNEL_MAX - 1));
     strncpy(say_packet.req_text, request, (SAY_MAX - 1));
@@ -193,6 +196,7 @@ static void server_say_reply(const char *packet) {
 static void client_list_request(void) {
     
     struct request_list list_packet;
+    memset(&list_packet, 0, sizeof(list_packet));
     list_packet.req_type = REQ_LIST;
     sendto(socket_fd, &list_packet, sizeof(list_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
@@ -227,6 +231,7 @@ static void client_who_request(const char *request) {
     }
     /* Create & send the who packet to the server */
     struct request_who who_packet;
+    memset(&who_packet, 0, sizeof(who_packet));
     who_packet.req_type = REQ_WHO;
     strncpy(who_packet.req_channel, ++channel, (CHANNEL_MAX - 1));
     sendto(socket_fd, &who_packet, sizeof(who_packet), 0,
@@ -314,6 +319,7 @@ static void client_help_request(void) {
 static void client_logout_request(void) {
     
     struct request_logout logout_packet;
+    memset(&logout_packet, 0, sizeof(logout_packet));
     logout_packet.req_type = REQ_LOGOUT;
     sendto(socket_fd, &logout_packet, sizeof(logout_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
@@ -430,11 +436,13 @@ int main(int argc, char *argv[]) {
 	strcpy(subscribed[i], "");
 
     /* Send a packet to the server to log user in */
+    memset(&login_packet, 0, sizeof(login_packet));
     login_packet.req_type = REQ_LOGIN;
     strncpy(login_packet.req_username, username, USERNAME_MAX);
     sendto(socket_fd, &login_packet, sizeof(login_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
     /* Send a packet to the server to join the default channel */
+    memset(&join_packet, 0, sizeof(join_packet));
     join_packet.req_type = REQ_JOIN;
     strncpy(join_packet.req_channel, DEFAULT_CHANNEL, (CHANNEL_MAX - 1));
     sendto(socket_fd, &join_packet, sizeof(join_packet), 0,
