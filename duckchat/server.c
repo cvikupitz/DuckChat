@@ -65,7 +65,9 @@ static User *malloc_user(const char *ip, const char *name) {
 
 	new_user->channels = ll_create();
 	new_user->ip_addr = (char *)malloc(strlen(ip) + 1);
-	new_user->username = (char *)malloc(strlen(name) + 1);
+	int name_len = ((strlen(name) > (USERNAME_MAX - 1)) ? (USERNAME_MAX - 1) : strlen(name));
+	new_user->username = (char *)malloc(name_len);
+	
 	if (new_user->channels == NULL || new_user->ip_addr == NULL ||
 	    new_user->username == NULL) {
 	    if (new_user->channels != NULL) ll_destroy(new_user->channels, free);
@@ -76,9 +78,10 @@ static User *malloc_user(const char *ip, const char *name) {
 	}
 
 	strcpy(new_user->ip_addr, ip);
-	strncpy(new_user->username, name, (USERNAME_MAX - 1));
+	strcpy(new_user->username, name);
 	new_user->is_alive = 1;
     }
+
     return new_user;
 }
 
@@ -86,11 +89,16 @@ static User *malloc_user(const char *ip, const char *name) {
  * FIXME
  */
 static void free_user(User *user) {
+    
     if (user != NULL) {
 	ll_destroy(user->channels, free);
+	user->channels = NULL;
 	free(user->ip_addr);
+	user->ip_addr = NULL;
 	free(user->username);
+	user->username = NULL;
 	free(user);
+	user = NULL;
     }
 }
 
