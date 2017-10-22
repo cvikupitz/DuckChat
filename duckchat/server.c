@@ -46,7 +46,7 @@ static HashMap *channels = NULL;
 
 
 /**
- * 
+ * FIXME
  */
 typedef struct user {
     LinkedList *channels;
@@ -59,36 +59,28 @@ typedef struct user {
  * FIXME
  */
 static User *malloc_user(const char *ip, const char *name) {
-    
+
     User *new_user;
     if ((new_user = (User *)malloc(sizeof(User))) != NULL) {
-
 	new_user->channels = ll_create();
 	new_user->ip_addr = (char *)malloc(strlen(ip) + 1);
 	int name_len = ((strlen(name) > (USERNAME_MAX - 1)) ? (USERNAME_MAX - 1) : strlen(name));
-	new_user->username = (char *)malloc(name_len);
-	
-	if (new_user->channels == NULL || new_user->ip_addr == NULL ||
-	    new_user->username == NULL) {
-	    if (new_user->channels != NULL) ll_destroy(new_user->channels, free);
-	    if (new_user->ip_addr != NULL) free(new_user->ip_addr);
-	    if (new_user->username != NULL) free(new_user->username);
-	    free(new_user);
-	    return NULL;
-	}
+	new_user->username = (char *)malloc(name_len + 1);
+
+	//FIXME-ERROR CHECK
 
 	strcpy(new_user->ip_addr, ip);
-	strcpy(new_user->username, name);
-	new_user->is_alive = 1;
+	memcpy(new_user->username, name, name_len);
+	new_user->username[name_len] = '\0';
     }
 
-    return new_user;
+    return new_user;    
 }
 
 /**
  * FIXME
  */
-static void free_user(User *user) {
+UNUSED static void free_user(User *user) {
     
     if (user != NULL) {
 	ll_destroy(user->channels, free);
@@ -105,7 +97,7 @@ static void free_user(User *user) {
 /**
  * FIXME
  */
-static void server_send_error(struct sockaddr_in *client_addr, const char *msg) {
+UNUSED static void server_send_error(struct sockaddr_in *client_addr, const char *msg) {
     
     struct text_error error_packet;
     error_packet.txt_type = TXT_ERROR;
@@ -117,24 +109,9 @@ static void server_send_error(struct sockaddr_in *client_addr, const char *msg) 
 /**
  * FIXME
  */
-static void server_login_request(const char *packet, char *client_ip,
-				struct sockaddr_in *client_addr) {
-
-    User *new_user;
-    struct request_login *login_packet = (struct request_login *) packet;
-
-    if ((new_user = malloc_user(client_ip, login_packet->req_username)) == NULL) {
-	server_send_error(client_addr, "Error: Failed to log into the server.");
-	return;
-    }
-    if (!hm_put(users, client_ip, new_user, NULL)) {
-	server_send_error(client_addr, "Error: Failed to log into the server.");
-	free_user(new_user);
-	return;
-    }
-
-    fprintf(stdout, "User %s logged in from %s\n", new_user->username,
-		new_user->ip_addr);
+static void server_login_request(UNUSED const char *packet, UNUSED char *client_ip,
+				UNUSED struct sockaddr_in *client_addr) {
+    puts("LOGIN packet received.");
 }
 
 /**
@@ -175,25 +152,8 @@ static void server_who_request(UNUSED const char *packet) {
 /**
  * FIXME
  */
-static void server_logout_request(char *client_ip) {
-    
-    User *user;
-
-    (void)hm_remove(users, client_ip, (void **)&user);
-    char *username = ((user != NULL) ? user->username : "<UNKNOWN>");
-    if (user != NULL) free(user);
-    /// FIXME-Remove user from all channels
-
-    fprintf(stdout, "User %s logged out\n", username);
-}
-
-/**
- * Prints the specified message to standard error stream as a program error
- * message, then terminates the server application.
- */
-static void print_error(const char *msg) {
-    fprintf(stderr, "Server: %s\n", msg);
-    exit(-1);
+static void server_logout_request(UNUSED char *client_ip) {
+    puts("LOGOUT packet received.");    
 }
 
 /**
@@ -207,14 +167,29 @@ static void free_ll(LinkedList *ll) {
 /**
  * FIXME
  */
-static void sig_handler(UNUSED int signo) {
-    fprintf(stdout, "\n\nShutting down server...\n");
+static void cleanup(void) {
     if (socket_fd != -1)
 	close(socket_fd);
     if (users != NULL)
 	hm_destroy(users, (void *)free_user);
     if (channels != NULL)
 	hm_destroy(channels, (void *)free_ll);
+}
+
+/**
+ * Prints the specified message to standard error stream as a program error
+ * message, then terminates the server application.
+ */
+static void print_error(const char *msg) {
+    fprintf(stderr, "Server: %s\n", msg);
+    exit(0);
+}
+
+/**
+ * FIXME
+ */
+static void sig_handler(UNUSED int signo) {
+    fprintf(stdout, "\n\nShutting down server...\n");
     exit(0);
 }
 
@@ -238,9 +213,12 @@ int main(int argc, char *argv[]) {
 	return 0;
     }
 
-    /* FIXME */
+    /* Register function to cleanup when user stops the server */
+    /* Also register the cleanup() function to be invoked upon program termination */
     if (signal(SIGINT, sig_handler))
 	print_error("Failed to catch SIGINT.");
+    if ((atexit(cleanup)) != 0)
+	print_error("Call to atexit() failed.");
 
     /* Assert that path name to unix domain socket does not exceed maximum allowed */
     /* Print error message and exit otherwise */
@@ -258,22 +236,23 @@ int main(int argc, char *argv[]) {
     if (port_num < 0 || port_num > 65535)
 	print_error("Server socket must be in the range [0, 65535].");
 
-    /* FIXME */
+    /* Obtain the address of the specified host */
     if ((host_end = gethostbyname(argv[1])) == NULL)
 	print_error("Failed to locate the host.");
 
-    /* FIXME */
-    bzero((char *)&server, sizeof(server));
+    /* Create server address struct, set internet family, address, & port number */
+    memset((char *)&server, 0, sizeof(server));
     server.sin_family = AF_INET;
-    bcopy((char *)host_end->h_addr, (char *)&server.sin_addr.s_addr, host_end->h_length);
+    memcpy((char *)host_end->h_addr, (char *)&server.sin_addr.s_addr, host_end->h_length);
     server.sin_port = htons(port_num);
 
-    /* FIXME */
+    /* Create the UDP socket, bind name to socket */
     if ((socket_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	print_error("Failed to create a socket for the server.");
     if (bind(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
 	print_error("Failed to assign the requested address.");
 
+    /* Create & initialize ADTs for server to use */
     if ((users = hm_create(100L, 0.0f)) == NULL)
 	print_error("Failed to allocate a sufficient amount of memory.");
     if ((channels = hm_create(100L, 0.0f)) == NULL)
@@ -284,10 +263,10 @@ int main(int argc, char *argv[]) {
     if (!hm_put(channels, DEFAULT_CHANNEL, default_ll, NULL))
 	print_error("Failed to allocate a sufficient amount of memory.");
 
-    /* FIXME */
+    /* Display successful launch title, timestamp & address */
     time(&timer);
-    fprintf(stdout, "* Launched DuckChat server ~ %s", ctime(&timer)); 
-    fprintf(stdout, "* Server assigned to address %s:%d\n", inet_ntoa(server.sin_addr),
+    fprintf(stdout, "*** Launched DuckChat server ~ %s", ctime(&timer)); 
+    fprintf(stdout, "*** Server assigned to address %s:%d\n", inet_ntoa(server.sin_addr),
 	    ntohs(server.sin_port));
 
     /**
