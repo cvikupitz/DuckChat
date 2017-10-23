@@ -28,12 +28,15 @@
 /// FIXME - Ensure byte order, htonl/s()....
 /// FIXME - Server mesage when error occurs
 /// FIXME - Set max channel number?
+/// FIXME - Unique user in channel, joining twice results in 2 messages...
 
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
 /* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 10000
-/*  */
+/* FIXME */
+#define MAX_CHANNELS 100
+/* FIXME */
 #define DEFAULT_CHANNEL "Common"
 /* Refresh rate (in minutes) of the server to forcefully logout inactive users */
 #define REFRESH_RATE 2
@@ -270,7 +273,7 @@ static void server_leave_request(const char *packet, char *client_ip, struct soc
     }
 
     if (ll_isEmpty(user_list) && strcmp(channel, DEFAULT_CHANNEL)) {
-	hm_remove(channels, channel, (void **)&user_list);
+	(void)hm_remove(channels, channel, (void **)&user_list);
 	ll_destroy(user_list, NULL);
 	print_timestamp();
 	fprintf(stdout, "Removed the empty channel %s\n", channel);
@@ -313,15 +316,49 @@ static void server_say_request(const char *packet, char *client_ip) {
 /**
  * FIXME
  */
-static void server_list_request(UNUSED char *client_ip) {
-    puts("****** LIST packet received.");
+static void server_list_request(char *client_ip) {
+
+    User *user;
+    long len;
+    char **ch_list;
+    struct text_list list_packet;
+
+    if (!hm_get(users, client_ip, (void **)&user))
+	return;
+    if ((ch_list = hm_keyArray(channels, &len)) == NULL)
+	return;
+
+    
+    list_packet.txt_type = TXT_LIST;
+    list_packet.txt_nchannels = 0;//FIXME - len
+    ///FIXME - FIX LIST
+
+    sendto(socket_fd, &list_packet, sizeof(list_packet), 0,
+		(struct sockaddr *)user->addr, user->len);
+
+    fprintf(stdout, "User %s listed available channels on server\n", user->username);
+    free(ch_list);
 }
 
 /**
  * FIXME
  */
-static void server_who_request(UNUSED const char *packet) {
-    puts("****** WHO packet received.");
+static void server_who_request(const char *packet, char *client_ip) {
+
+    User *user;
+    struct request_who *who_packet = (struct request_who *) packet;
+    struct text_who msg_packet;
+
+    if (!hm_get(users, client_ip, (void **)&user))
+	return;
+
+    msg_packet.txt_type = TXT_WHO;
+    msg_packet.txt_nusernames = 0;
+    strncpy(msg_packet.txt_channel, who_packet->req_channel, (CHANNEL_MAX - 1));
+    ///FIXME - LIST USERS
+
+    fprintf(stdout, "User %s listed subscribed users on channel %s\n",
+		    user->username, who_packet->req_channel);
 }
 
 /**
@@ -364,6 +401,7 @@ static void server_logout_request(char *client_ip) {
  * FIXME
  */
 static void free_ll(LinkedList *ll) {
+    
     if (ll != NULL)
 	ll_destroy(ll, NULL);
 }
@@ -506,7 +544,7 @@ int main(int argc, char *argv[]) {
 		server_list_request(client_ip);
 		break;
 	    case REQ_WHO:   /**/
-		server_who_request(buffer);
+		server_who_request(buffer, client_ip);
 		break;
 	    default:	/* Do nothing, likey a bogus packet */
 		break;
