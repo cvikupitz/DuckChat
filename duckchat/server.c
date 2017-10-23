@@ -125,13 +125,6 @@ static void print_timestamp(void) {
 /**
  * FIXME
  */
-UNUSED static void logout_user(UNUSED User *user) {
-
-}
-
-/**
- * FIXME
- */
 static void server_send_error(struct sockaddr_in *addr, socklen_t len, const char *msg) {
     
     struct text_error error_packet;
@@ -290,8 +283,34 @@ static void server_leave_request(const char *packet, char *client_ip, struct soc
 /**
  * FIXME
  */
-static void server_say_request(UNUSED const char *packet) {
-    puts("****** SAY packet received.");
+static void server_say_request(const char *packet, char *client_ip) {
+    
+    User *user;
+    User **listeners;
+    LinkedList *ch_users;
+    long i, len;
+    struct request_say *say_packet = (struct request_say *) packet;
+    struct text_say msg_packet;
+
+    if (!hm_get(users, client_ip, (void **)&user))
+	return;
+    if (!hm_get(channels, say_packet->req_channel, (void **)&ch_users))
+	return;
+    if ((listeners = (User **)ll_toArray(ch_users, &len)) == NULL)
+	return;
+
+    memset(&msg_packet, 0, sizeof(msg_packet));
+    strncpy(msg_packet.txt_channel, say_packet->req_channel, (CHANNEL_MAX - 1));
+    strncpy(msg_packet.txt_username, user->username, (USERNAME_MAX - 1));
+    strncpy(msg_packet.txt_text, say_packet->req_text, (SAY_MAX - 1));
+
+    for (i = 0L; i < len; i++)
+	sendto(socket_fd, &msg_packet, sizeof(msg_packet), 0,
+		(struct sockaddr *)listeners[i]->ip_addr, listeners[i]->len);
+
+    free(listeners);
+    fprintf(stdout, "User %s said in channel %s -> %s\n", user->username,
+		msg_packet.txt_channel, msg_packet.txt_text);
 }
 
 /**
@@ -311,7 +330,7 @@ static void server_who_request(UNUSED const char *packet) {
 /**
  * FIXME
  */
-static void server_logout_request(UNUSED char *client_ip) {
+static void server_logout_request(char *client_ip) {
 
     User *user, *temp;
     LinkedList *user_list;
@@ -380,7 +399,7 @@ static void print_error(const char *msg) {
  */
 static void sig_handler(UNUSED int signo) {
     
-    fprintf(stdout, "\n\nShutting down server...\n");
+    fprintf(stdout, "\n\nShutting down server...\n\n");
     exit(0);
 }
 
@@ -484,7 +503,7 @@ int main(int argc, char *argv[]) {
 		server_leave_request(buffer, client_ip, &client, addr_len);
 		break;
 	    case REQ_SAY:   /**/
-		server_say_request(buffer);
+		server_say_request(buffer, client_ip);
 		break;
 	    case REQ_LIST:  /**/
 		server_list_request(client_ip);
