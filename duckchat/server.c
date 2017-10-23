@@ -31,9 +31,11 @@
 #define UNUSED __attribute__((unused))
 /* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 10000
-/* Maximum number of channels allowed on the server at a time */
-#define MAX_CHANNELS 50
 /* FIXME */
+#define MAX_CHANNELS 100
+/*  */
+#define MAX_CHANNEL_USERS 250
+/*  */
 #define DEFAULT_CHANNEL "Common"
 /* Refresh rate (in minutes) of the server to forcefully logout inactive users */
 #define REFRESH_RATE 2
@@ -151,6 +153,8 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
 static void server_join_request(const char *packet, char *client_ip, struct sockaddr_in *addr, socklen_t len) {
     
     User *user;
+    LinkedList *user_list;
+    char buffer[SAY_MAX];
     struct request_join *join_packet = (struct request_join *) packet;
 
     if (!hm_get(users, client_ip, (void **)&user)) {
@@ -158,7 +162,36 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
 	return;
     }
 
-    puts("JOIN packet received.");
+    if (!hm_get(channels, join_packet->req_channel, (void **)&user_list)) {
+	if ((user_list = ll_create()) == NULL) {
+	    sprintf(buffer, "Error: Failed to join the channel %s.", join_packet->req_channel);
+	    server_send_error(*addr, len, buffer);
+	    return;
+	}
+	if (!ll_add(user_list, user)) {
+	    ll_destroy(user_list, NULL);
+	    sprintf(buffer, "Error: Failed to join the channel %s.", join_packet->req_channel);
+	    server_send_error(*addr, len, buffer);
+	    return;
+	}
+	if (!hm_put(channels, join_packet->req_channel, user_list, NULL)) {
+	    ll_destroy(user_list, NULL);
+	    sprintf(buffer, "Error: Failed to join the channel %s.", join_packet->req_channel);
+	    server_send_error(*addr, len, buffer);
+	    return;
+	}
+	fprintf(stdout, "User %s created & joined the channel %s\n", user->username, join_packet->req_channel);
+
+    } else {
+	if (!ll_add(user_list, user)) {
+	    sprintf(buffer, "Error: Failed to join the channel %s.", join_packet->req_channel);
+	    server_send_error(*addr, len, buffer);
+	    return;
+	}
+
+	fprintf(stdout, "User %s joined the channel %s\n", user->username, join_packet->req_channel);
+    }
+
 }
 
 /**
@@ -178,8 +211,31 @@ static void server_say_request(UNUSED const char *packet) {
 /**
  * FIXME
  */
-static void server_list_request(UNUSED char *client_ip) {
-    puts("LIST packet received.");
+static void server_list_request(char *client_ip) {
+
+    User *user;
+    char **list;
+    long i, len;
+    struct text_list list_packet;
+    
+    if (!hm_get(users, client_ip, (void **)&user)) {
+	server_send_error(user->addr, user->len, "Error: You are not currently logged in.");
+	return;
+    }
+    if ((list = hm_keyArray(channels, &len)) == NULL) {
+	server_send_error(user->addr, user->len, "Error: Failed to retrieve the channel list.");
+	return;
+    }
+
+    memset(&list_packet, 0, sizeof(list_packet));
+    list_packet.txt_type = TXT_LIST;
+    list_packet.txt_nchannels = len;
+    list_packet.txt_channels = channel_info[len];
+    /*for (i = 0L; i < len; i++)
+	strncpy(channels[i].ch_channel, list[i], (CHANNEL_MAX - 1));
+    list_packet.txt_channels = channels;
+    free(list);*/
+
 }
 
 /**
