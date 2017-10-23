@@ -140,6 +140,8 @@ static void server_send_error(struct sockaddr_in *addr, socklen_t len, const cha
     strncpy(error_packet.txt_error, msg, (SAY_MAX - 1));
     sendto(socket_fd, &error_packet, sizeof(error_packet), 0,
 		(struct sockaddr *)addr, len);
+    fprintf(stdout, "Sent error message to %s:%d - %s\n", inet_ntoa(addr->sin_addr),
+	    ntohs(addr->sin_port), msg);
 }
 
 /**
@@ -276,7 +278,7 @@ static void server_leave_request(const char *packet, char *client_ip, struct soc
 		    user->username, channel);
 
     if (ll_isEmpty(user_list) && strcmp(channel, DEFAULT_CHANNEL)) {
-	hm_remove(channels, client_ip, (void **)&user_list);
+	hm_remove(channels, channel, (void **)&user_list);
 	ll_destroy(user_list, NULL);
 	print_timestamp();
 	fprintf(stdout, "Removed the empty channel %s\n", channel);

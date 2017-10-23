@@ -294,7 +294,10 @@ static void client_subscribed_request(void) {
     for (i = 0; i < MAX_CHANNELS; i++) {
 	if (strcmp(subscribed[i], "") == 0)
 	    continue;	    /* Skip over empty strings */
-	fprintf(stdout, "  %s\n", subscribed[i]);
+	if (strcmp(subscribed[i], active_channel) == 0)
+	    fprintf(stdout, "* %s\n", subscribed[i]);
+	else
+	    fprintf(stdout, "  %s\n", subscribed[i]);
     }
 }
 
