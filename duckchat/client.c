@@ -295,7 +295,7 @@ static void client_subscribed_request(void) {
 	if (strcmp(subscribed[i], "") == 0)
 	    continue;	    /* Skip over empty strings */
 	if (strcmp(subscribed[i], active_channel) == 0)
-	    fprintf(stdout, "* %s\n", subscribed[i]);
+	    fprintf(stdout, "> %s\n", subscribed[i]);
 	else
 	    fprintf(stdout, "  %s\n", subscribed[i]);
     }
@@ -346,7 +346,7 @@ static void server_error_reply(const char *packet) {
  * was using and switches terminal back to cooked mode.
  */
 static void cleanup(void) {
-    
+
     if (socket_fd != -1)
 	close(socket_fd);
     cooked_mode();

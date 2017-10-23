@@ -25,7 +25,7 @@
 #include "hashmap.h"
 #include "linkedlist.h"
 
-///FIXME - Ensure byte order, htonl/s()....
+/// FIXME - Ensure byte order, htonl/s()....
 /// FIXME - server mesage when error occurs
 
 /* Suppress compiler warnings for unused parameters */
@@ -140,7 +140,7 @@ static void server_send_error(struct sockaddr_in *addr, socklen_t len, const cha
     strncpy(error_packet.txt_error, msg, (SAY_MAX - 1));
     sendto(socket_fd, &error_packet, sizeof(error_packet), 0,
 		(struct sockaddr *)addr, len);
-    fprintf(stdout, "Sent error message to %s:%d - %s\n", inet_ntoa(addr->sin_addr),
+    fprintf(stdout, "Sent error message to %s:%d -> %s\n", inet_ntoa(addr->sin_addr),
 	    ntohs(addr->sin_port), msg);
 }
 
@@ -266,16 +266,18 @@ static void server_leave_request(const char *packet, char *client_ip, struct soc
     for (i = 0L; i < ll_size(user_list); i++) {
 	(void)ll_get(user_list, i, (void **)&temp);
 	if (strcmp(user->ip_addr, temp->ip_addr) == 0) {
-	    ll_remove(user_list, i, (void **)&temp);
+	    (void)ll_remove(user_list, i, (void **)&temp);
 	    break;
 	}
     }
 
-    if (removed)
+    if (removed) {
 	fprintf(stdout, "User %s left the channel %s\n", user->username, channel);
-    else
-	fprintf(stdout, "User %s tried to leave non-subscribed/non-existent channel %s\n",
-		    user->username, channel);
+    } else {
+	sprintf(buffer, "You are not subscribed to the channel %s", channel);
+	server_send_error(user->addr, user->len, buffer);
+	return;
+    }
 
     if (ll_isEmpty(user_list) && strcmp(channel, DEFAULT_CHANNEL)) {
 	hm_remove(channels, channel, (void **)&user_list);
@@ -310,7 +312,36 @@ static void server_who_request(UNUSED const char *packet) {
  * FIXME
  */
 static void server_logout_request(UNUSED char *client_ip) {
-    puts("****** LOGOUT packet received.");
+
+    User *user, *temp;
+    LinkedList *user_list;
+    long i;
+    char *channel;
+
+    if (!hm_remove(users, client_ip, (void **)&user))
+	return;
+    fprintf(stdout, "User %s logged out\n", user->username);
+    while (ll_removeFirst(user->channels, (void **)&channel)) {
+	if (!hm_get(channels, channel, (void **)&user_list)) {
+	    free(channel);
+	    continue;
+	}
+	for (i = 0L; i < ll_size(user_list); i++) {
+	    (void)ll_get(user_list, i, (void **)&temp);
+	    if (strcmp(user->ip_addr, temp->ip_addr) == 0) {
+		(void)ll_remove(user_list, i, (void **)&temp);
+		break;
+	    }
+	}
+	if (ll_isEmpty(user_list) && strcmp(channel, DEFAULT_CHANNEL)) {
+	    (void)hm_remove(channels, channel, (void **)&user_list);
+	    ll_destroy(user_list, NULL);
+	    print_timestamp();
+	    fprintf(stdout, "Removed the empty channel %s\n", channel);
+	}
+	free(channel);
+    }
+    free_user(user);
 }
 
 /**
