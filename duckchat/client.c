@@ -350,11 +350,12 @@ static void cleanup(void) {
 }
 
 /**
- * FIXME
+ * Function that handles an interrupt signal from the user. Simply exits
+ * the program, which will invoke the cleanup method registered with the
+ * atexit() function.
  */
 static void sig_handler(UNUSED int signo) {
     
-    cleanup();
     exit(0);
 }
 
