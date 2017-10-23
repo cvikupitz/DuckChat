@@ -1,2 +1,2 @@
-valgrind --leak-check=full --leak-resolution=high --show-leak-kinds=all \
+valgrind --leak-check=full --leak-resolution=high --track-origins=yes --show-leak-kinds=all \
 ./server localhost 8080

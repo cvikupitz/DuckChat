@@ -26,16 +26,13 @@
 #include "linkedlist.h"
 
 /// FIXME - Ensure byte order, htonl/s()....
-/// FIXME - server mesage when error occurs
+/// FIXME - Server mesage when error occurs
+/// FIXME - Set max channel number?
 
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
 /* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 10000
-/* FIXME */
-#define MAX_CHANNELS 100
-/*  */
-#define MAX_CHANNEL_USERS 250
 /*  */
 #define DEFAULT_CHANNEL "Common"
 /* Refresh rate (in minutes) of the server to forcefully logout inactive users */
@@ -306,7 +303,7 @@ static void server_say_request(const char *packet, char *client_ip) {
 
     for (i = 0L; i < len; i++)
 	sendto(socket_fd, &msg_packet, sizeof(msg_packet), 0,
-		(struct sockaddr *)listeners[i]->ip_addr, listeners[i]->len);
+		(struct sockaddr *)listeners[i]->addr, listeners[i]->len);
 
     free(listeners);
     fprintf(stdout, "User %s said in channel %s -> %s\n", user->username,
