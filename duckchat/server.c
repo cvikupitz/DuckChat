@@ -51,9 +51,9 @@ static HashMap *channels = NULL;
  * FIXME
  */
 typedef struct user {
-    LinkedList *channels;
-    struct sockaddr_in addr;
+    struct sockaddr_in *addr;
     socklen_t len;
+    LinkedList *channels;
     char *ip_addr;
     char *username;
     int is_alive;
@@ -66,6 +66,7 @@ static User *malloc_user(const char *ip, const char *name, struct sockaddr_in *a
 
     User *new_user;
     if ((new_user = (User *)malloc(sizeof(User))) != NULL) {
+	new_user->addr = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
 	new_user->channels = ll_create();
 	new_user->ip_addr = (char *)malloc(strlen(ip) + 1);
 	int name_len = ((strlen(name) > (USERNAME_MAX - 1)) ? (USERNAME_MAX - 1) : strlen(name));
@@ -80,11 +81,11 @@ static User *malloc_user(const char *ip, const char *name, struct sockaddr_in *a
 	    return NULL;
 	}
 
+	*new_user->addr = *addr;
+	new_user->len = len;
 	strcpy(new_user->ip_addr, ip);
 	memcpy(new_user->username, name, name_len);
 	new_user->username[name_len] = '\0';
-	memcpy(&new_user->addr, addr, len);
-	new_user->len = len;
     }
 
     return new_user;    
@@ -96,13 +97,13 @@ static User *malloc_user(const char *ip, const char *name, struct sockaddr_in *a
 static void free_user(User *user) {
     
     if (user != NULL) {
+	free(user->addr);
 	ll_destroy(user->channels, free);
 	user->channels = NULL;
 	free(user->ip_addr);
 	user->ip_addr = NULL;
 	free(user->username);
 	user->username = NULL;
-	memset(&user->addr, 0, user->len);
 	free(user);
 	user = NULL;
     }
@@ -116,14 +117,14 @@ UNUSED static void remove_user_from_channel(UNUSED char *ip, UNUSED LinkedList *
 /**
  * FIXME
  */
-static void server_send_error(struct sockaddr_in addr, socklen_t len, const char *msg) {
+static void server_send_error(struct sockaddr_in *addr, socklen_t len, const char *msg) {
     
     struct text_error error_packet;
     memset(&error_packet, 0, sizeof(error_packet));
     error_packet.txt_type = TXT_ERROR;
     strncpy(error_packet.txt_error, msg, (SAY_MAX - 1));
     sendto(socket_fd, &error_packet, sizeof(error_packet), 0,
-		(struct sockaddr *)&addr, len);
+		(struct sockaddr *)addr, len);
 }
 
 /**
@@ -134,16 +135,16 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
     User *user;
     struct request_login *login_packet = (struct request_login *) packet;
     if ((user = malloc_user(client_ip, login_packet->req_username, addr, len)) == NULL) {
-	server_send_error(*addr, len, "Error: Failed to log into the server.");
+	server_send_error(addr, len, "Error: Failed to log into the server.");
 	return;
     }
     if (!hm_put(users, client_ip, user, NULL)) {
-	server_send_error(*addr, len, "Error: Failed to log into the server.");
+	server_send_error(addr, len, "Error: Failed to log into the server.");
 	free(user);
 	return;
     }
 
-    //server_send_error(user->addr, user->len, "Logged in!!!"); FIXME
+    //server_send_error(user->addr, user->len, "Logged in!!!");//FIXME
     fprintf(stdout, "User %s logged in from %s\n", user->username, user->ip_addr);
 }
 
@@ -158,26 +159,26 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
     struct request_join *join_packet = (struct request_join *) packet;
 
     if (!hm_get(users, client_ip, (void **)&user)) {
-	server_send_error(*addr, len, "Error: You are not currently logged in.");
+	server_send_error(addr, len, "Error: You are not currently logged in.");
 	return;
     }
 
     if (!hm_get(channels, join_packet->req_channel, (void **)&user_list)) {
 	if ((user_list = ll_create()) == NULL) {
 	    sprintf(buffer, "Error: Failed to join the channel %s.", join_packet->req_channel);
-	    server_send_error(*addr, len, buffer);
+	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
 	if (!ll_add(user_list, user)) {
 	    ll_destroy(user_list, NULL);
 	    sprintf(buffer, "Error: Failed to join the channel %s.", join_packet->req_channel);
-	    server_send_error(*addr, len, buffer);
+	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
 	if (!hm_put(channels, join_packet->req_channel, user_list, NULL)) {
 	    ll_destroy(user_list, NULL);
 	    sprintf(buffer, "Error: Failed to join the channel %s.", join_packet->req_channel);
-	    server_send_error(*addr, len, buffer);
+	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
 	fprintf(stdout, "User %s created & joined the channel %s\n", user->username, join_packet->req_channel);
@@ -185,13 +186,12 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
     } else {
 	if (!ll_add(user_list, user)) {
 	    sprintf(buffer, "Error: Failed to join the channel %s.", join_packet->req_channel);
-	    server_send_error(*addr, len, buffer);
+	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
 
 	fprintf(stdout, "User %s joined the channel %s\n", user->username, join_packet->req_channel);
     }
-
 }
 
 /**
@@ -211,7 +211,7 @@ static void server_say_request(UNUSED const char *packet) {
 /**
  * FIXME
  */
-static void server_list_request(char *client_ip) {
+static void server_list_request(UNUSED char *client_ip) {
 
     User *user;
     char **list;
@@ -229,12 +229,14 @@ static void server_list_request(char *client_ip) {
 
     memset(&list_packet, 0, sizeof(list_packet));
     list_packet.txt_type = TXT_LIST;
-    list_packet.txt_nchannels = len;
-    list_packet.txt_channels = channel_info[len];
-    /*for (i = 0L; i < len; i++)
-	strncpy(channels[i].ch_channel, list[i], (CHANNEL_MAX - 1));
-    list_packet.txt_channels = channels;
-    free(list);*/
+    list_packet.txt_nchannels = 0;///FIXME
+    //for (i = 0L; i < len; i++)
+	//strncpy(list_packet.txt_channels[i].ch_channel, list[i], (CHANNEL_MAX - 1));
+
+    sendto(socket_fd, &list_packet, sizeof(list_packet), 0,
+		(struct sockaddr *)user->addr, user->len);
+    free(list);
+    fprintf(stdout, "User %s listed all the channels\n", user->username);
 
 }
 
@@ -255,6 +257,14 @@ static void server_logout_request(UNUSED char *client_ip) {
 /**
  * FIXME
  */
+static void free_ll(LinkedList *ll) {
+    if (ll != NULL)
+	ll_destroy(ll, NULL);
+}
+
+/**
+ * FIXME
+ */
 static void cleanup(void) {
     
     if (socket_fd != -1)
@@ -262,7 +272,7 @@ static void cleanup(void) {
     if (users != NULL)
 	hm_destroy(users, (void *)free_user);
     if (channels != NULL)
-	hm_destroy(channels, (void *)ll_destroy);
+	hm_destroy(channels, (void *)free_ll);
 }
 
 /**
