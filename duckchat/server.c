@@ -72,9 +72,9 @@ static User *malloc_user(const char *ip, const char *name, struct sockaddr_in *a
 	int name_len = ((strlen(name) > (USERNAME_MAX - 1)) ? (USERNAME_MAX - 1) : strlen(name));
 	new_user->username = (char *)malloc(name_len + 1);
 
-	if (new_user->channels == NULL ||
-	    new_user->ip_addr == NULL ||
-	    new_user->username == NULL) {
+	if (new_user->addr == NULL || new_user->channels == NULL || 
+	    new_user->ip_addr == NULL || new_user->username == NULL) {
+	    if (new_user->addr != NULL) free(new_user->addr);
 	    if (new_user->channels != NULL) ll_destroy(new_user->channels, free);
 	    if (new_user->ip_addr != NULL) free(new_user->ip_addr);
 	    if (new_user->username != NULL) free(new_user->username);
@@ -99,14 +99,23 @@ static void free_user(User *user) {
     if (user != NULL) {
 	free(user->addr);
 	ll_destroy(user->channels, free);
-	user->channels = NULL;
 	free(user->ip_addr);
-	user->ip_addr = NULL;
 	free(user->username);
-	user->username = NULL;
 	free(user);
-	user = NULL;
     }
+}
+
+/**
+ * FIXME
+ */
+static void print_timestamp(void) {
+
+    struct tm *timestamp;
+    time_t timer;
+    time(&timer);
+    timestamp = localtime(&timer);
+    fprintf(stdout, "[%02d/%02d/%d %02d:%02d] ", (timestamp->tm_mon + 1), timestamp->tm_mday,
+		(1900 + timestamp->tm_year), timestamp->tm_hour, timestamp->tm_min);
 }
 
 /**
@@ -144,7 +153,6 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
 	return;
     }
 
-    //server_send_error(user->addr, user->len, "Logged in!!!");//FIXME
     fprintf(stdout, "User %s logged in from %s\n", user->username, user->ip_addr);
 }
 
@@ -181,7 +189,8 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
-	fprintf(stdout, "User %s created & joined the channel %s\n", user->username, join_packet->req_channel);
+	fprintf(stdout, "User %s created the channel %s\n", user->username, join_packet->req_channel);
+	print_timestamp();
 
     } else {
 	if (!ll_add(user_list, user)) {
@@ -189,9 +198,9 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
-
-	fprintf(stdout, "User %s joined the channel %s\n", user->username, join_packet->req_channel);
     }
+
+    fprintf(stdout, "User %s joined the channel %s\n", user->username, join_packet->req_channel);
 }
 
 /**
@@ -211,7 +220,7 @@ static void server_say_request(UNUSED const char *packet) {
 /**
  * FIXME
  */
-static void server_list_request(UNUSED char *client_ip) {
+static void server_list_request(char *client_ip) {
 
     User *user;
     char **list;
@@ -229,9 +238,11 @@ static void server_list_request(UNUSED char *client_ip) {
 
     memset(&list_packet, 0, sizeof(list_packet));
     list_packet.txt_type = TXT_LIST;
-    list_packet.txt_nchannels = 0;///FIXME
-    //for (i = 0L; i < len; i++)
-	//strncpy(list_packet.txt_channels[i].ch_channel, list[i], (CHANNEL_MAX - 1));
+    list_packet.txt_nchannels = len;
+    struct channel_info channels[len];
+    for (i = 0L; i < len; i++)
+	strncpy(channels[i].ch_channel, list[i], (CHANNEL_MAX - 1));
+    ////FIXME
 
     sendto(socket_fd, &list_packet, sizeof(list_packet), 0,
 		(struct sockaddr *)user->addr, user->len);
@@ -301,8 +312,6 @@ int main(int argc, char *argv[]) {
 
     struct sockaddr_in client;
     struct hostent *host_end;
-    struct tm *timestamp;
-    time_t timer;
     socklen_t addr_len = sizeof(client);
     int port_num;
     char buffer[BUFF_SIZE], client_ip[128];
@@ -365,6 +374,7 @@ int main(int argc, char *argv[]) {
 	print_error("Failed to allocate a sufficient amount of memory.");
 
     /* Display successful launch title, timestamp & address */
+    time_t timer;
     time(&timer);
     fprintf(stdout, "------ Launched DuckChat server ~ %s", ctime(&timer)); 
     fprintf(stdout, "------ Server assigned to address %s:%d\n", inet_ntoa(server.sin_addr),
@@ -377,13 +387,8 @@ int main(int argc, char *argv[]) {
     
 	memset(buffer, 0, sizeof(buffer));
 	recvfrom(socket_fd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client, &addr_len);
-
-	/* Log the timestamp when packet was received */
-	time(&timer);
-	timestamp = localtime(&timer);
-	fprintf(stdout, "[%02d/%02d/%d %02d:%02d] ", (timestamp->tm_mon + 1), timestamp->tm_mday,
-		(1900 + timestamp->tm_year), timestamp->tm_hour, timestamp->tm_min);
 	sprintf(client_ip, "%s:%d", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
+	print_timestamp();
 	
 	struct text *packet_type = (struct text *) buffer;
 	switch (packet_type->txt_type) {
