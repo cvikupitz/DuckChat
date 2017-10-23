@@ -26,6 +26,7 @@
 #include "linkedlist.h"
 
 ///FIXME - Ensure byte order, htonl/s()....
+/// FIXME - server mesage when error occurs
 
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
@@ -232,7 +233,8 @@ static void server_leave_request(const char *packet, char *client_ip, struct soc
 
     User *user, *temp;
     LinkedList *user_list;
-    char buffer[SAY_MAX], channel[CHANNEL_MAX], *ch;
+    char *ch, channel[CHANNEL_MAX], buffer[SAY_MAX];
+    int removed = 0;
     long i;
     struct request_leave *leave_packet = (struct request_leave *) packet;
 
@@ -244,7 +246,7 @@ static void server_leave_request(const char *packet, char *client_ip, struct soc
     memset(channel, 0, sizeof(channel));
     strncpy(channel, leave_packet->req_channel, (CHANNEL_MAX - 1));
     if (!hm_get(channels, channel, (void **)&user_list)) {
-	sprintf(buffer, "No channel by the name %s", buffer);
+	sprintf(buffer, "No channel by the name %s", leave_packet->req_channel);
 	server_send_error(user->addr, user->len, buffer);
 	return;
     }
@@ -254,6 +256,7 @@ static void server_leave_request(const char *packet, char *client_ip, struct soc
 	if (strcmp(channel, ch) == 0) {
 	    ll_remove(user->channels, i, (void **)&ch);
 	    free(ch);
+	    removed = 1;
 	    break;
 	}
     }
@@ -266,7 +269,11 @@ static void server_leave_request(const char *packet, char *client_ip, struct soc
 	}
     }
 
-    fprintf(stdout, "User %s left the channel %s\n", user->username, channel);
+    if (removed)
+	fprintf(stdout, "User %s left the channel %s\n", user->username, channel);
+    else
+	fprintf(stdout, "User %s tried to leave non-subscribed/non-existent channel %s\n",
+		    user->username, channel);
 
     if (ll_isEmpty(user_list) && strcmp(channel, DEFAULT_CHANNEL)) {
 	hm_remove(channels, client_ip, (void **)&user_list);
