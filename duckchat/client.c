@@ -539,7 +539,6 @@ int main(int argc, char *argv[]) {
 	     */
 	    if (FD_ISSET(STDIN_FILENO, &receiver)) {
 		if ((ch = getchar()) != '\n') {
-
 		    if (ch == 127) {
 			/* User pressed backspace, erase character from prompt */
 			if (i == 0) continue;
