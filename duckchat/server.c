@@ -60,7 +60,6 @@ typedef struct user {
     LinkedList *channels;   /* List of channels */
     char *ip_addr;
     char *username;
-    int is_alive;
 } User;
 
 /**
@@ -162,9 +161,10 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
  */
 static void server_join_request(const char *packet, char *client_ip, struct sockaddr_in *addr, socklen_t len) {
     
-    User *user;
+    User *user, *temp;
     LinkedList *user_list;
     char buffer[SAY_MAX], *joined;
+    long i;
     struct request_join *join_packet = (struct request_join *) packet;
 
     if (!hm_get(users, client_ip, (void **)&user)) {
@@ -190,6 +190,7 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
     }
 
     if (!hm_get(channels, joined, (void **)&user_list)) {
+
 	if ((user_list = ll_create()) == NULL) {
 	    sprintf(buffer, "Failed to join the channel %s.", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
@@ -211,6 +212,12 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
 	print_timestamp();
 
     } else {
+
+	for (i = 0L; i < ll_size(user_list); i++) { /// CHECK TO SEE IF ALREADY JOINED
+	    (void)ll_get(user_list, i, (void **)&temp);
+	    if (strcmp(user->ip_addr, temp->ip_addr) == 0)
+		return;
+	}
 	
 	if (!ll_add(user_list, user)) {
 	    sprintf(buffer, "Failed to join the channel %s.", join_packet->req_channel);
@@ -374,6 +381,14 @@ static void server_who_request(const char *packet, char *client_ip) {
 
     fprintf(stdout, "User %s listed subscribed users on channel %s\n",
 		    user->username, who_packet->req_channel);
+}
+
+/**
+ * FIXME
+ */
+static void server_keep_alive_request(char *client_ip) {
+
+    fprintf(stdout, "Received KEEP_ALIVE from %s\n", client_ip); 
 }
 
 /**
@@ -561,6 +576,8 @@ int main(int argc, char *argv[]) {
 	    case REQ_WHO:   /**/
 		server_who_request(buffer, client_ip);
 		break;
+	    case REQ_KEEP_ALIVE:
+		server_keep_alive_request(client_ip);
 	    default:	/* Do nothing, likey a bogus packet */
 		break;
 	}

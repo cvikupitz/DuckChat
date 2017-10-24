@@ -25,6 +25,7 @@
 #include "raw.h"
 
 /// FIXME - USE htons(), hotl().. for byte order....
+#define RATE 8
 
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
@@ -332,6 +333,19 @@ static void client_logout_request(void) {
 }
 
 /**
+ * FIXME
+ */
+static void client_keep_alive_request(UNUSED int signo) {
+    
+    struct request_keep_alive keep_alive_packet;
+    memset(&keep_alive_packet, 0, sizeof(keep_alive_packet));
+    keep_alive_packet.req_type = REQ_KEEP_ALIVE;
+    sendto(socket_fd, &keep_alive_packet, sizeof(keep_alive_packet), 0,
+		(struct sockaddr *)&server, sizeof(server));
+    alarm(RATE);
+}
+
+/**
  * Prints out an error message to the client from the specified packet
  * received from the server.
  */
@@ -400,8 +414,10 @@ int main(int argc, char *argv[]) {
 
     /* Register function to cleanup when user stops the client */
     /* Also register the cleanup() function to be invoked upon program termination */
-    if (signal(SIGINT, sig_handler))
+    if (signal(SIGINT, sig_handler) == SIG_ERR)
 	print_error("Failed to catch SIGINT.");
+    if (signal(SIGALRM, client_keep_alive_request) == SIG_ERR)
+	print_error("Failed to catch SIGALRM.");
     if ((atexit(cleanup)) != 0)
 	print_error("Call to atexit() failed.");
 
@@ -472,6 +488,7 @@ int main(int argc, char *argv[]) {
     fprintf(stdout, "%s\n", TITLE);
     fprintf(stdout, "Type '/help' for help, '/exit' to exit.\n");
     PROMPT;
+    alarm(RATE);
 
     /**
      * Main application loop. Sends/receives packets to/from the server.
@@ -538,6 +555,7 @@ int main(int argc, char *argv[]) {
 	     * until the user entered the message.
 	     */
 	    if (FD_ISSET(STDIN_FILENO, &receiver)) {
+		alarm(RATE);
 		if ((ch = getchar()) != '\n') {
 		    if (ch == 127) {
 			/* User pressed backspace, erase character from prompt */
@@ -595,7 +613,7 @@ int main(int argc, char *argv[]) {
 		} else {
 		    /* No special command given, send say message to server */
 		    client_say_request(buffer);
-		}
+		}	
 		PROMPT;
 	    }
 	}
