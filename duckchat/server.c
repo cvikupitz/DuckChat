@@ -108,14 +108,15 @@ static void free_user(User *user) {
 /**
  * FIXME
  */
-static void print_timestamp(void) {
+static void print_log_message(const char *msg) {
 
     struct tm *timestamp;
     time_t timer;
     time(&timer);
     timestamp = localtime(&timer);
-    fprintf(stdout, "[%02d/%02d/%d %02d:%02d] ", (timestamp->tm_mon + 1), timestamp->tm_mday,
-		(1900 + timestamp->tm_year), timestamp->tm_hour, timestamp->tm_min);
+    fprintf(stdout, "[%02d/%02d/%d %02d:%02d] %s\n", (timestamp->tm_mon + 1),
+		    timestamp->tm_mday, (1900 + timestamp->tm_year),
+		    timestamp->tm_hour, timestamp->tm_min, msg);
 }
 
 /**
@@ -124,13 +125,17 @@ static void print_timestamp(void) {
 static void server_send_error(struct sockaddr_in *addr, socklen_t len, const char *msg) {
     
     struct text_error error_packet;
+    char buffer[256];
+
     memset(&error_packet, 0, sizeof(error_packet));
     error_packet.txt_type = TXT_ERROR;
     strncpy(error_packet.txt_error, msg, (SAY_MAX - 1));
     sendto(socket_fd, &error_packet, sizeof(error_packet), 0,
 		(struct sockaddr *)addr, len);
-    fprintf(stdout, "Sent error message to %s:%d -> %s\n", inet_ntoa(addr->sin_addr),
-	    ntohs(addr->sin_port), msg);
+
+    sprintf(buffer, "Sent error message to %s:%d -> %s",
+		inet_ntoa(addr->sin_addr), ntohs(addr->sin_port), msg);
+    print_log_message(buffer);
 }
 
 /**
@@ -139,7 +144,9 @@ static void server_send_error(struct sockaddr_in *addr, socklen_t len, const cha
 static void server_login_request(const char *packet, char *client_ip, struct sockaddr_in *addr, socklen_t len) {
 
     User *user;
+    char buffer[256];
     struct request_login *login_packet = (struct request_login *) packet;
+
     if ((user = malloc_user(client_ip, login_packet->req_username, addr, len)) == NULL) {
 	server_send_error(addr, len, "Failed to log into the server.");
 	return;
@@ -150,7 +157,8 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
 	return;
     }
 
-    fprintf(stdout, "User %s logged in from %s\n", user->username, user->ip_addr);
+    sprintf(buffer, "User %s logged in from %s", user->username, user->ip_addr);
+    print_log_message(buffer);
 }
 
 /**
@@ -160,7 +168,8 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
     
     User *user, *temp;
     LinkedList *user_list;
-    char buffer[SAY_MAX], *joined;
+    char *joined;
+    char buffer[256];
     long i;
     struct request_join *join_packet = (struct request_join *) packet;
 
@@ -205,8 +214,8 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
-	fprintf(stdout, "User %s created the channel %s\n", user->username, joined);
-	print_timestamp();
+	sprintf(buffer, "User %s created the channel %s", user->username, joined);
+	print_log_message(buffer);
 
     } else {
 
@@ -223,7 +232,8 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
 	}
     }
 
-    fprintf(stdout, "User %s joined the channel %s\n", user->username, joined);
+    sprintf(buffer, "User %s joined the channel %s", user->username, joined);
+    print_log_message(buffer);
 }
 
 /**
@@ -231,9 +241,10 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
  */
 static void server_leave_request(const char *packet, char *client_ip, struct sockaddr_in *addr, socklen_t len) {
 
-    User *user, *temp;
+    User *user, *tmp;
     LinkedList *user_list;
-    char *ch, channel[CHANNEL_MAX], buffer[SAY_MAX];
+    char *ch;
+    char channel[CHANNEL_MAX], buffer[256];
     int removed = 0;
     long i;
     struct request_leave *leave_packet = (struct request_leave *) packet;
@@ -262,15 +273,16 @@ static void server_leave_request(const char *packet, char *client_ip, struct soc
     }
 
     for (i = 0L; i < ll_size(user_list); i++) {
-	(void)ll_get(user_list, i, (void **)&temp);
-	if (strcmp(user->ip_addr, temp->ip_addr) == 0) {
-	    (void)ll_remove(user_list, i, (void **)&temp);
+	(void)ll_get(user_list, i, (void **)&tmp);
+	if (strcmp(user->ip_addr, tmp->ip_addr) == 0) {
+	    (void)ll_remove(user_list, i, (void **)&tmp);
 	    break;
 	}
     }
 
     if (removed) {
-	fprintf(stdout, "User %s left the channel %s\n", user->username, channel);
+	sprintf(buffer, "User %s left the channel %s", user->username, channel);
+	print_log_message(buffer);
     } else {
 	sprintf(buffer, "You are not subscribed to the channel %s", channel);
 	server_send_error(user->addr, user->len, buffer);
@@ -280,8 +292,8 @@ static void server_leave_request(const char *packet, char *client_ip, struct soc
     if (ll_isEmpty(user_list) && strcmp(channel, DEFAULT_CHANNEL)) {
 	(void)hm_remove(channels, channel, (void **)&user_list);
 	ll_destroy(user_list, NULL);
-	print_timestamp();
-	fprintf(stdout, "Removed the empty channel %s\n", channel);
+	sprintf(buffer, "Removed the empty channel %s\n", channel);
+	print_log_message(buffer);
     }
 }
 
@@ -294,6 +306,7 @@ static void server_say_request(const char *packet, char *client_ip) {
     User **listeners;
     LinkedList *ch_users;
     long i, len;
+    char buffer[256];
     struct request_say *say_packet = (struct request_say *) packet;
     struct text_say msg_packet;
 
@@ -313,9 +326,10 @@ static void server_say_request(const char *packet, char *client_ip) {
 	sendto(socket_fd, &msg_packet, sizeof(msg_packet), 0,
 		(struct sockaddr *)listeners[i]->addr, listeners[i]->len);
 
-    free(listeners);
-    fprintf(stdout, "User %s said in channel %s -> %s\n", user->username,
+    sprintf(buffer, "User %s said in channel %s -> %s", user->username,
 		msg_packet.txt_channel, msg_packet.txt_text);
+    print_log_message(buffer);
+    free(listeners);
 }
 
 /**
@@ -326,6 +340,7 @@ static void server_list_request(char *client_ip) {
     User *user;
     long i, len;
     char **ch_list;
+    char buffer[256];
     struct text_list *list_packet;
 
     if (!hm_get(users, client_ip, (void **)&user))
@@ -346,7 +361,9 @@ static void server_list_request(char *client_ip) {
     sendto(socket_fd, list_packet, size, 0,
 		(struct sockaddr *)user->addr, user->len);
 
-    fprintf(stdout, "User %s listed available channels on server\n", user->username);
+    sprintf(buffer, "User %s listed available channels on server", user->username);
+    print_log_message(buffer);
+
     free(ch_list);
     free(list_packet);
 }
@@ -358,9 +375,11 @@ static void server_who_request(const char *packet, char *client_ip) {
 
     User *user, **user_list;
     LinkedList *u_list;
+    int size;
     long i, len;
-    struct request_who *who_packet = (struct request_who *) packet;
+    char buffer[256];
     struct text_who *msg_packet;
+    struct request_who *who_packet = (struct request_who *) packet;
 
     if (!hm_get(users, client_ip, (void **)&user))
 	return;//User not logged in
@@ -369,7 +388,7 @@ static void server_who_request(const char *packet, char *client_ip) {
     if ((user_list = (User **)ll_toArray(u_list, &len)) == NULL)
 	return;///malloc error
 
-    int size = sizeof(struct text_who) + (sizeof(struct user_info) * len);
+    size = sizeof(struct text_who) + (sizeof(struct user_info) * len);
     
     msg_packet = malloc(size);
     memset(msg_packet, 0, size);
@@ -383,8 +402,9 @@ static void server_who_request(const char *packet, char *client_ip) {
     sendto(socket_fd, msg_packet, size, 0,
 		(struct sockaddr *)user->addr, user->len);
 
-    fprintf(stdout, "User %s listed all users on channel %s\n",
-		    user->username, who_packet->req_channel);
+    sprintf(buffer, "User %s listed all users on channel %s", user->username, who_packet->req_channel);
+    print_log_message(buffer);
+
     free(user_list);
     free(msg_packet);
 }
@@ -402,31 +422,35 @@ static void server_keep_alive_request(char *client_ip) {
  */
 static void server_logout_request(char *client_ip) {
 
-    User *user, *temp;
+    User *user, *tmp;
     LinkedList *user_list;
     long i;
     char *channel;
+    char buffer[256];
 
     if (!hm_remove(users, client_ip, (void **)&user))
 	return;
-    fprintf(stdout, "User %s logged out\n", user->username);
+
+    sprintf(buffer, "User %s logged out", user->username);
+    print_log_message(buffer);
+
     while (ll_removeFirst(user->channels, (void **)&channel)) {
 	if (!hm_get(channels, channel, (void **)&user_list)) {
 	    free(channel);
 	    continue;
 	}
 	for (i = 0L; i < ll_size(user_list); i++) {
-	    (void)ll_get(user_list, i, (void **)&temp);
-	    if (strcmp(user->ip_addr, temp->ip_addr) == 0) {
-		(void)ll_remove(user_list, i, (void **)&temp);
+	    (void)ll_get(user_list, i, (void **)&tmp);
+	    if (strcmp(user->ip_addr, tmp->ip_addr) == 0) {
+		(void)ll_remove(user_list, i, (void **)&tmp);
 		break;
 	    }
 	}
 	if (ll_isEmpty(user_list) && strcmp(channel, DEFAULT_CHANNEL)) {
 	    (void)hm_remove(channels, channel, (void **)&user_list);
 	    ll_destroy(user_list, NULL);
-	    print_timestamp();
-	    fprintf(stdout, "Removed the empty channel %s\n", channel);
+	    sprintf(buffer, "Removed the empty channel %s", channel);
+	    print_log_message(buffer);
 	}
 	free(channel);
     }
@@ -557,7 +581,6 @@ int main(int argc, char *argv[]) {
 	memset(buffer, 0, sizeof(buffer));
 	recvfrom(socket_fd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client, &addr_len);
 	sprintf(client_ip, "%s:%d", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
-	print_timestamp();
 	
 	struct text *packet_type = (struct text *) buffer;
 	switch (packet_type->txt_type) {

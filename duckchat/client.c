@@ -26,7 +26,7 @@
 
 /// FIXME - USE htons(), hotl().. for byte order....
 
-/* FIXME */
+/* The rate (in seconds) to send keep-alive packet when inactive */
 #define KEEP_ALIVE_RATE 4
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
@@ -334,7 +334,9 @@ static void client_logout_request(void) {
 }
 
 /**
- * FIXME
+ * Sends a packet to the server requesting the server to keep the client
+ * logged in. Invoked only if the client is inactive for a period of time,
+ * that is, they have not sent anything to the server.
  */
 static void client_keep_alive_request(UNUSED int signo) {
     
@@ -490,7 +492,6 @@ int main(int argc, char *argv[]) {
     fprintf(stdout, "%s\n", TITLE);
     fprintf(stdout, "Type '/help' for help, '/exit' to exit.\n");
     PROMPT;
-    //alarm(KEEP_ALIVE_RATE);
 
     /**
      * Main application loop. Sends/receives packets to/from the server.
@@ -616,7 +617,6 @@ int main(int argc, char *argv[]) {
 		    /* No special command given, send say message to server */
 		    client_say_request(buffer);
 		}
-		//alarm(KEEP_ALIVE_RATE);
 		PROMPT;
 	    }
 	}
