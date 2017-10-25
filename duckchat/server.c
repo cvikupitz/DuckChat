@@ -26,17 +26,16 @@
 #include "linkedlist.h"
 
 /// FIXME - Ensure byte order, htonl/s()....
-/// FIXME - Server mesage when error occurs
-/// FIXME - Unique user in channel, joining twice results in 2 messages...
+/// FIXME - SCAN AND LOGOUT INACTIVE USERS
 
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
 /* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 10000
 /* The default channel for the user to join upon logging in */
-/* This channel also never gets deleted by the server despite being empty */
+/* This channel will also never be removed, even when empty */
 #define DEFAULT_CHANNEL "Common"
-/* Refresh rate (in minutes) of the server to forcefully logout inactive users */
+/* Refresh rate (in minutes) of the server to scan for and logout inactive users */
 #define REFRESH_RATE 2
 
 /* Socket address for the server */
@@ -142,7 +141,7 @@ static void server_send_error(struct sockaddr_in *addr, socklen_t len, const cha
     sendto(socket_fd, &error_packet, sizeof(error_packet), 0,
 		(struct sockaddr *)addr, len);
 
-    sprintf(buffer, "*** Sent error message to %s:%d -> %s",
+    sprintf(buffer, "*** Sent error message to %s:%d -> \"%s\"",
 		inet_ntoa(addr->sin_addr), ntohs(addr->sin_port), msg);
     print_log_message(buffer);
 }
@@ -166,7 +165,7 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
 	return;
     }
 
-    sprintf(buffer, "User %s logged in from %s", user->username, user->ip_addr);
+    sprintf(buffer, "%s logged in from %s", user->username, user->ip_addr);
     print_log_message(buffer);
 }
 
@@ -190,7 +189,7 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
     int ch_len = ((strlen(join_packet->req_channel) > (CHANNEL_MAX - 1)) ?
 				(CHANNEL_MAX - 1) : strlen(join_packet->req_channel));
     if ((joined = (char *)malloc(ch_len + 1)) == NULL) {
-	sprintf(buffer, "Error: Failed to join channel %s", join_packet->req_channel);
+	sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
 	server_send_error(user->addr, user->len, buffer);
 	return;
     }
@@ -198,7 +197,7 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
     memcpy(joined, join_packet->req_channel, ch_len);
     joined[ch_len] = '\0';
     if (!ll_add(user->channels, joined)) {
-	sprintf(buffer, "Error: Failed to join channel %s", joined);
+	sprintf(buffer, "Error: Failed to join %s", joined);
 	server_send_error(user->addr, user->len, buffer);
 	free(joined);
 	return;
@@ -207,23 +206,23 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
     if (!hm_get(channels, joined, (void **)&user_list)) {
 
 	if ((user_list = ll_create()) == NULL) {
-	    sprintf(buffer, "Error: Failed to join channel %s", join_packet->req_channel);
+	    sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
 	if (!ll_add(user_list, user)) {
 	    ll_destroy(user_list, NULL);
-	    sprintf(buffer, "Error: Failed to join channel %s", join_packet->req_channel);
+	    sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
 	if (!hm_put(channels, joined, user_list, NULL)) {
 	    ll_destroy(user_list, NULL);
-	    sprintf(buffer, "Error: Failed to join channel %s", join_packet->req_channel);
+	    sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
-	sprintf(buffer, "User %s created the channel %s", user->username, joined);
+	sprintf(buffer, "%s created the channel %s", user->username, joined);
 	print_log_message(buffer);
 
     } else {
@@ -235,13 +234,13 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
 	}
 	
 	if (!ll_add(user_list, user)) {
-	    sprintf(buffer, "Error: Failed to join channel %s", join_packet->req_channel);
+	    sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
     }
 
-    sprintf(buffer, "User %s joined the channel %s", user->username, joined);
+    sprintf(buffer, "%s joined the channel %s", user->username, joined);
     print_log_message(buffer);
 }
 
@@ -258,22 +257,30 @@ static void server_leave_request(const char *packet, char *client_ip, struct soc
     long i;
     struct request_leave *leave_packet = (struct request_leave *) packet;
 
+    /* Assert that the user requesting is currently logged in */
     if (!hm_get(users, client_ip, (void **)&user)) {
 	server_send_error(addr, len, "Error: You are not currently logged in.");
 	return;
     }
 
+    /* Copy into buffer, ensure the channel name length does not exceed maximum allowed */
     memset(channel, 0, sizeof(channel));
     strncpy(channel, leave_packet->req_channel, (CHANNEL_MAX - 1));
+    /* Assert that the channel currently exists */
+    /* If not, report error back to user, log the error */
     if (!hm_get(channels, channel, (void **)&user_list)) {
 	sprintf(buffer, "No channel by the name %s", leave_packet->req_channel);
 	server_send_error(user->addr, user->len, buffer);
+	sprintf(buffer, "%s attempted to leave non-existent channel %s", user->username, leave_packet->req_channel);
+	print_log_message(buffer);
 	return;
     }
 
+    /* Next, remove the requested channel from the user's list of subscribed channels */
     for (i = 0L; i < ll_size(user->channels); i++) {
 	(void)ll_get(user->channels, i, (void **)&ch);
 	if (strcmp(channel, ch) == 0) {
+	    /* Channel found, remove it from list and free reserved memory */
 	    ll_remove(user->channels, i, (void **)&ch);
 	    free(ch);
 	    removed = 1;
@@ -281,27 +288,38 @@ static void server_leave_request(const char *packet, char *client_ip, struct soc
 	}
     }
 
+    /* Next, remove pointer of user from the channel's list of subscribed users */
+    /* Ensures no more messages will be sent to the unsubscribed user */
     for (i = 0L; i < ll_size(user_list); i++) {
 	(void)ll_get(user_list, i, (void **)&tmp);
 	if (strcmp(user->ip_addr, tmp->ip_addr) == 0) {
+	    /* User found, remove them from subscription list */
 	    (void)ll_remove(user_list, i, (void **)&tmp);
 	    break;
 	}
     }
 
     if (removed) {
-	sprintf(buffer, "User %s left the channel %s", user->username, channel);
+	/* User was successfully removed, log the event */
+	sprintf(buffer, "%s left the channel %s", user->username, channel);
 	print_log_message(buffer);
     } else {
-	sprintf(buffer, "You are not subscribed to the channel %s", channel);
+	/* User was not removed, wasn't subscribed to channel to begin with */
+	/* Send a message back to user notifying them, log the error */
+	sprintf(buffer, "You are not subscribed to %s", channel);
 	server_send_error(user->addr, user->len, buffer);
+	sprintf(buffer, "%s attempted to leave a channel they are not subscribed to", user->username);
+	print_log_message(buffer);
 	return;
     }
 
+    /* If the channel the user left becomes empty, remove it from channel list */
     if (ll_isEmpty(user_list) && strcmp(channel, DEFAULT_CHANNEL)) {
+	/* Free all memory reserved by deleted channel */
 	(void)hm_remove(channels, channel, (void **)&user_list);
 	ll_destroy(user_list, NULL);
-	sprintf(buffer, "Removed the empty channel %s\n", channel);
+	/* Log the channel deletion */
+	sprintf(buffer, "Removed the empty channel %s", channel);
 	print_log_message(buffer);
     }
 }
@@ -319,25 +337,37 @@ static void server_say_request(const char *packet, char *client_ip) {
     struct request_say *say_packet = (struct request_say *) packet;
     struct text_say msg_packet;
 
+    /* Assert user is logged in; do nothing if not */
     if (!hm_get(users, client_ip, (void **)&user))
 	return;
+    /* Assert that the channel exists; do nothing if not */
     if (!hm_get(channels, say_packet->req_channel, (void **)&ch_users))
 	return;
-    if ((listeners = (User **)ll_toArray(ch_users, &len)) == NULL)
+    /* Get the list of users listening to the channel */
+    /* Respond to user with error message if malloc() failure, log the error */
+    if ((listeners = (User **)ll_toArray(ch_users, &len)) == NULL) {
+	sprintf(buffer, "Error: Failed to send the message.");
+	server_send_error(user->addr, user->len, buffer);
+	sprintf(buffer, "Failed to send a message from %s to channel %s",
+		    user->username, say_packet->req_channel);
+	print_log_message(buffer);
 	return;
+    }
 
+    /* Initialize the SAY packet to send; set the type, channel, and username */
     memset(&msg_packet, 0, sizeof(msg_packet));
     strncpy(msg_packet.txt_channel, say_packet->req_channel, (CHANNEL_MAX - 1));
     strncpy(msg_packet.txt_username, user->username, (USERNAME_MAX - 1));
     strncpy(msg_packet.txt_text, say_packet->req_text, (SAY_MAX - 1));
-
+    /* Send the packet to each user listening on the channel */
     for (i = 0L; i < len; i++)
 	sendto(socket_fd, &msg_packet, sizeof(msg_packet), 0,
 		(struct sockaddr *)listeners[i]->addr, listeners[i]->len);
-
-    sprintf(buffer, "User %s said in channel %s -> %s", user->username,
-		msg_packet.txt_channel, msg_packet.txt_text);
+    /* Log the message */
+    sprintf(buffer, "[%s][%s] -> \"%s\"", msg_packet.txt_channel,
+		user->username, msg_packet.txt_text);
     print_log_message(buffer);
+    /* Free the array */
     free(listeners);
 }
 
@@ -370,7 +400,7 @@ static void server_list_request(char *client_ip) {
     sendto(socket_fd, list_packet, size, 0,
 		(struct sockaddr *)user->addr, user->len);
 
-    sprintf(buffer, "User %s listed available channels on server", user->username);
+    sprintf(buffer, "%s listed available channels on server", user->username);
     print_log_message(buffer);
 
     free(ch_list);
@@ -396,13 +426,14 @@ static void server_who_request(const char *packet, char *client_ip) {
     if (!hm_get(channels, who_packet->req_channel, (void **)&u_list)) {
 	sprintf(buffer, "No channel by the name %s", who_packet->req_channel);
 	server_send_error(user->addr, user->len, buffer);
-	sprintf(buffer, "User %s attempted to list users on non-existent channel %s",
+	sprintf(buffer, "%s attempted to list users on non-existent channel %s",
 		    user->username, who_packet->req_channel);
 	print_log_message(buffer);
 	return;
     }
     if ((user_list = (User **)ll_toArray(u_list, &len)) == NULL)
 	return;///malloc error
+	///FIXME CHECK FOR EMPTY CHANNEL
 
     size = sizeof(struct text_who) + (sizeof(struct user_info) * len);
     
@@ -418,7 +449,7 @@ static void server_who_request(const char *packet, char *client_ip) {
     sendto(socket_fd, msg_packet, size, 0,
 		(struct sockaddr *)user->addr, user->len);
 
-    sprintf(buffer, "User %s listed all users on channel %s", user->username, who_packet->req_channel);
+    sprintf(buffer, "%s listed all users on channel %s", user->username, who_packet->req_channel);
     print_log_message(buffer);
 
     free(user_list);
@@ -447,7 +478,7 @@ static void server_logout_request(char *client_ip) {
     if (!hm_remove(users, client_ip, (void **)&user))
 	return;
 
-    sprintf(buffer, "User %s logged out", user->username);
+    sprintf(buffer, "%s logged out", user->username);
     print_log_message(buffer);
 
     while (ll_removeFirst(user->channels, (void **)&channel)) {
@@ -580,7 +611,7 @@ int main(int argc, char *argv[]) {
     if (bind(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
 	print_error("Failed to assign the requested address.");
 
-    /* Create & initialize ADTs for server to use */
+    /* Create & initialize data structures for server to use */
     if ((users = hm_create(100L, 0.0f)) == NULL)
 	print_error("Failed to allocate a sufficient amount of memory.");
     if ((channels = hm_create(100L, 0.0f)) == NULL)
@@ -595,8 +626,8 @@ int main(int argc, char *argv[]) {
     time_t timer;
     time(&timer);
     fprintf(stdout, "------ Launched DuckChat server ~ %s", ctime(&timer)); 
-    fprintf(stdout, "------ Server assigned to address %s:%d\n", inet_ntoa(server.sin_addr),
-	    ntohs(server.sin_port));
+    fprintf(stdout, "------ Server assigned to address %s:%d\n",
+		inet_ntoa(server.sin_addr), ntohs(server.sin_port));
 
     /**
      * FIXME
