@@ -27,15 +27,12 @@
 
 /// FIXME - Ensure byte order, htonl/s()....
 /// FIXME - Server mesage when error occurs
-/// FIXME - Set max channel number?
 /// FIXME - Unique user in channel, joining twice results in 2 messages...
 
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
 /* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 10000
-/* FIXME */
-#define MAX_CHANNELS 100
 /* FIXME */
 #define DEFAULT_CHANNEL "Common"
 /* Refresh rate (in minutes) of the server to forcefully logout inactive users */
@@ -54,7 +51,7 @@ static HashMap *channels = NULL;
 /**
  * FIXME
  */
-typedef struct user {
+typedef struct {
     struct sockaddr_in *addr;
     socklen_t len;
     LinkedList *channels;   /* List of channels */
