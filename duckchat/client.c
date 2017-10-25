@@ -25,8 +25,9 @@
 #include "raw.h"
 
 /// FIXME - USE htons(), hotl().. for byte order....
-#define RATE 8
 
+/* FIXME */
+#define KEEP_ALIVE_RATE 4
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
 /* Maximum buffer size for messages and packets */
@@ -215,7 +216,7 @@ static void server_list_reply(const char *packet) {
     
     int i;
     struct text_list *list_packet = (struct text_list *) packet;
-    fprintf(stdout, "Existing channels:\n");
+    fprintf(stdout, "Existing channels (%d):\n", list_packet->txt_nchannels);
     for (i = 0; i < list_packet->txt_nchannels; i++)
 	fprintf(stdout, "  %s\n", list_packet->txt_channels[i].ch_channel);
 }
@@ -342,7 +343,8 @@ static void client_keep_alive_request(UNUSED int signo) {
     keep_alive_packet.req_type = REQ_KEEP_ALIVE;
     sendto(socket_fd, &keep_alive_packet, sizeof(keep_alive_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
-    alarm(RATE);
+    alarm(KEEP_ALIVE_RATE);
+    return;
 }
 
 /**
@@ -488,7 +490,7 @@ int main(int argc, char *argv[]) {
     fprintf(stdout, "%s\n", TITLE);
     fprintf(stdout, "Type '/help' for help, '/exit' to exit.\n");
     PROMPT;
-    alarm(RATE);
+    //alarm(KEEP_ALIVE_RATE);
 
     /**
      * Main application loop. Sends/receives packets to/from the server.
@@ -555,7 +557,7 @@ int main(int argc, char *argv[]) {
 	     * until the user entered the message.
 	     */
 	    if (FD_ISSET(STDIN_FILENO, &receiver)) {
-		alarm(RATE);
+		
 		if ((ch = getchar()) != '\n') {
 		    if (ch == 127) {
 			/* User pressed backspace, erase character from prompt */
@@ -613,7 +615,8 @@ int main(int argc, char *argv[]) {
 		} else {
 		    /* No special command given, send say message to server */
 		    client_say_request(buffer);
-		}	
+		}
+		//alarm(KEEP_ALIVE_RATE);
 		PROMPT;
 	    }
 	}

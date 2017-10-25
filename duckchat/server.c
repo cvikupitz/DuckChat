@@ -340,16 +340,13 @@ static void server_list_request(char *client_ip) {
     list_packet = (struct text_list *)malloc(size);
 
     list_packet->txt_type = TXT_LIST;
-    list_packet->txt_nchannels = len;
+    list_packet->txt_nchannels = (int)len;
     for (i = 0L; i < len; i++) {
-	//struct channel_info ch;
-	//memset(&ch, 0, sizeof(ch));
-	//strncpy(ch.ch_channel, list[i], (CHANNEL_MAX - 1));
-	strcpy(list_packet->txt_channels[i].ch_channel, ch_list[i]);
+	strncpy(list_packet->txt_channels[i].ch_channel, ch_list[i], (CHANNEL_MAX - 1));
+	
     }
-    ////FIXME
-    
-    sendto(socket_fd, list_packet, sizeof(size), 0,
+
+    isendto(socket_fd, list_packet, sizeof(size), 0,
 		(struct sockaddr *)user->addr, user->len);
 
     fprintf(stdout, "User %s listed available channels on server\n", user->username);
