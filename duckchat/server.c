@@ -357,7 +357,40 @@ static void server_list_request(char *client_ip) {
 /**
  * FIXME
  */
-static void server_who_request(const char *packet, char *client_ip) {}
+static void server_who_request(const char *packet, char *client_ip) {
+
+    User *user, **user_list;
+    LinkedList *u_list;
+    long i, len;
+    struct request_who *who_packet = (struct request_who *) packet;
+    struct text_who *msg_packet;
+
+    if (!hm_get(users, client_ip, (void **)&user))
+	return;//User not logged in
+    if (!hm_get(channels, who_packet->req_channel, (void **)&u_list))
+	return;//Channel non existent
+    if ((user_list = (User **)ll_toArray(u_list, &len)) == NULL)
+	return;///malloc error
+
+    int size = sizeof(struct text_who) + (sizeof(struct user_info) * len);
+    
+    msg_packet = malloc(size);
+    memset(msg_packet, 0, size);
+    msg_packet->txt_type = TXT_WHO;
+    msg_packet->txt_nusernames = (int)len;
+    strncpy(msg_packet->txt_channel, who_packet->req_channel, (CHANNEL_MAX - 1));
+
+    for (i = 0L; i < len; i++)
+	strncpy(msg_packet->txt_users[i].us_username, user_list[i]->username, (USERNAME_MAX - 1));
+
+    sendto(socket_fd, msg_packet, size, 0,
+		(struct sockaddr *)user->addr, user->len);
+
+    fprintf(stdout, "User %s listed all users on channel %s\n",
+		    user->username, who_packet->req_channel);
+    free(user_list);
+    free(msg_packet);
+}
 
 /**
  * FIXME
