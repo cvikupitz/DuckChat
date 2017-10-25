@@ -203,7 +203,7 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
     
     User *user, *temp;
     LinkedList *user_list;
-    int ch_size;
+    int ch_len;
     long i;
     char *joined;
     char buffer[256];
@@ -397,7 +397,7 @@ static void server_say_request(const char *packet, char *client_ip) {
 	sendto(socket_fd, &msg_packet, sizeof(msg_packet), 0,
 		(struct sockaddr *)listeners[i]->addr, listeners[i]->len);
     /* Log the message */
-    sprintf(buffer, "* [%s][%s] -> \"%s\"", msg_packet.txt_channel,
+    sprintf(buffer, "[%s][%s] -> \"%s\"", msg_packet.txt_channel,
 		user->username, msg_packet.txt_text);
     print_log_message(buffer);
     /* Free the array */
