@@ -55,8 +55,8 @@ static HashMap *channels = NULL;
  * A structure to represent a user logged into the server.
  */
 typedef struct {
-    struct sockaddr_in *addr;	/*  */
-    socklen_t len;		/*  */
+    struct sockaddr_in *addr;	/* FIXME */
+    socklen_t len;		/* FIXME */
     LinkedList *channels;	/* List of channel names user is listening to */
     char *ip_addr;		/* Full IP address in string format */
     char *username;		/* The username of user */
@@ -101,6 +101,7 @@ static User *malloc_user(const char *ip, const char *name, struct sockaddr_in *a
 static void free_user(User *user) {
     
     if (user != NULL) {
+	/* Free all reserved memory within instance */
 	free(user->addr);
 	ll_destroy(user->channels, free);
 	free(user->ip_addr);
@@ -141,7 +142,7 @@ static void server_send_error(struct sockaddr_in *addr, socklen_t len, const cha
     sendto(socket_fd, &error_packet, sizeof(error_packet), 0,
 		(struct sockaddr *)addr, len);
 
-    sprintf(buffer, "Sent error message to %s:%d -> %s",
+    sprintf(buffer, "*** Sent error message to %s:%d -> %s",
 		inet_ntoa(addr->sin_addr), ntohs(addr->sin_port), msg);
     print_log_message(buffer);
 }
@@ -156,11 +157,11 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
     struct request_login *login_packet = (struct request_login *) packet;
 
     if ((user = malloc_user(client_ip, login_packet->req_username, addr, len)) == NULL) {
-	server_send_error(addr, len, "Failed to log into the server.");
+	server_send_error(addr, len, "Error: Failed to log into the server.");
 	return;
     }
     if (!hm_put(users, client_ip, user, NULL)) {
-	server_send_error(addr, len, "Failed to log into the server.");
+	server_send_error(addr, len, "Error: Failed to log into the server.");
 	free(user);
 	return;
     }
@@ -182,14 +183,14 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
     struct request_join *join_packet = (struct request_join *) packet;
 
     if (!hm_get(users, client_ip, (void **)&user)) {
-	server_send_error(addr, len, "You are not currently logged in.");
+	server_send_error(addr, len, "Error: You are not currently logged in.");
 	return;
     }
 
     int ch_len = ((strlen(join_packet->req_channel) > (CHANNEL_MAX - 1)) ?
 				(CHANNEL_MAX - 1) : strlen(join_packet->req_channel));
     if ((joined = (char *)malloc(ch_len + 1)) == NULL) {
-	sprintf(buffer, "Failed to join the channel %s.", join_packet->req_channel);
+	sprintf(buffer, "Error: Failed to join channel %s", join_packet->req_channel);
 	server_send_error(user->addr, user->len, buffer);
 	return;
     }
@@ -197,7 +198,7 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
     memcpy(joined, join_packet->req_channel, ch_len);
     joined[ch_len] = '\0';
     if (!ll_add(user->channels, joined)) {
-	sprintf(buffer, "Failed to join the channel %s.", joined);
+	sprintf(buffer, "Error: Failed to join channel %s", joined);
 	server_send_error(user->addr, user->len, buffer);
 	free(joined);
 	return;
@@ -206,19 +207,19 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
     if (!hm_get(channels, joined, (void **)&user_list)) {
 
 	if ((user_list = ll_create()) == NULL) {
-	    sprintf(buffer, "Failed to join the channel %s.", join_packet->req_channel);
+	    sprintf(buffer, "Error: Failed to join channel %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
 	if (!ll_add(user_list, user)) {
 	    ll_destroy(user_list, NULL);
-	    sprintf(buffer, "Failed to join the channel %s.", join_packet->req_channel);
+	    sprintf(buffer, "Error: Failed to join channel %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
 	if (!hm_put(channels, joined, user_list, NULL)) {
 	    ll_destroy(user_list, NULL);
-	    sprintf(buffer, "Failed to join the channel %s.", join_packet->req_channel);
+	    sprintf(buffer, "Error: Failed to join channel %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
@@ -234,7 +235,7 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
 	}
 	
 	if (!ll_add(user_list, user)) {
-	    sprintf(buffer, "Failed to join the channel %s.", join_packet->req_channel);
+	    sprintf(buffer, "Error: Failed to join channel %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
@@ -258,7 +259,7 @@ static void server_leave_request(const char *packet, char *client_ip, struct soc
     struct request_leave *leave_packet = (struct request_leave *) packet;
 
     if (!hm_get(users, client_ip, (void **)&user)) {
-	server_send_error(addr, len, "You are not currently logged in.");
+	server_send_error(addr, len, "Error: You are not currently logged in.");
 	return;
     }
 
@@ -473,7 +474,8 @@ static void server_logout_request(char *client_ip) {
 }
 
 /**
- * FIXME
+ * Frees the reserved memory occupied by the specified LinkedList. Used by
+ * the LinkedList destructor.
  */
 static void free_ll(LinkedList *ll) {
     
@@ -482,14 +484,20 @@ static void free_ll(LinkedList *ll) {
 }
 
 /**
- * FIXME
+ * Cleans up after the server before shutting down by freeing and returning all
+ * reserved memory back to the heap; this includes destroying the hashmaps of the
+ * users and channels, any other datastructures used within them, and closing any
+ * open sockets.
  */
 static void cleanup(void) {
     
+    /* Close the socket if open */
     if (socket_fd != -1)
 	close(socket_fd);
+    /* Destroy the hashmap holding the channels */
     if (channels != NULL)
 	hm_destroy(channels, (void *)free_ll);
+    /* Destroy the hashmap containing all logged in users */
     if (users != NULL)
 	hm_destroy(users, (void *)free_user);
 }
@@ -505,7 +513,9 @@ static void print_error(const char *msg) {
 }
 
 /**
- * FIXME
+ * Function that handles an interrupt signal from the user. Simply exits
+ * the program, which will invoke the cleanup method registered with the
+ * atexit() function.
  */
 static void sig_handler(UNUSED int signo) {
     
@@ -611,16 +621,16 @@ int main(int argc, char *argv[]) {
 	    case REQ_LEAVE: /**/
 		server_leave_request(buffer, client_ip, &client, addr_len);
 		break;
-	    case REQ_SAY:   /**/
+	    case REQ_SAY:   /* A user snet */
 		server_say_request(buffer, client_ip);
 		break;
-	    case REQ_LIST:  /**/
+	    case REQ_LIST:  /* A client requests a list of all the channels on the server */
 		server_list_request(client_ip);
 		break;
-	    case REQ_WHO:   /**/
+	    case REQ_WHO:   /* A client requests a list of users on the specified channel */
 		server_who_request(buffer, client_ip);
 		break;
-	    case REQ_KEEP_ALIVE:
+	    case REQ_KEEP_ALIVE:    /* Received from an inactive user, keeps them logged in */
 		server_keep_alive_request(client_ip);
 	    default:	/* Do nothing, likey a bogus packet */
 		break;
