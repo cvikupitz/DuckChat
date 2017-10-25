@@ -33,30 +33,33 @@
 #define UNUSED __attribute__((unused))
 /* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 10000
-/* FIXME */
+/* The default channel for the user to join upon logging in */
+/* This channel also never gets deleted by the server despite being empty */
 #define DEFAULT_CHANNEL "Common"
 /* Refresh rate (in minutes) of the server to forcefully logout inactive users */
 #define REFRESH_RATE 2
 
-/**/
+/* Socket address for the server */
 static struct sockaddr_in server;
-/**/
+/* File descriptor for the socket to use */
 static int socket_fd = -1;
-/**/
+/* HashMap of all users currently logged on */
+/* Maps the user's IP address in a string to the user struct */
 static HashMap *users = NULL;
-/**/
+/* HashMap of all the channels currently available */
+/* Maps the channel name to a linked list of pointers of all users on the channel */
 static HashMap *channels = NULL;
 
 
 /**
- * FIXME
+ * A structure to represent a user logged into the server.
  */
 typedef struct {
-    struct sockaddr_in *addr;
-    socklen_t len;
-    LinkedList *channels;   /* List of channels */
-    char *ip_addr;
-    char *username;
+    struct sockaddr_in *addr;	/*  */
+    socklen_t len;		/*  */
+    LinkedList *channels;	/* List of channel names user is listening to */
+    char *ip_addr;		/* Full IP address in string format */
+    char *username;		/* The username of user */
 } User;
 
 /**
@@ -92,7 +95,8 @@ static User *malloc_user(const char *ip, const char *name, struct sockaddr_in *a
 }
 
 /**
- * FIXME
+ * Destroys the user instance by freeing & returning all memory it reserved back
+ * to the heap.
  */
 static void free_user(User *user) {
     
@@ -106,14 +110,18 @@ static void free_user(User *user) {
 }
 
 /**
- * FIXME
+ * Prints out the specified message for the server log. Prints out the full current
+ * date and time followed by the message.
  */
 static void print_log_message(const char *msg) {
 
     struct tm *timestamp;
     time_t timer;
+    
+    /* Access the current local time */
     time(&timer);
     timestamp = localtime(&timer);
+    /* Prints out the logging date, time, & the message */
     fprintf(stdout, "[%02d/%02d/%d %02d:%02d] %s\n", (timestamp->tm_mon + 1),
 		    timestamp->tm_mday, (1900 + timestamp->tm_year),
 		    timestamp->tm_hour, timestamp->tm_min, msg);
@@ -383,8 +391,15 @@ static void server_who_request(const char *packet, char *client_ip) {
 
     if (!hm_get(users, client_ip, (void **)&user))
 	return;//User not logged in
-    if (!hm_get(channels, who_packet->req_channel, (void **)&u_list))
-	return;//Channel non existent
+
+    if (!hm_get(channels, who_packet->req_channel, (void **)&u_list)) {
+	sprintf(buffer, "No channel by the name %s", who_packet->req_channel);
+	server_send_error(user->addr, user->len, buffer);
+	sprintf(buffer, "User %s attempted to list users on non-existent channel %s",
+		    user->username, who_packet->req_channel);
+	print_log_message(buffer);
+	return;
+    }
     if ((user_list = (User **)ll_toArray(u_list, &len)) == NULL)
 	return;///malloc error
 
