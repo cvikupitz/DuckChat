@@ -31,7 +31,7 @@
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
 /* Maximum buffer size for messages and packets */
-#define BUFF_SIZE 10000
+#define BUFF_SIZE 20000
 /* The default channel for the user to join upon logging in */
 /* This channel will also never be removed, even when empty */
 #define DEFAULT_CHANNEL "Common"
@@ -447,17 +447,19 @@ static void server_list_request(char *client_ip) {
 static void server_who_request(const char *packet, char *client_ip) {
 
     User *user, **user_list;
-    LinkedList *u_list;
+    LinkedList *subscribers;
     int size;
     long i, len;
     char buffer[256];
-    struct text_who *msg_packet;
+    struct text_who *send_packet;
     struct request_who *who_packet = (struct request_who *) packet;
 
+    /* Assert that the user is logged in, do nothing if not */
     if (!hm_get(users, client_ip, (void **)&user))
-	return;//User not logged in
+	return;
 
-    if (!hm_get(channels, who_packet->req_channel, (void **)&u_list)) {
+    /*  */
+    if (!hm_get(channels, who_packet->req_channel, (void **)&subscribers)) {
 	sprintf(buffer, "No channel by the name %s", who_packet->req_channel);
 	server_send_error(user->addr, user->len, buffer);
 	sprintf(buffer, "%s attempted to list users on non-existent channel %s",
@@ -466,7 +468,7 @@ static void server_who_request(const char *packet, char *client_ip) {
 	return;
     }
 
-    if (ll_isEmpty(u_list)) {
+    if (ll_isEmpty(subscribers)) {
 	sprintf(buffer, "The channel %s is currently empty", who_packet->req_channel);
 	server_send_error(user->addr, user->len, buffer);
 	sprintf(buffer, "%s listed all users on channel %s", user->username, who_packet->req_channel);
@@ -474,28 +476,43 @@ static void server_who_request(const char *packet, char *client_ip) {
 	return;
     }
 
-    if ((user_list = (User **)ll_toArray(u_list, &len)) == NULL)
-	return;
+    if ((user_list = (User **)ll_toArray(subscribers, &len)) == NULL) {
+	sprintf(buffer, "Error: Failed to list users on %s", who_packet->req_channel);
+	server_send_error(user->addr, user->len, buffer);
+	sprintf(buffer, "Failed to list users on channel %s for user %s",
+		    who_packet->req_channel, user->username);
+	print_log_message(buffer);
+	return;    
+    }
 
     size = sizeof(struct text_who) + (sizeof(struct user_info) * len);
     
-    msg_packet = malloc(size);//// FIXME DO NULL CHECK
-    memset(msg_packet, 0, size);
-    msg_packet->txt_type = TXT_WHO;
-    msg_packet->txt_nusernames = (int)len;
-    strncpy(msg_packet->txt_channel, who_packet->req_channel, (CHANNEL_MAX - 1));
+    if ((send_packet = malloc(size)) == NULL) {
+	sprintf(buffer, "Error: Failed to list users on %s", who_packet->req_channel);
+	server_send_error(user->addr, user->len, buffer);
+	sprintf(buffer, "Failed to list users on channel %s for user %s",
+		    who_packet->req_channel, user->username);
+	print_log_message(buffer);
+	free(user_list);
+	return;
+    }
+
+    memset(send_packet, 0, size);
+    send_packet->txt_type = TXT_WHO;
+    send_packet->txt_nusernames = (int)len;
+    strncpy(send_packet->txt_channel, who_packet->req_channel, (CHANNEL_MAX - 1));
 
     for (i = 0L; i < len; i++)
-	strncpy(msg_packet->txt_users[i].us_username, user_list[i]->username, (USERNAME_MAX - 1));
+	strncpy(send_packet->txt_users[i].us_username, user_list[i]->username, (USERNAME_MAX - 1));
 
-    sendto(socket_fd, msg_packet, size, 0,
+    sendto(socket_fd, send_packet, size, 0,
 		(struct sockaddr *)user->addr, user->len);
 
     sprintf(buffer, "%s listed all users on channel %s", user->username, who_packet->req_channel);
     print_log_message(buffer);
 
     free(user_list);
-    free(msg_packet);
+    free(send_packet);
 }
 
 /**
@@ -514,39 +531,48 @@ static void server_logout_request(char *client_ip) {
     User *user, *tmp;
     LinkedList *user_list;
     long i;
-    char *channel;
+    char *ch;
     char buffer[256];
 
+    /* Assert the user is logged in, do nothing if not */
     if (!hm_remove(users, client_ip, (void **)&user))
 	return;
 
+    /* Log the logout event */
     sprintf(buffer, "%s logged out", user->username);
     print_log_message(buffer);
 
-    while (ll_removeFirst(user->channels, (void **)&channel)) {
+    /* For each of the user's subscribed channels */
+    /* Remove user from each of the existing channel's subscription list */
+    while (ll_removeFirst(user->channels, (void **)&ch)) {
 	
-	if (!hm_get(channels, channel, (void **)&user_list)) {
-	    free(channel);
+	/* Error catch: channel does not actually exist, continue */
+	if (!hm_get(channels, ch, (void **)&user_list)) {
+	    free(ch);
 	    continue;
 	}
 
+	/* Perform a linear search in channel's subscription list for user */
 	for (i = 0L; i < ll_size(user_list); i++) {
 	    (void)ll_get(user_list, i, (void **)&tmp);
+	    /* User found, remove them from the list */
 	    if (strcmp(user->ip_addr, tmp->ip_addr) == 0) {
 		(void)ll_remove(user_list, i, (void **)&tmp);
 		break;
 	    }
 	}
 
-	if (ll_isEmpty(user_list) && strcmp(channel, DEFAULT_CHANNEL)) {
-	    (void)hm_remove(channels, channel, (void **)&user_list);
+	/* If the channel is now empty, server should now delete it */
+	if (ll_isEmpty(user_list) && strcmp(ch, DEFAULT_CHANNEL)) {
+	    (void)hm_remove(channels, ch, (void **)&user_list);
 	    ll_destroy(user_list, NULL);
-	    sprintf(buffer, "Removed the empty channel %s", channel);
+	    /* Log the channel deletion */
+	    sprintf(buffer, "Removed the empty channel %s", ch);
 	    print_log_message(buffer);
 	}
-	free(channel);
+	free(ch);   /* Free allocated memory  */
     }
-    free_user(user);
+    free_user(user);	/* Free allocated memory */
 }
 
 /**
@@ -675,40 +701,53 @@ int main(int argc, char *argv[]) {
 		inet_ntoa(server.sin_addr), ntohs(server.sin_port));
 
     /**
-     * FIXME
+     * Main application loop; a packet is received from one of the connected
+     * clients, and the packet is dealt with accordingly.
      */
     while (1) {
     
+	/* WAit & receive a packet from a connected client */
 	memset(buffer, 0, sizeof(buffer));
 	recvfrom(socket_fd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client, &addr_len);
+	/* FIXME */
 	sprintf(client_ip, "%s:%d", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
 	struct text *packet_type = (struct text *) buffer;
 
+	/* What type of packet did we receive? */
 	switch (packet_type->txt_type) {
-	    case REQ_LOGIN:	/* A client requests to login to the server */
+	    case REQ_LOGIN:
+		/* A client requests to login to the server */
 		server_login_request(buffer, client_ip, &client, addr_len);
 		break;
-	    case REQ_LOGOUT:	/* A client requests to logout from the server */
+	    case REQ_LOGOUT:
+		/* A client requests to logout from the server */
 		server_logout_request(client_ip);
 		break;
-	    case REQ_JOIN:  /* A client requests to join a channel */
+	    case REQ_JOIN:
+		/* A client requests to join a channel */
 		server_join_request(buffer, client_ip, &client, addr_len);
 		break;
-	    case REQ_LEAVE: /* A client requests to leave a channel */
+	    case REQ_LEAVE:
+		/* A client requests to leave a channel */
 		server_leave_request(buffer, client_ip, &client, addr_len);
 		break;
-	    case REQ_SAY:   /* A client sent a message to broadcast in their active channel */
+	    case REQ_SAY:
+		/* A client sent a message to broadcast in their active channel */
 		server_say_request(buffer, client_ip);
 		break;
-	    case REQ_LIST:  /* A client requests a list of all the channels on the server */
+	    case REQ_LIST:
+		/* A client requests a list of all the channels on the server */
 		server_list_request(client_ip);
 		break;
-	    case REQ_WHO:   /* A client requests a list of users on the specified channel */
+	    case REQ_WHO:
+		/* A client requests a list of users on the specified channel */
 		server_who_request(buffer, client_ip);
 		break;
-	    case REQ_KEEP_ALIVE:    /* Received from an inactive user, keeps them logged in */
+	    case REQ_KEEP_ALIVE:
+		/* Received from an inactive user, keeps them logged in */
 		server_keep_alive_request(client_ip);
-	    default:	/* Do nothing, likey a bogus packet */
+	    default:
+		/* Do nothing, likey a bogus packet */
 		break;
 	}
     }

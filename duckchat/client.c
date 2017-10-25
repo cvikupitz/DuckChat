@@ -31,7 +31,7 @@
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
 /* Maximum buffer size for messages and packets */
-#define BUFF_SIZE 10000
+#define BUFF_SIZE 20000
 /* Maximum channels client may be subscribed to at once */
 #define MAX_CHANNELS 20
 /* Default channel to join upon login */
