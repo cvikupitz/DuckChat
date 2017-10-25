@@ -337,48 +337,27 @@ static void server_list_request(char *client_ip) {
 	return;
 
     int size = sizeof(struct text_list) + (sizeof(struct channel_info) * len);
-    list_packet = (struct text_list *)malloc(size);
-
+    
+    list_packet = malloc(size);
+    memset(list_packet, 0, size);
     list_packet->txt_type = TXT_LIST;
     list_packet->txt_nchannels = (int)len;
-    for (i = 0L; i < len; i++) {
-	strncpy(list_packet->txt_channels[i].ch_channel, ch_list[i], (CHANNEL_MAX - 1));
-	
-    }
 
-    isendto(socket_fd, list_packet, sizeof(size), 0,
+    for (i = 0L; i < len; i++)
+	strncpy(list_packet->txt_channels[i].ch_channel, ch_list[i], (CHANNEL_MAX - 1));
+
+    sendto(socket_fd, list_packet, size, 0,
 		(struct sockaddr *)user->addr, user->len);
 
     fprintf(stdout, "User %s listed available channels on server\n", user->username);
-    free(list_packet);
     free(ch_list);
+    free(list_packet);
 }
 
 /**
  * FIXME
  */
-static void server_who_request(const char *packet, char *client_ip) {
-
-    User *user;
-    struct request_who *who_packet = (struct request_who *) packet;
-    struct text_who msg_packet;
-
-    if (!hm_get(users, client_ip, (void **)&user))
-	return;
-    //FIXME-Check to see if channel exists
-
-    memset(&msg_packet, 0, sizeof(msg_packet));
-    msg_packet.txt_type = TXT_WHO;
-    msg_packet.txt_nusernames = 0;
-    strncpy(msg_packet.txt_channel, who_packet->req_channel, (CHANNEL_MAX - 1));
-    /// FIXME - FIX WHO LIST
-
-    sendto(socket_fd, &msg_packet, sizeof(msg_packet), 0,
-		(struct sockaddr *)user->addr, user->len);
-
-    fprintf(stdout, "User %s listed subscribed users on channel %s\n",
-		    user->username, who_packet->req_channel);
-}
+static void server_who_request(const char *packet, char *client_ip) {}
 
 /**
  * FIXME

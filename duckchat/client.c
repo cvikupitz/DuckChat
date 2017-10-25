@@ -216,7 +216,7 @@ static void server_list_reply(const char *packet) {
     
     int i;
     struct text_list *list_packet = (struct text_list *) packet;
-    fprintf(stdout, "Existing channels (%d):\n", list_packet->txt_nchannels);
+    fprintf(stdout, "Existing channels:\n");
     for (i = 0; i < list_packet->txt_nchannels; i++)
 	fprintf(stdout, "  %s\n", list_packet->txt_channels[i].ch_channel);
 }
