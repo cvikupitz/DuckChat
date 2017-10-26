@@ -36,8 +36,6 @@
 #define MAX_CHANNELS 20
 /* Default channel to join upon login */
 #define DEFAULT_CHANNEL "Common"
-/* Title to display upon successful login */
-#define TITLE "------------  Duck Chat v1.1  ------------"
 /* Prompt to display to user for input */
 #define PROMPT {fprintf(stdout, "# ");fflush(stdout);}
 
@@ -489,7 +487,7 @@ int main(int argc, char *argv[]) {
 
     /* Displays the title and prompt */
     i = 0;
-    fprintf(stdout, "%s\n", TITLE);
+    fprintf(stdout, "------------  Duck Chat v1.1  ------------\n");
     fprintf(stdout, "Type '/help' for help, '/exit' to exit.\n");
     PROMPT;
 

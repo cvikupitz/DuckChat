@@ -8,9 +8,8 @@ CFLAGS=-Wall -W -g
 
 FILES=Makefile client.c server.c raw.h raw.c duckchat.h\
 	hashmap.h hashmap.c linkedlist.h linkedlist.h
-OBJECTS=client.o server.o raw.o hashmap.o linkedlist.o\
-	bad_client.o # REMOVE WHEN DONE
-EXECS=client server bad_client
+OBJECTS=client.o server.o raw.o hashmap.o linkedlist.o
+EXECS=client server
 
 
 all: $(EXECS)
@@ -20,9 +19,6 @@ client: client.o raw.o
 
 server: server.o hashmap.o linkedlist.o
 	$(CC) $(CFLAGS) server.o hashmap.o linkedlist.o -o server
-
-bad_client: bad_client.o
-	$(CC) $(CFLAGS) bad_client.o -o bad_client
 
 tarfile:
 	mkdir duckchat/
@@ -48,6 +44,4 @@ server.o: server.c duckchat.h
 raw.o: raw.c raw.h
 hashmap.o: hashmap.c hashmap.h
 linkedlist.o: linkedlist.c linkedlist.h
-
-bad_client.o: bad_client.c duckchat.h
 

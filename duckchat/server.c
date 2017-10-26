@@ -42,6 +42,9 @@
 static struct sockaddr_in server;
 /* File descriptor for the socket to use */
 static int socket_fd = -1;
+/* Time variables/structs used for logging the current time */
+struct tm *timestamp;
+time_t timer;
 /* HashMap of all users currently logged on */
 /* Maps the user's IP address in a string to the user struct */
 static HashMap *users = NULL;
@@ -59,6 +62,7 @@ typedef struct {
     LinkedList *channels;	/* List of channel names user is listening to */
     char *ip_addr;		/* Full IP address of client in string format */
     char *username;		/* The username of user */
+    short min_last;		/* Clock minute of last received packet from this client */
 } User;
 
 /**
@@ -78,8 +82,7 @@ static User *malloc_user(const char *ip, const char *name, struct sockaddr_in *a
 	new_user->addr = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
 	new_user->channels = ll_create();
 	new_user->ip_addr = (char *)malloc(strlen(ip) + 1);
-	int name_len = ((strlen(name) > (USERNAME_MAX - 1)) ? (USERNAME_MAX - 1) : strlen(name));
-	new_user->username = (char *)malloc(name_len + 1);
+	new_user->username = (char *)malloc(strlen(name) + 1);
 
 	/* Do error checking for malloc(), free all members and return NULL if failed */
 	if (new_user->addr == NULL || new_user->channels == NULL || 
@@ -96,8 +99,8 @@ static User *malloc_user(const char *ip, const char *name, struct sockaddr_in *a
 	*new_user->addr = *addr;
 	new_user->len = len;
 	strcpy(new_user->ip_addr, ip);
-	memcpy(new_user->username, name, name_len);
-	new_user->username[name_len] = '\0';
+	strcpy(new_user->username, name);
+	new_user->min_last = 0;
     }
 
     return new_user;    
@@ -125,9 +128,6 @@ static void free_user(User *user) {
  */
 static void print_log_message(const char *msg) {
 
-    struct tm *timestamp;
-    time_t timer;
-    
     /* Access the current local time */
     time(&timer);
     timestamp = localtime(&timer);
@@ -167,12 +167,16 @@ static void server_send_error(struct sockaddr_in *addr, socklen_t len, const cha
 static void server_login_request(const char *packet, char *client_ip, struct sockaddr_in *addr, socklen_t len) {
 
     User *user;
-    char buffer[256];
+    char name[USERNAME_MAX], buffer[256];
     struct request_login *login_packet = (struct request_login *) packet;
+
+    /* Copy username into buffer, ensures name length does not exceed max allowed */
+    memset(name, 0, sizeof(name));
+    strncpy(name, login_packet->req_username, (USERNAME_MAX - 1));
 
     /* Create a new instance of the user */
     /* Send error back to client if malloc() failed, log the error */
-    if ((user = malloc_user(client_ip, login_packet->req_username, addr, len)) == NULL) {
+    if ((user = malloc_user(client_ip, name, addr, len)) == NULL) {
 	server_send_error(addr, len, "Error: Failed to log into the server");
 	sprintf(buffer, "%s failed to login: unable to allocate a sufficient amount of memory",
 			client_ip);
@@ -735,7 +739,6 @@ int main(int argc, char *argv[]) {
 	print_error("Failed to allocate a sufficient amount of memory.");
 
     /* Display successful launch title, timestamp & address */
-    time_t timer;
     time(&timer);
     fprintf(stdout, "------ Launched DuckChat server ~ %s", ctime(&timer)); 
     fprintf(stdout, "------ Server assigned to address %s:%d\n",
