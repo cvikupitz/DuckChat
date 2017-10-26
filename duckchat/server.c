@@ -199,7 +199,7 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
 /**
  * FIXME
  */
-static void server_join_request(const char *packet, char *client_ip, struct sockaddr_in *addr, socklen_t len) {
+static void server_join_request(const char *packet, char *client_ip) {
     
     User *user, *tmp;
     LinkedList *user_list;
@@ -237,38 +237,47 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
     /* User has joined a channel that already exists */
     if (!hm_get(channels, joined, (void **)&user_list)) {
 
+	/* Create the new channel list, send error back if failed, log the error */
 	if ((user_list = ll_create()) == NULL) {
 	    sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
+	/* Add the user to the list, send error back if failed, log the error */
 	if (!ll_add(user_list, user)) {
 	    ll_destroy(user_list, NULL);
 	    sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
+	/* Add the channel to the server's channel collection */
+	/* Send error back to client if failed, log the error */
 	if (!hm_put(channels, joined, user_list, NULL)) {
 	    ll_destroy(user_list, NULL);
 	    sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
+	/* Creation and insertion(s) of channel successful, log the event */
 	sprintf(buffer, "%s created the channel %s", user->username, joined);
 	print_log_message(buffer);
 
     /* User has joined a channel that does not exist */
     } else {
-
+	
+	/* Check to see if user is already subscribed; makes sure not to add duplicate instance(s) */
 	for (i = 0L; i < ll_size(user_list); i++) {
 	    (void)ll_get(user_list, i, (void **)&tmp);
 	    if (strcmp(user->ip_addr, tmp->ip_addr) == 0) {
+		/* User found, log the join event and return */
 		sprintf(buffer, "%s joined the channel %s", user->username, joined);
 		print_log_message(buffer);
 		return;
 	    }
 	}
 
+	/* User was not found, so add them to subscription list */
+	/* If failed, send error back to client, log the error */
 	if (!ll_add(user_list, user)) {
 	    sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
@@ -284,7 +293,7 @@ static void server_join_request(const char *packet, char *client_ip, struct sock
 /**
  * FIXME
  */
-static void server_leave_request(const char *packet, char *client_ip, struct sockaddr_in *addr, socklen_t len) {
+static void server_leave_request(const char *packet, char *client_ip) {
 
     User *user, *tmp;
     LinkedList *user_list;
@@ -757,11 +766,11 @@ int main(int argc, char *argv[]) {
 		break;
 	    case REQ_JOIN:
 		/* A client requests to join a channel */
-		server_join_request(buffer, client_ip, &client, addr_len);
+		server_join_request(buffer, client_ip);
 		break;
 	    case REQ_LEAVE:
 		/* A client requests to leave a channel */
-		server_leave_request(buffer, client_ip, &client, addr_len);
+		server_leave_request(buffer, client_ip);
 		break;
 	    case REQ_SAY:
 		/* A client sent a message to broadcast in their active channel */
