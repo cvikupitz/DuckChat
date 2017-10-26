@@ -446,7 +446,7 @@ int main(int argc, char *argv[]) {
     /* Create server address struct, set internet family, address, & port number */
     memset((char *)&server, 0, sizeof(server));
     server.sin_family = AF_INET;
-    memcpy((char *)host_end->h_addr, (char *)&server.sin_addr.s_addr, host_end->h_length);
+    memcpy((char *)&server.sin_addr.s_addr, (char *)host_end->h_addr, host_end->h_length);
     server.sin_port = htons(port_num);
 
     /* Create the UDP socket & connect client to server */
@@ -487,7 +487,7 @@ int main(int argc, char *argv[]) {
 
     /* Displays the title and prompt */
     i = 0;
-    fprintf(stdout, "------------  Duck Chat v1.1  ------------\n");
+    fprintf(stdout, "---------------  Duck Chat  ---------------\n");
     fprintf(stdout, "Type '/help' for help, '/exit' to exit.\n");
     PROMPT;
 
