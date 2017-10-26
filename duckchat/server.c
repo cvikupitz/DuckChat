@@ -70,7 +70,7 @@ typedef struct {
 static User *malloc_user(const char *ip, const char *name, struct sockaddr_in *addr, socklen_t len) {
 
     User *new_user;
-    
+   
     /* Allocate memory for the struct itself */
     if ((new_user = (User *)malloc(sizeof(User))) != NULL) {
 	
