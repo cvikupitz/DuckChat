@@ -38,6 +38,7 @@
 /* Refresh rate (in minutes) of the server to scan for and logout inactive users */
 #define REFRESH_RATE 2
 
+
 /* Socket address for the server */
 static struct sockaddr_in server;
 /* File descriptor for the socket to use */
@@ -162,7 +163,8 @@ static void server_send_error(struct sockaddr_in *addr, socklen_t len, const cha
 }
 
 /**
- * FIXME
+ * Server receives a login packet; the server allocates memory and creates an instance of the
+ * new user and connects them to the server.
  */
 static void server_login_request(const char *packet, char *client_ip, struct sockaddr_in *addr, socklen_t len) {
 
@@ -201,7 +203,8 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
 }
 
 /**
- * FIXME
+ * Server receives a join packet; the server adds the client to the requested channel, so
+ * that they can now receive messages from other subscribed clients.
  */
 static void server_join_request(const char *packet, char *client_ip) {
     
@@ -295,7 +298,9 @@ static void server_join_request(const char *packet, char *client_ip) {
 }
 
 /**
- * FIXME
+ * Server recieves a leave packet from a client; the server removes the specified
+ * channel from the user's subscription list and deletes the channel if becomes
+ * empty.
  */
 static void server_leave_request(const char *packet, char *client_ip) {
 
@@ -373,7 +378,9 @@ static void server_leave_request(const char *packet, char *client_ip) {
 }
 
 /**
- * FIXME
+ * Server receiveds a say packet from a client; the server broadcasts the message
+ * back to all connected clients subscribed to the requested channel by sending
+ * a packet to each of the subscribed clients.
  */
 static void server_say_request(const char *packet, char *client_ip) {
     
@@ -422,7 +429,9 @@ static void server_say_request(const char *packet, char *client_ip) {
 }
 
 /**
- * FIXME
+ * Server receives a list packet from a client; the server compiles a list of
+ * all the channels currently available on the server, then sends the packet
+ * back to the client.
  */
 static void server_list_request(char *client_ip) {
 
@@ -478,7 +487,9 @@ static void server_list_request(char *client_ip) {
 }
 
 /**
- * FIXME
+ * Server receives a who packet from a client; the server compiles a list of all
+ * the users currently subscribed to the requested channel, then sends the packet
+ * back to the client.
  */
 static void server_who_request(const char *packet, char *client_ip) {
 
@@ -569,7 +580,8 @@ static void server_keep_alive_request(char *client_ip) {
 }
 
 /**
- * FIXME
+ * Server receives a logout packet from a client; server removes the user from the
+ * user database and any instances of them from all the channels.
  */
 static void server_logout_request(char *client_ip) {
 
