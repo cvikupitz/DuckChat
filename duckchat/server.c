@@ -18,6 +18,7 @@
 #include <sys/types.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -702,7 +703,7 @@ int main(int argc, char *argv[]) {
 
     /* Register function to cleanup when user stops the server */
     /* Also register the cleanup() function to be invoked upon program termination */
-    if (signal(SIGINT, sig_handler))
+    if ((signal(SIGINT, sig_handler)) == SIG_ERR)
 	print_error("Failed to catch SIGINT.");
     if ((atexit(cleanup)) != 0)
 	print_error("Call to atexit() failed.");
