@@ -26,14 +26,15 @@
 
 /// FIXME - USE htons(), hotl().. for byte order....
 
-/* The rate (in seconds) to send keep-alive packet when inactive */
-#define KEEP_ALIVE_RATE 4
+
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
 /* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 20000
 /* Maximum channels client may be subscribed to at once */
 #define MAX_CHANNELS 20
+/* The rate (in seconds) to send keep-alive packet when inactive */
+#define KEEP_ALIVE_RATE 4
 /* Default channel to join upon login */
 #define DEFAULT_CHANNEL "Common"
 /* Prompt to display to user for input */
