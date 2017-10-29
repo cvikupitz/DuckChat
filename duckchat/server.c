@@ -37,7 +37,7 @@
 /* This channel will also never be removed, even when empty */
 #define DEFAULT_CHANNEL "Common"
 /* Refresh rate (in minutes) of the server to scan for and logout inactive users */
-#define REFRESH_RATE 2
+#define REFRESH_RATE 10
 
 
 /* Socket address for the server */
@@ -64,7 +64,7 @@ typedef struct {
     LinkedList *channels;	/* List of channel names user is listening to */
     char *ip_addr;		/* Full IP address of client in string format */
     char *username;		/* The username of user */
-    short min_last;		/* Clock minute of last received packet from this client */
+    int min_last;		/* Clock minute of last received packet from this client */
 } User;
 
 /**
@@ -102,10 +102,23 @@ static User *malloc_user(const char *ip, const char *name, struct sockaddr_in *a
 	new_user->len = len;
 	strcpy(new_user->ip_addr, ip);
 	strcpy(new_user->username, name);
-	new_user->min_last = 0;
+	time(&timer);
+	timestamp = localtime(&timer);
+	new_user->min_last = timestamp->tm_min;
     }
 
     return new_user;    
+}
+
+/**
+ * FIXME
+ */
+static void update_user_time(User *user) {
+    if (user != NULL) {
+	time(&timer);
+	timestamp = localtime(&timer);
+	user->min_last = timestamp->tm_min;
+    }
 }
 
 /**
@@ -220,6 +233,7 @@ static void server_join_request(const char *packet, char *client_ip) {
     /* Assert that the user is currently logged in, do nothing if not */
     if (!hm_get(users, client_ip, (void **)&user))
 	return;
+    update_user_time(user);
 
     /* Set the channel name length; shorten it down if exceeds max length allowed */
     ch_len = ((strlen(join_packet->req_channel) > (CHANNEL_MAX - 1)) ?
@@ -316,6 +330,7 @@ static void server_leave_request(const char *packet, char *client_ip) {
     /* Assert that the user requesting is currently logged in, do nothing if not */
     if (!hm_get(users, client_ip, (void **)&user))
 	return;
+    update_user_time(user);
 
     /* Copy into buffer, ensure the channel name length does not exceed maximum allowed */
     memset(channel, 0, sizeof(channel));
@@ -399,6 +414,7 @@ static void server_say_request(const char *packet, char *client_ip) {
     /* Assert that the channel exists; do nothing if not */
     if (!hm_get(channels, say_packet->req_channel, (void **)&ch_users))
 	return;
+    update_user_time(user);
 
     /* Get the list of users listening to the channel */
     /* Respond to user with error message if malloc() failure, log the error */
@@ -446,6 +462,7 @@ static void server_list_request(char *client_ip) {
     /* Assert that the user is logged in, do nothing if not */
     if (!hm_get(users, client_ip, (void **)&user))
 	return;
+    update_user_time(user);
 
     /* Retrieve the complete list of channel names */
     /* Send error message back to client if failed (malloc() error), log the error */
@@ -505,6 +522,7 @@ static void server_who_request(const char *packet, char *client_ip) {
     /* Assert that the user is logged in, do nothing if not */
     if (!hm_get(users, client_ip, (void **)&user))
 	return;
+    update_user_time(user);
 
     /* Assert that the channel requested exists, send error back if it doesn't, log the error */
     if (!hm_get(channels, who_packet->req_channel, (void **)&subscribers)) {
@@ -634,6 +652,34 @@ static void server_logout_request(char *client_ip) {
 }
 
 /**
+ * FIXME
+ */
+static int user_inactive(User *user) {
+    
+    int curr_min, res;
+
+    if (user == NULL)
+	return 0;
+    time(&timer);
+    timestamp = localtime(&timer);
+    curr_min = timestamp->tm_min;
+    if (curr_min >= user->min_last)
+	res = curr_min - user->min_last;
+    else
+	res = ((60 - user->min_last) + curr_min);
+    return ((res > REFRESH_RATE) ? 1 : 0);
+}
+
+/**
+ * FIXME
+ */
+static void refresh(UNUSED int signo) {
+
+    fprintf(stdout, "Scanning all users...\n");
+    alarm(REFRESH_RATE);
+}
+
+/**
  * Frees the reserved memory occupied by the specified LinkedList. Used by
  * the LinkedList destructor.
  */
@@ -705,6 +751,8 @@ int main(int argc, char *argv[]) {
     /* Also register the cleanup() function to be invoked upon program termination */
     if ((signal(SIGINT, sig_handler)) == SIG_ERR)
 	print_error("Failed to catch SIGINT.");
+    if ((signal(SIGALRM, refresh)) == SIG_ERR)
+	print_error("Failed to catch SIGALRM.");
     if ((atexit(cleanup)) != 0)
 	print_error("Call to atexit() failed.");
 
@@ -756,6 +804,7 @@ int main(int argc, char *argv[]) {
     fprintf(stdout, "------ Launched DuckChat server ~ %s", ctime(&timer)); 
     fprintf(stdout, "------ Server assigned to address %s:%d\n",
 		inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+    alarm(REFRESH_RATE);
 
     /**
      * Main application loop; a packet is received from one of the connected
