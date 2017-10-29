@@ -1,6 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
+ * Last Modified: 10/29/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -27,7 +28,7 @@
 #include "linkedlist.h"
 
 /// FIXME - Ensure byte order, htonl/s()....
-
+/// FIXME - ADD CREDITS/RESOURCES USED
 
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
@@ -111,10 +112,13 @@ static User *malloc_user(const char *ip, const char *name, struct sockaddr_in *a
 }
 
 /**
- * FIXME
+ * Updates the time of the specified user's last sent packet to now. Should be
+ * invoked every time a packet is received from a connected client.
  */
 static void update_user_time(User *user) {
+    
     if (user != NULL) {
+	/* Retrieve current time, update user record */
 	time(&timer);
 	timestamp = localtime(&timer);
 	user->min_last = timestamp->tm_min;
@@ -147,9 +151,10 @@ static void print_log_message(const char *msg) {
     time(&timer);
     timestamp = localtime(&timer);
     /* Prints out the logging date, time, & the message */
-    fprintf(stdout, "[%02d/%02d/%d %02d:%02d] %s\n", (timestamp->tm_mon + 1),
+    fprintf(stdout, "[%02d/%02d/%d %02d:%02d:%02d] %s\n", (timestamp->tm_mon + 1),
 		    timestamp->tm_mday, (1900 + timestamp->tm_year),
-		    timestamp->tm_hour, timestamp->tm_min, msg);
+		    timestamp->tm_hour, timestamp->tm_min,
+		    timestamp->tm_sec, msg);
 }
 
 /**
@@ -441,7 +446,7 @@ static void server_say_request(const char *packet, char *client_ip) {
     sprintf(buffer, "[%s][%s] -> \"%s\"", msg_packet.txt_channel,
 		user->username, msg_packet.txt_text);
     print_log_message(buffer);
-    /* Free the array */
+    /* Free reserved memory */
     free(listeners);
 }
 
@@ -609,7 +614,10 @@ static void server_keep_alive_request(char *client_ip) {
 }
 
 /**
- * FIXME
+ * Manually removes the specified user from the server database. Logs the user
+ * out and removes all instances of the user from all their subscribed channels.
+ * All reserved memory associated with the user is also freed and returned to
+ * the heap.
  */
 static void logout_user(User *user) {
 
@@ -647,9 +655,11 @@ static void logout_user(User *user) {
 	    sprintf(buffer, "Removed the empty channel %s", ch);
 	    print_log_message(buffer);
 	}
-	free(ch);   /* Free allocated memory  */
+	/* Free allocated memory */
+	free(ch);
     }
-    free_user(user);	/* Free allocated memory */
+    /* Free allocated memory */
+    free_user(user);
 }
 
 /**
@@ -672,14 +682,19 @@ static void server_logout_request(char *client_ip) {
 }
 
 /**
- * FIXME
+ * Local method to verify the specified user is inactive. Calculates the
+ * number of minutes since the server received a packet from the specified
+ * user. If the time difference is greater than the server's refresh rate,
+ * the user is deemed inactive. Returns 1 if considered inactive, 0 if active.
  */
 static int user_inactive(User *user) {
 
     int diff;
 
+    /* Retrieve the current time */
     time(&timer);
     timestamp = localtime(&timer);
+    /* Calculate the number of minutes the client last sent a packet */
     if (timestamp->tm_min >= user->min_last)
 	diff = (timestamp->tm_min - user->min_last);
     else
@@ -689,7 +704,9 @@ static int user_inactive(User *user) {
 }
 
 /**
- * FIXME
+ * Performs a scan on all the currently connected clients and determines for
+ * each one whether the client is inactive or not. If inactive, the client
+ * is forcefully logged out, or ignored if otherwise.
  */
 static void logout_inactive_users(void) {
     
@@ -698,6 +715,8 @@ static void logout_inactive_users(void) {
     char **user_list;
     char buffer[256];
 
+    /* Retrieve the list of all connected clients */
+    /* Abort the scan if failed (malloc() error), log the error */
     if ((user_list = hm_keyArray(users, &len)) == NULL) {
 	print_log_message("*** Failed to perform server scan, malloc() error");
 	return;
@@ -705,9 +724,12 @@ static void logout_inactive_users(void) {
 
     print_log_message("Scanning server for inactive users...");
     for (i = 0L; i < len; i++) {
+	/* Assert the user exists in the map */
 	if (!hm_get(users, user_list[i], (void **)&user))
 	    continue;
+	/* Determines if the user is inactive */
 	if (user_inactive(user)) {
+	    /* User is deemed inactive, logout & remove the user */
 	    sprintf(buffer, "Forcefully logged out inactive user %s", user->username);
 	    print_log_message(buffer);
 	    (void)hm_remove(users, user->ip_addr, (void **)&user);
@@ -715,6 +737,7 @@ static void logout_inactive_users(void) {
 	}
     }
 
+    /* Log the scan, free allocated memory */
     print_log_message("Scan complete");
     free(user_list);
 }
@@ -854,19 +877,19 @@ int main(int argc, char *argv[]) {
      */
     while (1) {
 
-	/* FIXME */
+	/* Watch the socket for packets from connected clients */
 	FD_ZERO(&receiver);
 	FD_SET(socket_fd, &receiver);
 	res = select((socket_fd + 1), &receiver, NULL, NULL, &timeout);
 
-	/* FIXME */
+	/* Timer has expired, the server now will scan all users for inactivity */
 	if (res == 0) {
 	    logout_inactive_users();
 	    timeout.tv_sec = (REFRESH_RATE * 60);
 	    continue;
 	}
     
-	/* Wait & receive a packet from a connected client */
+	/* Receive a packet from a connected client */
 	memset(buffer, 0, sizeof(buffer));
 	if (recvfrom(socket_fd, buffer, sizeof(buffer), 0,
 		(struct sockaddr *)&client, &addr_len) < 0) continue;

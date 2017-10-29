@@ -1,6 +1,7 @@
 /**
  * client.c
  * Author: Cole Vikupitz
+ * Last Modified: 10/29/2017
  *
  * Client side of a chat application using the DuckChat protocol. The client sends
  * and receives packets from a server using this protocol and handles each of the
@@ -25,7 +26,7 @@
 #include "raw.h"
 
 /// FIXME - USE htons(), hotl().. for byte order....
-
+/// FIXME - ADD RESOURCES USED
 
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
@@ -39,6 +40,7 @@
 #define DEFAULT_CHANNEL "Common"
 /* Prompt to display to user for input */
 #define PROMPT {fprintf(stdout, "# ");fflush(stdout);}
+
 
 /* Socket address for the server */
 static struct sockaddr_in server;
@@ -307,6 +309,7 @@ static void client_subscribed_request(void) {
  * the user enters the special command '/help'.
  */
 static void client_help_request(void) {
+    
     fprintf(stdout, "Possible commands are:\n");
     fprintf(stdout, "  /join <channel>: Join the named channel, creating it if it doesn't exist.\n");
     fprintf(stdout, "  /leave <channel>: Unsubscribe from the named channel.\n");
@@ -503,7 +506,8 @@ int main(int argc, char *argv[]) {
 	FD_SET(STDIN_FILENO, &receiver);
 	res = select((socket_fd + 1), &receiver, NULL, NULL, &timeout);
 
-	/* Select() timed out, user has not sent packet; send a keep-alive packet, reset timer */
+	/* Select() timed out, user has not sent packet */
+	/* Send a keep-alive packet to server, reset the timer */
 	if (res == 0) {
 	    client_keep_alive_request();
 	    timeout.tv_sec = KEEP_ALIVE_RATE;
