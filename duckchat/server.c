@@ -27,7 +27,7 @@
 #include "linkedlist.h"
 
 /// FIXME - Ensure byte order, htonl/s()....
-/// FIXME - SCAN AND LOGOUT INACTIVE USERS
+
 
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
@@ -37,8 +37,7 @@
 /* This channel will also never be removed, even when empty */
 #define DEFAULT_CHANNEL "Common"
 /* Refresh rate (in minutes) of the server to scan for and logout inactive users */
-#define REFRESH_RATE 10
-#define RW 1
+#define REFRESH_RATE 2
 
 
 /* Socket address for the server */
@@ -591,12 +590,22 @@ static void server_who_request(const char *packet, char *client_ip) {
 }
 
 /**
- * FIXME
+ * Server receives a keep-alive packet from a client; the server simply updates the
+ * user's last sent packet time so that they are not logged out due to inactivity.
  */
 static void server_keep_alive_request(char *client_ip) {
 
-    fprintf(stdout, "Received KEEP_ALIVE from %s\n", client_ip);
-    //// FIXME
+    User *user;
+    char buffer[256];
+
+    /* Assert that the user is logged in, do nothing if not */
+    if (!hm_get(users, client_ip, (void **)&user))
+	return;
+    update_user_time(user);
+    
+    /* Log the keep alive message received */
+    sprintf(buffer, "%s kept alive", user->username);
+    print_log_message(buffer);
 }
 
 /**
@@ -663,6 +672,54 @@ static void server_logout_request(char *client_ip) {
 }
 
 /**
+ * FIXME
+ */
+static int user_inactive(User *user) {
+
+    int diff;
+
+    time(&timer);
+    timestamp = localtime(&timer);
+    if (timestamp->tm_min >= user->min_last)
+	diff = (timestamp->tm_min - user->min_last);
+    else
+	diff = ((60 - user->min_last) + timestamp->tm_min);
+
+    return (diff > REFRESH_RATE);
+}
+
+/**
+ * FIXME
+ */
+static void logout_inactive_users(void) {
+    
+    User *user;
+    long i, len;
+    char **user_list;
+    char buffer[256];
+
+    if ((user_list = hm_keyArray(users, &len)) == NULL) {
+	print_log_message("*** Failed to perform server scan, malloc() error");
+	return;
+    }
+
+    print_log_message("Scanning server for inactive users...");
+    for (i = 0L; i < len; i++) {
+	if (!hm_get(users, user_list[i], (void **)&user))
+	    continue;
+	if (user_inactive(user)) {
+	    sprintf(buffer, "Forcefully logged out inactive user %s", user->username);
+	    print_log_message(buffer);
+	    (void)hm_remove(users, user->ip_addr, (void **)&user);
+	    logout_user(user);
+	}
+    }
+
+    print_log_message("Scan complete");
+    free(user_list);
+}
+
+/**
  * Frees the reserved memory occupied by the specified LinkedList. Used by
  * the LinkedList destructor.
  */
@@ -719,8 +776,10 @@ int main(int argc, char *argv[]) {
 
     struct sockaddr_in client;
     struct hostent *host_end;
+    struct timeval timeout;
     socklen_t addr_len = sizeof(client);
-    int port_num;
+    fd_set receiver;
+    int port_num, res;
     char buffer[BUFF_SIZE], client_ip[128];
 
     /* Assert that the correct number of arguments were given */
@@ -785,16 +844,32 @@ int main(int argc, char *argv[]) {
     fprintf(stdout, "------ Launched DuckChat server ~ %s", ctime(&timer)); 
     fprintf(stdout, "------ Server assigned to address %s:%d\n",
 		inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+    /* Set the timeout timer for select() */
+    memset(&timeout, 0, sizeof(timeout));
+    timeout.tv_sec = (REFRESH_RATE * 60);
 
     /**
      * Main application loop; a packet is received from one of the connected
      * clients, and the packet is dealt with accordingly.
      */
     while (1) {
+
+	/* FIXME */
+	FD_ZERO(&receiver);
+	FD_SET(socket_fd, &receiver);
+	res = select((socket_fd + 1), &receiver, NULL, NULL, &timeout);
+
+	/* FIXME */
+	if (res == 0) {
+	    logout_inactive_users();
+	    timeout.tv_sec = (REFRESH_RATE * 60);
+	    continue;
+	}
     
 	/* Wait & receive a packet from a connected client */
 	memset(buffer, 0, sizeof(buffer));
-	recvfrom(socket_fd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client, &addr_len);
+	if (recvfrom(socket_fd, buffer, sizeof(buffer), 0,
+		(struct sockaddr *)&client, &addr_len) < 0) continue;
 	/* Extract full address of sender, parse packet */
 	sprintf(client_ip, "%s:%d", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
 	struct text *packet_type = (struct text *) buffer;
