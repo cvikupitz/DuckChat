@@ -38,6 +38,7 @@
 #define DEFAULT_CHANNEL "Common"
 /* Refresh rate (in minutes) of the server to scan for and logout inactive users */
 #define REFRESH_RATE 10
+#define RW 1
 
 
 /* Socket address for the server */
@@ -599,24 +600,15 @@ static void server_keep_alive_request(char *client_ip) {
 }
 
 /**
- * Server receives a logout packet from a client; server removes the user from the
- * user database and any instances of them from all the channels.
+ * FIXME
  */
-static void server_logout_request(char *client_ip) {
+static void logout_user(User *user) {
 
-    User *user, *tmp;
+    User *tmp;
     LinkedList *user_list;
     long i;
     char *ch;
     char buffer[256];
-
-    /* Assert the user is logged in, do nothing if not */
-    if (!hm_remove(users, client_ip, (void **)&user))
-	return;
-
-    /* Log the logout event */
-    sprintf(buffer, "%s logged out", user->username);
-    print_log_message(buffer);
 
     /* For each of the user's subscribed channels */
     /* Remove user from each of the existing channel's subscription list */
@@ -652,31 +644,22 @@ static void server_logout_request(char *client_ip) {
 }
 
 /**
- * FIXME
+ * Server receives a logout packet from a client; server removes the user from the
+ * user database and any instances of them from all the channels.
  */
-static int user_inactive(User *user) {
-    
-    int curr_min, res;
+static void server_logout_request(char *client_ip) {
 
-    if (user == NULL)
-	return 0;
-    time(&timer);
-    timestamp = localtime(&timer);
-    curr_min = timestamp->tm_min;
-    if (curr_min >= user->min_last)
-	res = curr_min - user->min_last;
-    else
-	res = ((60 - user->min_last) + curr_min);
-    return ((res > REFRESH_RATE) ? 1 : 0);
-}
+    User *user;
+    char buffer[256];
 
-/**
- * FIXME
- */
-static void refresh(UNUSED int signo) {
+    /* Assert the user is logged in, do nothing if not */
+    if (!hm_remove(users, client_ip, (void **)&user))
+	return;
 
-    fprintf(stdout, "Scanning all users...\n");
-    alarm(REFRESH_RATE);
+    /* Log the user out, log the logout event */ 
+    sprintf(buffer, "%s logged out", user->username);
+    print_log_message(buffer);
+    logout_user(user);
 }
 
 /**
@@ -751,8 +734,6 @@ int main(int argc, char *argv[]) {
     /* Also register the cleanup() function to be invoked upon program termination */
     if ((signal(SIGINT, sig_handler)) == SIG_ERR)
 	print_error("Failed to catch SIGINT.");
-    if ((signal(SIGALRM, refresh)) == SIG_ERR)
-	print_error("Failed to catch SIGALRM.");
     if ((atexit(cleanup)) != 0)
 	print_error("Call to atexit() failed.");
 
@@ -804,7 +785,6 @@ int main(int argc, char *argv[]) {
     fprintf(stdout, "------ Launched DuckChat server ~ %s", ctime(&timer)); 
     fprintf(stdout, "------ Server assigned to address %s:%d\n",
 		inet_ntoa(server.sin_addr), ntohs(server.sin_port));
-    alarm(REFRESH_RATE);
 
     /**
      * Main application loop; a packet is received from one of the connected

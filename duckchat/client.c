@@ -34,7 +34,7 @@
 /* Maximum channels client may be subscribed to at once */
 #define MAX_CHANNELS 20
 /* The rate (in seconds) to send keep-alive packet when inactive */
-#define KEEP_ALIVE_RATE 4
+#define KEEP_ALIVE_RATE 60
 /* Default channel to join upon login */
 #define DEFAULT_CHANNEL "Common"
 /* Prompt to display to user for input */
@@ -337,15 +337,13 @@ static void client_logout_request(void) {
  * logged in. Invoked only if the client is inactive for a period of time,
  * that is, they have not sent anything to the server.
  */
-static void client_keep_alive_request(UNUSED int signo) {
-    
+static void client_keep_alive_request(void) {
+   
     struct request_keep_alive keep_alive_packet;
     memset(&keep_alive_packet, 0, sizeof(keep_alive_packet));
     keep_alive_packet.req_type = REQ_KEEP_ALIVE;
     sendto(socket_fd, &keep_alive_packet, sizeof(keep_alive_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
-    alarm(KEEP_ALIVE_RATE);
-    return;
 }
 
 /**
@@ -374,7 +372,7 @@ static void cleanup(void) {
  * the program, which will invoke the cleanup method registered with the
  * atexit() function.
  */
-static void sig_handler(UNUSED int signo) {
+static void client_exit(UNUSED int signo) {
     
     exit(0);
 }
@@ -398,9 +396,10 @@ int main(int argc, char *argv[]) {
     struct hostent *host_end;
     struct request_login login_packet;
     struct request_join join_packet;
+    struct timeval timeout;
     socklen_t addr_len = sizeof(server);
     fd_set receiver;
-    int port_num, i, j;
+    int port_num, i, j, res;
     char ch;
     char buffer[BUFF_SIZE], in_buff[BUFF_SIZE];
 
@@ -417,10 +416,8 @@ int main(int argc, char *argv[]) {
 
     /* Register function to cleanup when user stops the client */
     /* Also register the cleanup() function to be invoked upon program termination */
-    if (signal(SIGINT, sig_handler) == SIG_ERR)
+    if (signal(SIGINT, client_exit) == SIG_ERR)
 	print_error("Failed to catch SIGINT.");
-    if (signal(SIGALRM, client_keep_alive_request) == SIG_ERR)
-	print_error("Failed to catch SIGALRM.");
     if ((atexit(cleanup)) != 0)
 	print_error("Call to atexit() failed.");
 
@@ -491,6 +488,9 @@ int main(int argc, char *argv[]) {
     fprintf(stdout, "---------------  Duck Chat  ---------------\n");
     fprintf(stdout, "Type '/help' for help, '/exit' to exit.\n");
     PROMPT;
+    /* Set the timeout timer for select() */
+    memset(&timeout, 0, sizeof(timeout));
+    timeout.tv_sec = KEEP_ALIVE_RATE;
 
     /**
      * Main application loop. Sends/receives packets to/from the server.
@@ -501,9 +501,16 @@ int main(int argc, char *argv[]) {
 	FD_ZERO(&receiver);
 	FD_SET(socket_fd, &receiver);
 	FD_SET(STDIN_FILENO, &receiver);
+	res = select((socket_fd + 1), &receiver, NULL, NULL, &timeout);
+
+	/* Select() timed out, user has not sent packet; send a keep-alive packet, reset timer */
+	if (res == 0) {
+	    client_keep_alive_request();
+	    timeout.tv_sec = KEEP_ALIVE_RATE;
+	}
 
 	/* Either data arrived in stdin or socket stream */
-	if (select((socket_fd + 1), &receiver, NULL, NULL, NULL)) {
+	else if (res > 0) {
 	    
 	    /**
 	     * Input was received from the socket stream, a message arrived to the client.
@@ -525,19 +532,24 @@ int main(int argc, char *argv[]) {
 		}
 
 		switch (packet_type->txt_type) {
-		    case TXT_SAY:   /* Message received from another client */
+		    case TXT_SAY:
+			/* Message received from another client */
 			server_say_reply(in_buff);
 			break;
-		    case TXT_LIST:  /* List server's available channels */
+		    case TXT_LIST:
+			/* List server's available channels */
 			server_list_reply(in_buff);
 			break;
-		    case TXT_WHO:   /* List users on a server's channel */
+		    case TXT_WHO:
+			/* List users on a server's channel */
 			server_who_reply(in_buff);
 			break;
-		    case TXT_ERROR: /* Error message received from the server */
+		    case TXT_ERROR:
+			/* Error message received from the server */
 			server_error_reply(in_buff);
 			break;
-		    default:	/* Do nothing, likely a bogus packet */
+		    default:
+			/* Do nothing, likely a bogus packet */
 			break;
 		}
 
@@ -583,15 +595,19 @@ int main(int argc, char *argv[]) {
 		    if (strncmp(buffer, "/join ", 6) == 0) {
 			/* User joins/subscribes to a channel */
 			client_join_request(buffer);
+			timeout.tv_sec = KEEP_ALIVE_RATE;
 		    } else if (strncmp(buffer, "/leave ", 7) == 0) {
 			/* User unsubscribes from a channel */
 			client_leave_request(buffer);
+			timeout.tv_sec = KEEP_ALIVE_RATE;
 		    } else if (strcmp(buffer, "/list") == 0) {
 			/* User requests list of all channels on server */
 			client_list_request();
+			timeout.tv_sec = KEEP_ALIVE_RATE;
 		    } else if (strncmp(buffer, "/who ", 5) == 0) {
 			/* User requests list of users on a channel */
 			client_who_request(buffer);
+			timeout.tv_sec = KEEP_ALIVE_RATE;
 		    } else if (strncmp(buffer, "/switch ", 8) == 0) {
 			/* User switches active channel to another channel */
 			client_switch_request(buffer);
@@ -615,6 +631,7 @@ int main(int argc, char *argv[]) {
 		} else {
 		    /* No special command given, send say message to server */
 		    client_say_request(buffer);
+		    timeout.tv_sec = KEEP_ALIVE_RATE;
 		}
 		PROMPT;
 	    }
