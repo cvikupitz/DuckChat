@@ -3,11 +3,12 @@
 # Author: Cole Vikupitz
 #
 
-CC=gcc
-CFLAGS=-Wall -W -g
 
 FILES=Makefile client.c server.c raw.h raw.c duckchat.h\
-	hashmap.h hashmap.c linkedlist.h linkedlist.h
+	hashmap.h hashmap.c linkedlist.h linkedlist.c
+
+CC=gcc
+CFLAGS=-Wall -W -g
 OBJECTS=client.o server.o raw.o hashmap.o linkedlist.o
 EXECS=client server
 
