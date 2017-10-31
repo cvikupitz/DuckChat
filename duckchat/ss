@@ -1,1 +1,0 @@
-valgrind --leak-check=full --leak-resolution=high ./server localhost 8080
