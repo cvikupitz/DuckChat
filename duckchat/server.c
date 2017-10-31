@@ -1,13 +1,21 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 10/30/2017
+ * Last Modified: 11/1/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
  * packets accordingly.
  *
  * Usage: ./server domain_name port_num
+ *
+ * Resources Used:
+ * Lots of help about basic socket programming received from Beej's Guide to Socket Programming:
+ * https://beej.us/guide/bgnet/output/html/multipage/index.html
+ *
+ * Implementations for the LinkedList and HashMap ADTs that this server uses were borrowed from
+ * professor Joe Sventek's ADT library on github (https://github.com/jsventek/ADTs).
+ * These implementations are not my own.
  */
 
 #include <stdio.h> 
@@ -28,7 +36,6 @@
 #include "linkedlist.h"
 
 /// FIXME - USE htonl(), htons(), ntohl(), ntohs()
-/// FIXME - ADD CREDITS/RESOURCES USED
 
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))

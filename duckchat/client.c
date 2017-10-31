@@ -1,13 +1,17 @@
 /**
  * client.c
  * Author: Cole Vikupitz
- * Last Modified: 10/31/2017
+ * Last Modified: 11/1/2017
  *
  * Client side of a chat application using the DuckChat protocol. The client sends
  * and receives packets from a server using this protocol and handles each of the
  * packets accordingly.
  *
  * Usage: ./client server_socket server_port username
+ *
+ * Resources Used:
+ * Lots of help about basic socket programming received from Beej's Guide to Socket Programming:
+ * https://beej.us/guide/bgnet/output/html/multipage/index.html
  */
 
 #include <stdio.h> 
@@ -26,14 +30,13 @@
 #include "raw.h"
 
 /// FIXME - USE htonl(), htons(), ntohl(), ntohs()
-/// FIXME - ADD RESOURCES USED
 
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
 /* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 20000
 /* Maximum channels client may be subscribed to at once */
-#define MAX_CHANNELS 20
+#define MAX_CHANNELS 25
 /* The rate (in seconds) to send keep-alive packet when inactive */
 #define KEEP_ALIVE_RATE 60
 /* Default channel to join upon login */
@@ -298,7 +301,7 @@ static void client_subscribed_request(void) {
 	if (strcmp(subscribed[i], "") == 0)
 	    continue;	    /* Skip over empty strings */
 	if (strcmp(subscribed[i], active_channel) == 0)
-	    fprintf(stdout, "> %s\n", subscribed[i]);
+	    fprintf(stdout, "* %s\n", subscribed[i]);
 	else
 	    fprintf(stdout, "  %s\n", subscribed[i]);
     }
