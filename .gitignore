@@ -1,4 +1,5 @@
 *.swp
 *.o
-duckchat/server
-duckchat/client
+*.exe
+client
+server
