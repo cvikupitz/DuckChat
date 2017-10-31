@@ -1,7 +1,7 @@
 /**
  * client.c
  * Author: Cole Vikupitz
- * Last Modified: 10/29/2017
+ * Last Modified: 10/31/2017
  *
  * Client side of a chat application using the DuckChat protocol. The client sends
  * and receives packets from a server using this protocol and handles each of the
@@ -25,7 +25,7 @@
 #include "duckchat.h"
 #include "raw.h"
 
-/// FIXME - USE htons(), hotl().. for byte order....
+/// FIXME - USE htonl(), htons(), ntohl(), ntohs()
 /// FIXME - ADD RESOURCES USED
 
 /* Suppress compiler warnings for unused parameters */
@@ -39,7 +39,7 @@
 /* Default channel to join upon login */
 #define DEFAULT_CHANNEL "Common"
 /* Prompt to display to user for input */
-#define PROMPT {fprintf(stdout, "# ");fflush(stdout);}
+#define PROMPT {fprintf(stdout, "> ");fflush(stdout);}
 
 
 /* Socket address for the server */
@@ -376,7 +376,8 @@ static void cleanup(void) {
  * atexit() function.
  */
 static void client_exit(UNUSED int signo) {
-    
+
+    putchar('\n');
     exit(0);
 }
 
@@ -559,25 +560,21 @@ int main(int argc, char *argv[]) {
 
 		/* Redisplays the prompt and all text the user typed in before */
 		PROMPT;
-		for (j = 0; j < i; j++) putchar(buffer[j]);
+		for (j = 0; j < i; j++)
+		    putchar(buffer[j]);
 		fflush(stdout);
 	    }
 
 	    /**
 	     * Input was received from the stdin stream, user entered a character.
-	     *
-	     * The client must output any messages it receives while the user is
-	     * typing in the prompt. To achieve this, the client reads and outputs
-	     * one character at a time. In the tests provided, the client did not
-	     * do this; messages received while the user was typing did not show
-	     * until the user entered the message.
 	     */
 	    if (FD_ISSET(STDIN_FILENO, &receiver)) {
 		
 		if ((ch = getchar()) != '\n') {
 		    if (ch == 127) {
 			/* User pressed backspace, erase character from prompt */
-			if (i == 0) continue;
+			if (i == 0)
+			    continue;
 			i--;
 			putchar('\b'); putchar(' '); putchar('\b');
 		    } else if (i != (SAY_MAX - 1)) {

@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 10/29/2017
+ * Last Modified: 10/30/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -27,7 +27,7 @@
 #include "hashmap.h"
 #include "linkedlist.h"
 
-/// FIXME - Ensure byte order, htonl/s()....
+/// FIXME - USE htonl(), htons(), ntohl(), ntohs()
 /// FIXME - ADD CREDITS/RESOURCES USED
 
 /* Suppress compiler warnings for unused parameters */
@@ -715,6 +715,10 @@ static void logout_inactive_users(void) {
     char **user_list;
     char buffer[256];
 
+    /* If no users are connected, don't bother with the scan */
+    if (hm_isEmpty(users))
+	return;
+
     /* Retrieve the list of all connected clients */
     /* Abort the scan if failed (malloc() error), log the error */
     if ((user_list = hm_keyArray(users, &len)) == NULL) {
@@ -786,7 +790,7 @@ static void print_error(const char *msg) {
  * the program, which will invoke the cleanup method registered with the
  * atexit() function.
  */
-static void sig_handler(UNUSED int signo) {
+static void server_exit(UNUSED int signo) {
     
     fprintf(stdout, "\n\nShutting down server...\n\n");
     exit(0);
@@ -814,7 +818,7 @@ int main(int argc, char *argv[]) {
 
     /* Register function to cleanup when user stops the server */
     /* Also register the cleanup() function to be invoked upon program termination */
-    if ((signal(SIGINT, sig_handler)) == SIG_ERR)
+    if ((signal(SIGINT, server_exit)) == SIG_ERR)
 	print_error("Failed to catch SIGINT.");
     if ((atexit(cleanup)) != 0)
 	print_error("Call to atexit() failed.");
