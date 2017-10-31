@@ -35,8 +35,6 @@
 #include "hashmap.h"
 #include "linkedlist.h"
 
-/// FIXME - USE htonl(), htons(), ntohl(), ntohs()
-
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
 /* Maximum buffer size for messages and packets */
