@@ -5,7 +5,7 @@
 
 
 FILES=Makefile client.c server.c raw.h raw.c duckchat.h\
-	hashmap.h hashmap.c linkedlist.h linkedlist.c
+	hashmap.h hashmap.c linkedlist.h linkedlist.c README.txt
 
 CC=gcc
 CFLAGS=-Wall -W -g
