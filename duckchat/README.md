@@ -34,21 +34,20 @@ To send a message, simply type the message and press enter. The message you send
 clients listening on the current channel. The client supports a number of special commands that are listed
 as such below:
 
-/join [channel]: Join the named channel, creating it if it doesn't exist.
-/leave [channel]: Unsubscribe from the named channel.
-/list: Lists the names of all the available channels.
-/who [channel]: Lists all users who are on the named channel.
-/switch [channel]: Switch to the named channel you are subscribed to.
-/subscribed: Lists the names of all the channels you're subscribed to.
-/clear: Clears the terminal screen.
-/help: Lists all available commands.
-/exit: Logout and exit the client software.
+* /join [channel]: Join the named channel, creating it if it doesn't exist.
+* /leave [channel]: Unsubscribe from the named channel.
+* /list: Lists the names of all the available channels.
+* /who [channel]: Lists all users who are on the named channel.
+* /switch [channel]: Switch to the named channel you are subscribed to.
+* /subscribed: Lists the names of all the channels you're subscribed to.
+* /clear: Clears the terminal screen.
+* /help: Lists all available commands.
+* /exit: Logout and exit the client software.
 
 ## Resources
 A lot of help consulted from Beej's Guide to Network/Socket Programming
 http://beej.us/guide/bgnet/output/html/multipage/index.html
 
 The LinkedList and HashMap implementations used by the server are borrowed from professor Joe Sventek's
-C ADT library (https://github.com/jsventek/ADTs).
-Credit belongs to him.
+C ADT library (https://github.com/jsventek/ADTs). Credit belongs to him.
 
