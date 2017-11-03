@@ -2,5 +2,5 @@
 *.o
 *.exe
 *.tgz
-client
-server
+duckchat/client
+duckchat/server
