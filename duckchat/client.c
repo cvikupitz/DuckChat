@@ -32,7 +32,7 @@
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
 /* Maximum buffer size for messages and packets */
-#define BUFF_SIZE 20000
+#define BUFF_SIZE 80000
 /* Maximum channels client may be subscribed to at once */
 #define MAX_CHANNELS 25
 /* The rate (in seconds) to send keep-alive packet when inactive */
@@ -406,7 +406,7 @@ int main(int argc, char *argv[]) {
     fd_set receiver;
     int port_num, i, j, res;
     char ch;
-    char buffer[BUFF_SIZE], in_buff[BUFF_SIZE];
+    char buffer[1024], in_buff[BUFF_SIZE];
 
     /* Assert that the correct number of arguments were given */
     /* Print program usage otherwise */
@@ -455,8 +455,6 @@ int main(int argc, char *argv[]) {
     /* Create the UDP socket & connect client to server */
     if ((socket_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	print_error("Failed to create a socket for client.");
-    //if (connect(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
-//	print_error("Failed to connect client to server.");
 
     /* Initialize username string, do not copy more bytes than maximum allowed */
     /* If the length is too long, notify user, but don't exit */

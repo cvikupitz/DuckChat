@@ -37,7 +37,7 @@
 /* Suppress compiler warnings for unused parameters */
 #define UNUSED __attribute__((unused))
 /* Maximum buffer size for messages and packets */
-#define BUFF_SIZE 20000
+#define BUFF_SIZE 80000
 /* The default channel for the user to join upon logging in */
 /* This channel will also never be removed, even when empty */
 #define DEFAULT_CHANNEL "Common"
