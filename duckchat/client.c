@@ -449,14 +449,14 @@ int main(int argc, char *argv[]) {
     /* Create server address struct, set internet family, address, & port number */
     memset((char *)&server, 0, sizeof(server));
     server.sin_family = AF_INET;
-    memcpy((char *)&server.sin_addr.s_addr, (char *)host_end->h_addr, host_end->h_length);
+    memcpy((char *)&server.sin_addr, (char *)host_end->h_addr_list[0], host_end->h_length);
     server.sin_port = htons(port_num);
 
     /* Create the UDP socket & connect client to server */
     if ((socket_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	print_error("Failed to create a socket for client.");
-    if (connect(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
-	print_error("Failed to connect client to server.");
+    //if (connect(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
+//	print_error("Failed to connect client to server.");
 
     /* Initialize username string, do not copy more bytes than maximum allowed */
     /* If the length is too long, notify user, but don't exit */
