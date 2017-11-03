@@ -1,6 +1,7 @@
 #
-# Duckchat Makefile
+# DuckChat Makefile
 # Author: Cole Vikupitz
+# Last Modified: 11/3/2017
 #
 
 
@@ -22,11 +23,11 @@ server: server.o hashmap.o linkedlist.o
 	$(CC) $(CFLAGS) server.o hashmap.o linkedlist.o -o server
 
 tarfile:
-	mkdir duckchat/
-	cp $(FILES) duckchat/
-	tar -zcvf duckchat.tgz duckchat/
-	tar -ztvf duckchat.tgz
-	rm -fr duckchat/
+	mkdir DuckChat/
+	cp $(FILES) DuckChat/
+	tar -zcvf DuckChat.tgz DuckChat/
+	tar -ztvf DuckChat.tgz
+	rm -fr DuckChat/
 
 help:
 	@echo "Possible targets for make:"
