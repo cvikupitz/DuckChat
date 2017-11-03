@@ -8,8 +8,8 @@ compress it into a tarball, gz or zip and send using TurnIN Homework page.
 (https://systems.cs.uoregon.edu/apps/turnin.php)
 Please include any special instructions for compiling and running your program on ix.
 
-Student Names:
-Student IDs:
+Student Names: Cole Vikupitz
+Student IDs: 951374618
 
 Answer the questions by selecting one of the given options. You may add additional information if you wish to.
 

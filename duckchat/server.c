@@ -69,7 +69,7 @@ typedef struct {
     LinkedList *channels;	/* List of channel names user is listening to */
     char *ip_addr;		/* Full IP address of client in string format */
     char *username;		/* The username of user */
-    int min_last;		/* Clock minute of last received packet from this client */
+    short last_min, last_sec;	/* Clock minute & second of last received packet from this client */
 } User;
 
 /**
@@ -109,7 +109,8 @@ static User *malloc_user(const char *ip, const char *name, struct sockaddr_in *a
 	strcpy(new_user->username, name);
 	time(&timer);
 	timestamp = localtime(&timer);
-	new_user->min_last = timestamp->tm_min;
+	new_user->last_min = timestamp->tm_min;
+	new_user->last_sec = timestamp->tm_sec;
     }
 
     return new_user;    
@@ -125,7 +126,8 @@ static void update_user_time(User *user) {
 	/* Retrieve current time, update user record */
 	time(&timer);
 	timestamp = localtime(&timer);
-	user->min_last = timestamp->tm_min;
+	user->last_min = timestamp->tm_min;
+	user->last_sec = timestamp->tm_sec;
     }
 }
 
@@ -699,11 +701,13 @@ static int user_inactive(User *user) {
     time(&timer);
     timestamp = localtime(&timer);
     /* Calculate the number of minutes the client last sent a packet */
-    if (timestamp->tm_min >= user->min_last)
-	diff = (timestamp->tm_min - user->min_last);
+    if (timestamp->tm_min >= user->last_min)
+	diff = (timestamp->tm_min - user->last_min);
     else
-	diff = ((60 - user->min_last) + timestamp->tm_min);
-
+	diff = ((60 - user->last_min) + timestamp->tm_min);
+    /* Check and return user inactivity */
+    if (diff == REFRESH_RATE)
+	return (user->last_sec > 0);
     return (diff > REFRESH_RATE);
 }
 

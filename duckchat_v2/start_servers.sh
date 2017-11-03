@@ -3,7 +3,7 @@
 #uncomment the topolgy you want. The simple two-server topology is uncommented here.
 
 # Change the SERVER variable below to point your server executable.
-SERVER=~/prog2/server
+SERVER=server
 
 SERVER_NAME=`echo $SERVER | sed 's#.*/\(.*\)#\1#g'`
 
