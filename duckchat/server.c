@@ -854,7 +854,7 @@ int main(int argc, char *argv[]) {
     /* Create server address struct, set internet family, address, & port number */
     memset((char *)&server, 0, sizeof(server));
     server.sin_family = AF_INET;
-    memcpy((char *)&server.sin_addr.s_addr, (char *)host_end->h_addr, host_end->h_length);
+    memcpy((char *)&server.sin_addr, (char *)host_end->h_addr_list[0], host_end->h_length);
     server.sin_port = htons(port_num);
 
     /* Create the UDP socket, bind name to socket */
