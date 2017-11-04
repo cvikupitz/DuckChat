@@ -4,3 +4,7 @@
 *.tgz
 duckchat/client
 duckchat/server
+duckchat_v2/client
+duckchat_v2/server
+duckchat_v2/test/client
+duckchat_v2/test/server
