@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 11/5/2017
+ * Last Modified: 11/6/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -204,7 +204,7 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
     /* Send error back to client if malloc() failed, log the error */
     if ((user = malloc_user(client_ip, name, addr, len)) == NULL) {
 	server_send_error(addr, len, "Error: Failed to log into the server");
-	sprintf(buffer, "%s failed to login: unable to allocate a sufficient amount of memory",
+	sprintf(buffer, "*** Failed to login %s, memory allocation failed",
 			client_ip);
 	print_log_message(buffer);
 	return;
@@ -214,7 +214,7 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
     /* Send error back to client if failed, log the error */
     if (!hm_put(users, client_ip, user, NULL)) {
 	server_send_error(addr, len, "Error: Failed to log into the server.");
-	sprintf(buffer, "%s failed to login: unable to allocate a sufficient amount of memory.",
+	sprintf(buffer, "*** Failed to login %s, memory allocation failed",
 			client_ip);
 	print_log_message(buffer);
 	free(user);
@@ -252,6 +252,9 @@ static void server_join_request(const char *packet, char *client_ip) {
     if ((joined = (char *)malloc(ch_len + 1)) == NULL) {
 	sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
 	server_send_error(user->addr, user->len, buffer);
+	sprintf(buffer, "*** Failed to add %s to channel %s, memory allocation failed",
+		    user->username, join_packet->req_channel);
+	print_log_message(buffer);
 	return;
     }
 
@@ -262,6 +265,9 @@ static void server_join_request(const char *packet, char *client_ip) {
     if (!ll_add(user->channels, joined)) {
 	sprintf(buffer, "Error: Failed to join %s", joined);
 	server_send_error(user->addr, user->len, buffer);
+	sprintf(buffer, "*** Failed to add %s to channel %s, memory allocation failed",
+		    user->username, joined);
+	print_log_message(buffer);
 	free(joined);
 	return;
     }
@@ -273,6 +279,9 @@ static void server_join_request(const char *packet, char *client_ip) {
 	if ((user_list = ll_create()) == NULL) {
 	    sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
+	    sprintf(buffer, "*** Failed to add %s to channel %s, memory allocation failed",
+		    user->username, joined);
+	    print_log_message(buffer);
 	    return;
 	}
 	/* Add the user to the list, send error back if failed, log the error */
@@ -280,6 +289,9 @@ static void server_join_request(const char *packet, char *client_ip) {
 	    ll_destroy(user_list, NULL);
 	    sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
+	    sprintf(buffer, "*** Failed to add %s to channel %s, memory allocation failed",
+		    user->username, joined);
+	    print_log_message(buffer);
 	    return;
 	}
 	/* Add the channel to the server's channel collection */
@@ -288,6 +300,9 @@ static void server_join_request(const char *packet, char *client_ip) {
 	    ll_destroy(user_list, NULL);
 	    sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
+	    sprintf(buffer, "*** Failed to add %s to channel %s, memory allocation failed",
+		    user->username, joined);
+	    print_log_message(buffer);
 	    return;
 	}
 	/* Creation and insertion(s) of channel successful, log the event */
@@ -304,6 +319,9 @@ static void server_join_request(const char *packet, char *client_ip) {
 		/* User found, log the join event and return */
 		sprintf(buffer, "%s joined the channel %s", user->username, joined);
 		print_log_message(buffer);
+		sprintf(buffer, "*** Failed to add %s to channel %s, memory allocation failed",
+		    user->username, joined);
+		print_log_message(buffer);
 		return;
 	    }
 	}
@@ -313,6 +331,9 @@ static void server_join_request(const char *packet, char *client_ip) {
 	if (!ll_add(user_list, user)) {
 	    sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
+	    sprintf(buffer, "*** Failed to add %s to channel %s, memory allocation failed",
+		    user->username, joined);
+	    print_log_message(buffer);
 	    return;
 	}
     }
@@ -431,7 +452,7 @@ static void server_say_request(const char *packet, char *client_ip) {
     if ((listeners = (User **)ll_toArray(ch_users, &len)) == NULL) {
 	sprintf(buffer, "Error: Failed to send the message");
 	server_send_error(user->addr, user->len, buffer);
-	sprintf(buffer, "Failed to send a message from %s to channel %s",
+	sprintf(buffer, "*** Failed to send a message from %s to channel %s, memory allocation failed",
 		    user->username, say_packet->req_channel);
 	print_log_message(buffer);
 	return;
@@ -478,7 +499,8 @@ static void server_list_request(char *client_ip) {
     /* Send error message back to client if failed (malloc() error), log the error */
     if ((ch_list = hm_keyArray(channels, &len)) == NULL) {
 	server_send_error(user->addr, user->len, "Error: Failed to list the channels");
-	sprintf(buffer, "Failed to list channels for user %s", user->username);
+	sprintf(buffer, "*** Failed to list channels for user %s, memory allocation failed",
+			user->username);
 	print_log_message(buffer);
 	return;
     }
@@ -489,7 +511,8 @@ static void server_list_request(char *client_ip) {
     /* Send error back to user if failed (malloc() error), log the error */
     if ((list_packet = malloc(size)) == NULL) {
 	server_send_error(user->addr, user->len, "Error: Failed to list the channels");
-	sprintf(buffer, "Failed to list channels for user %s", user->username);
+	sprintf(buffer, "*** Failed to list channels for user %s, memory allocation failed",
+			user->username);
 	print_log_message(buffer);
 	free(ch_list);
 	return;
@@ -559,7 +582,7 @@ static void server_who_request(const char *packet, char *client_ip) {
     if ((user_list = (User **)ll_toArray(subscribers, &len)) == NULL) {
 	sprintf(buffer, "Error: Failed to list users on %s", who_packet->req_channel);
 	server_send_error(user->addr, user->len, buffer);
-	sprintf(buffer, "Failed to list users on channel %s for user %s",
+	sprintf(buffer, "*** Failed to list users on channel %s for user %s, memory allocation failed",
 		    who_packet->req_channel, user->username);
 	print_log_message(buffer);
 	return;    
@@ -572,7 +595,7 @@ static void server_who_request(const char *packet, char *client_ip) {
     if ((send_packet = malloc(size)) == NULL) {
 	sprintf(buffer, "Error: Failed to list users on %s", who_packet->req_channel);
 	server_send_error(user->addr, user->len, buffer);
-	sprintf(buffer, "Failed to list users on channel %s for user %s",
+	sprintf(buffer, "*** Failed to list users on channel %s for user %s",
 		    who_packet->req_channel, user->username);
 	print_log_message(buffer);
 	free(user_list);
@@ -727,7 +750,7 @@ static void logout_inactive_users(void) {
     /* Retrieve the list of all connected clients */
     /* Abort the scan if failed (malloc() error), log the error */
     if ((user_list = hm_keyArray(users, &len)) == NULL) {
-	print_log_message("*** Failed to perform server scan, malloc() error");
+	print_log_message("*** Failed to perform server scan, memory allocation failed");
 	return;
     }
 
