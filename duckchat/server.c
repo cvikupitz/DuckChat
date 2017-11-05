@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 11/4/2017
+ * Last Modified: 11/5/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -42,6 +42,7 @@
 /* This channel will also never be removed, even when empty */
 #define DEFAULT_CHANNEL "Common"
 /* Refresh rate (in minutes) of the server to scan for and logout inactive users */
+/* Should be 2 or greater */
 #define REFRESH_RATE 2
 
 
