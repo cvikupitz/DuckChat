@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 11/1/2017
+ * Last Modified: 11/4/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -69,7 +69,7 @@ typedef struct {
     LinkedList *channels;	/* List of channel names user is listening to */
     char *ip_addr;		/* Full IP address of client in string format */
     char *username;		/* The username of user */
-    short last_min, last_sec;	/* Clock minute & second of last received packet from this client */
+    short last_min;		/* Clock minute of last received packet from this client */
 } User;
 
 /**
@@ -110,7 +110,6 @@ static User *malloc_user(const char *ip, const char *name, struct sockaddr_in *a
 	time(&timer);
 	timestamp = localtime(&timer);
 	new_user->last_min = timestamp->tm_min;
-	new_user->last_sec = timestamp->tm_sec;
     }
 
     return new_user;    
@@ -127,7 +126,6 @@ static void update_user_time(User *user) {
 	time(&timer);
 	timestamp = localtime(&timer);
 	user->last_min = timestamp->tm_min;
-	user->last_sec = timestamp->tm_sec;
     }
 }
 
@@ -706,9 +704,7 @@ static int user_inactive(User *user) {
     else
 	diff = ((60 - user->last_min) + timestamp->tm_min);
     /* Check and return user inactivity */
-    if (diff == REFRESH_RATE)
-	return (user->last_sec > 0);
-    return (diff > REFRESH_RATE);
+    return (diff >= REFRESH_RATE);
 }
 
 /**
