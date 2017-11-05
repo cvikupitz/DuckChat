@@ -36,6 +36,7 @@
 /* Maximum channels client may be subscribed to at once */
 #define MAX_CHANNELS 15
 /* The rate (in seconds) to send keep-alive packet when inactive */
+/* Should be kept at 45-60 seconds */
 #define KEEP_ALIVE_RATE 60
 /* Default channel to join upon login */
 #define DEFAULT_CHANNEL "Common"

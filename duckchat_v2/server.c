@@ -42,7 +42,7 @@
 /* This channel will also never be removed, even when empty */
 #define DEFAULT_CHANNEL "Common"
 /* Refresh rate (in minutes) of the server to scan for and logout inactive users */
-/* Should be 2 or greater */
+/* Should be kept at 2 minutes or greater */
 #define REFRESH_RATE 2
 
 
