@@ -1,15 +1,22 @@
 #!/usr/bin/bash
 
-#uncomment the topolgy you want. The simple two-server topology is uncommented here.
-
 # Change the SERVER variable below to point your server executable.
-SERVER=server
+SERVER=./server
 
 SERVER_NAME=`echo $SERVER | sed 's#.*/\(.*\)#\1#g'`
 
+# Single server
+$SERVER localhost 4000 &
+
 # Generate a simple two-server topology
-$SERVER localhost 4000 localhost 4001 &
-$SERVER localhost 4001 localhost 4000 & 
+#$SERVER localhost 4000 localhost 4001 &
+#$SERVER localhost 4001 localhost 4000 &
+
+# Generate a square-shaped topology
+#$SERVER localhost 4000 localhost 4001 localhost 4002 &
+#$SERVER localhost 4001 localhost 4000 localhost 4003 &
+#$SERVER localhost 4002 localhost 4000 localhost 4003 &
+#$SERVER localhost 4003 localhost 4001 localhost 4002 &
 
 # Generate a capital-H shaped topology
 #$SERVER localhost 4000 localhost 4001 &

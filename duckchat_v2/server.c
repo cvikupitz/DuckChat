@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 11/6/2017
+ * Last Modified: 11/15/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -839,8 +839,10 @@ int main(int argc, char *argv[]) {
 
     /* Assert that the correct number of arguments were given */
     /* Print program usage otherwise */
-    if (argc != 3) {
-	fprintf(stdout, "Usage: %s domain_name port_num\n", argv[0]);
+    if (argc < 3 || argc % 2 != 1) {
+	fprintf(stdout, "Usage: %s domain_name port_num [domain_name] [port_num] ...\n", argv[0]);
+	fprintf(stdout, "  The first two arguments are the IP address and port number this server binds to.\n");
+	fprintf(stdout, "  The following optional arguments are the IP address and port number of adjacent server(s) to connect to.\n");
 	return 0;
     }
 

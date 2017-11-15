@@ -91,7 +91,8 @@ struct request_keep_alive {
 } packed;
 
 
-/* FIXME */
+/* Server to server protocols: */
+/* S2S Join, S2S Leave, and S2S Say */
 struct request_s2s_join {
 	request_t req_type; /* = REQ_S2S_JOIN */
 	char req_channel[CHANNEL_MAX];
@@ -104,7 +105,7 @@ struct request_s2s_leave {
 
 struct request_s2s_say {
 	request_t req_type; /* = REQ_S2S_SAY */
-	// FIXME Unique ID here...
+	long id;
 	char req_username[USERNAME_MAX];
 	char req_channel[CHANNEL_MAX];
 	char req_text[SAY_MAX];
