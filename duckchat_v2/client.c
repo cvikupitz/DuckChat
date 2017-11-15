@@ -1,7 +1,7 @@
 /**
  * client.c
  * Author: Cole Vikupitz
- * Last Modified: 11/5/2017
+ * Last Modified: 11/15/2017
  *
  * Client side of a chat application using the DuckChat protocol. The client sends
  * and receives packets from a server using this protocol and handles each of the
@@ -389,7 +389,7 @@ static void client_exit(UNUSED int signo) {
  */
 static void print_error(const char *msg) {
     
-    fprintf(stderr, "Client: %s\n", msg);
+    fprintf(stderr, "[Client]: %s\n", msg);
     exit(0);
 }
 

@@ -809,7 +809,7 @@ static void cleanup(void) {
  */
 static void print_error(const char *msg) {
     
-    fprintf(stderr, "Server: %s\n", msg);
+    fprintf(stderr, "[Server]: %s\n", msg);
     exit(0);
 }
 
