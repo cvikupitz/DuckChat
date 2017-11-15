@@ -1,12 +1,12 @@
 #
-# DuckChat Makefile
+# DuckChat v2 Makefile
 # Author: Cole Vikupitz
-# Last Modified: 11/3/2017
+# Last Modified: 11/15/2017
 #
 
 
 FILES=Makefile client.c server.c raw.h raw.c duckchat.h\
-	hashmap.h hashmap.c linkedlist.h linkedlist.c README.md
+	hashmap.h hashmap.c linkedlist.h linkedlist.c
 
 CC=gcc
 CFLAGS=-Wall -W -g
@@ -25,8 +25,8 @@ server: server.o hashmap.o linkedlist.o
 tarfile:
 	mkdir DuckChat/
 	cp $(FILES) DuckChat/
-	tar -zcvf DuckChat.tgz DuckChat/
-	tar -ztvf DuckChat.tgz
+	tar -zcvf DuckChat_v2.tgz DuckChat/
+	tar -ztvf DuckChat_v2.tgz
 	rm -fr DuckChat/
 
 help:
