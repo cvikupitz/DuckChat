@@ -1,13 +1,15 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 11/15/2017
+ * Last Modified: 11/16/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
  * packets accordingly.
  *
- * Usage: ./server domain_name port_num
+ * FIXME
+ *
+ * Usage: ./server domain_name port_num [domain_name port_num] ...
  *
  * Resources Used:
  * Lots of help about basic socket programming received from Beej's Guide to Socket Programming:
@@ -59,6 +61,8 @@ static HashMap *users = NULL;
 /* HashMap of all the channels currently available */
 /* Maps the channel name to a linked list of pointers of all users on the channel */
 static HashMap *channels = NULL;
+/* FIXME */
+static struct sockaddr_in **neighbors = NULL;
 
 
 /**
@@ -144,6 +148,13 @@ static void free_user(User *user) {
 	free(user->username);
 	free(user);
     }
+}
+
+/**
+ * FIXME
+ */
+static void malloc_neighbors(char *args[], int n) {
+
 }
 
 /**
@@ -792,6 +803,8 @@ static void free_ll(LinkedList *ll) {
  */
 static void cleanup(void) {
     
+    int i;
+
     /* Close the socket if open */
     if (socket_fd != -1)
 	close(socket_fd);
@@ -801,6 +814,12 @@ static void cleanup(void) {
     /* Destroy the hashmap containing all logged in users */
     if (users != NULL)
 	hm_destroy(users, (void *)free_user);
+    /* Destroy the list of neighboring server addresses */
+    if (neighbors != NULL) {
+	for (i = 0; neighbors[i] != NULL; i++)
+	    free(neighbors[i]);
+	free(neighbors);
+    }
 }
 
 /**
@@ -885,6 +904,10 @@ int main(int argc, char *argv[]) {
     if (bind(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
 	print_error("Failed to assign the requested address.");
 
+    /* Allocate memory for all neighboring servers */
+    argc -= 3; argv += 3;   /* Skip this server's address args */
+    malloc_neighbors(argv, argc);
+
     /* Create & initialize data structures for server to use */
     if ((users = hm_create(100L, 0.0f)) == NULL)
 	print_error("Failed to allocate a sufficient amount of memory.");
@@ -896,10 +919,8 @@ int main(int argc, char *argv[]) {
     if (!hm_put(channels, DEFAULT_CHANNEL, default_ll, NULL))
 	print_error("Failed to allocate a sufficient amount of memory.");
 
-    /* Display successful launch title, timestamp & address */
-    time(&timer);
-    fprintf(stdout, "------ Launched DuckChat server ~ %s", ctime(&timer)); 
-    fprintf(stdout, "------ Server assigned to address %s:%d\n",
+    /* Display successful launch title & address */
+    fprintf(stdout, "------ Launched server at %s:%d\n",
 		inet_ntoa(server.sin_addr), ntohs(server.sin_port));
     /* Set the timeout timer for select() */
     memset(&timeout, 0, sizeof(timeout));

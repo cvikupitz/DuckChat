@@ -34,7 +34,7 @@
 /* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 80000
 /* Maximum channels client may be subscribed to at once */
-#define MAX_CHANNELS 15
+#define MAX_CHANNELS 10
 /* The rate (in seconds) to send keep-alive packet when inactive */
 /* Should be kept at 45-60 seconds */
 #define KEEP_ALIVE_RATE 60
