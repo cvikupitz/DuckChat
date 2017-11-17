@@ -62,8 +62,12 @@ static HashMap *users = NULL;
 /* HashMap of all the channels currently available */
 /* Maps the channel name to a linked list of pointers of all users on the channel */
 static HashMap *channels = NULL;
-/* FIXME */
-static struct sockaddr_in **neighbors = NULL;
+/* HashMap of all the neighboring servers */
+/* Maps the server's IP address to the server struct */
+static HashMap *neighbors = NULL;
+/* HashMap of all channels neighboring servers are subscribed to */
+/* Maps the channel name to a linked list of pointers of listening servers */
+static HashMap *server_channels = NULL;
 
 
 /**
@@ -77,6 +81,15 @@ typedef struct {
     char *username;		/* The username of user */
     short last_min;		/* Clock minute of last received packet from this client */
 } User;
+
+/**
+ * FIXME
+ */
+typedef struct {
+    struct sockaddr_in *addr;
+    socklen_t len;
+    char *ip_addr;
+} Server;
 
 /**
  * Creates a new instance of a user logged in the server by allocating memory and returns
@@ -154,23 +167,41 @@ static void free_user(User *user) {
 /**
  * FIXME
  */
-static void malloc_neighbors(char *args[], int n) {
-    
-    struct hostent *host_end;
-    int i, num = ((n / 2) + 1);
+static Server *malloc_server(const char *ip, struct sockaddr_in *addr, socklen_t len) {
 
-    if ((neighbors = (struct sockaddr_in **)malloc(sizeof(struct sockaddr_in *) * num)) != NULL) {
-	for (i = 0; i < n; i += 2) {
-	    if ((neighbors[i / 2] = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in))) == NULL)
-		return;
-	    if ((host_end = gethostbyname(args[i])) == NULL)
-		return;
-	    memset((char *)neighbors[i / 2], 0, sizeof(neighbors[i / 2]));
-	    neighbors[i / 2]->sin_family = AF_INET;
-	    memcpy((char *)&(neighbors[i / 2]->sin_addr), (char *)host_end->h_addr_list[0], host_end->h_length);
-	    neighbors[i / 2]->sin_port = htons(atoi(args[i + 1]));
+    Server *new_server;
+
+    if ((new_server = (Server *)malloc(sizeof(Server))) != NULL) {
+	/* Allocate memory for the server members */
+	new_server->addr = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
+	new_server->ip_addr = (char *)malloc(strlen(ip) + 1);
+
+	/* Do error checking for malloc(), free all members and return NULL if failed */
+	if (new_server->addr == NULL || new_server->ip_addr == NULL) {
+	    if (new_server->addr != NULL) free(new_server->addr);
+	    if (new_server->ip_addr != NULL) free(new_server->ip_addr);
+	    free(new_server);
+	    return NULL;
 	}
-	neighbors[num - 1] = NULL;
+
+	/* Initialize all the members, return the pointer */
+	*new_server->addr = *addr;
+	new_server->len = len;
+	strcpy(new_server->ip_addr, ip);
+    }
+
+    return new_server;
+}
+
+/**
+ * FIXME
+ */
+static void free_server(Server *server) {
+    
+    if (server != NULL) {
+	free(server->addr);
+	free(server->ip_addr);
+	free(server);
     }
 }
 
@@ -726,8 +757,6 @@ static void free_ll(LinkedList *ll) {
  */
 static void cleanup(void) {
     
-    int i;
-
     /* Close the socket if open */
     if (socket_fd != -1)
 	close(socket_fd);
@@ -737,12 +766,12 @@ static void cleanup(void) {
     /* Destroy the hashmap containing all logged in users */
     if (users != NULL)
 	hm_destroy(users, (void *)free_user);
-    /* Destroy the array of neighboring server addresses */
-    if (neighbors != NULL) {
-	for (i = 0; neighbors[i] != NULL; i++)
-	    free(neighbors[i]);
-	free(neighbors);
-    }
+    /* Destroy the hashmap of channels neighboring servers are listening to */
+    if (server_channels != NULL)
+	hm_destroy(server_channels, (void *)free_ll);
+    /* Destroy the hashmap containing neighboring servers */
+    if (neighbors != NULL)
+	hm_destroy(neighbors, (void *)free_server);
 }
 
 /**
@@ -827,10 +856,6 @@ int main(int argc, char *argv[]) {
     if (bind(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
 	print_error("Failed to assign the requested address.");
 
-    /* Allocate memory for all neighboring servers */
-    argc -= 3; argv += 3;   /* Skip this server's address args */
-    malloc_neighbors(argv, argc);
-
     /* Create & initialize data structures for server to use */
     if ((users = hm_create(100L, 0.0f)) == NULL)
 	print_error("Failed to allocate a sufficient amount of memory.");
@@ -840,6 +865,8 @@ int main(int argc, char *argv[]) {
     if ((default_ll = ll_create()) == NULL)
 	print_error("Failed to allocate a sufficient amount of memory.");
     if (!hm_put(channels, DEFAULT_CHANNEL, default_ll, NULL))
+	print_error("Failed to allocate a sufficient amount of memory.");
+    if ((neighbors = hm_create(20L, 0.0f)) == NULL)
 	print_error("Failed to allocate a sufficient amount of memory.");
 
     /* Display successful launch title & address */
@@ -908,6 +935,13 @@ int main(int argc, char *argv[]) {
 	    case REQ_KEEP_ALIVE:
 		/* Received from an inactive user, keeps them logged in */
 		server_keep_alive_request(client_ip);
+		break;
+	    case REQ_S2S_JOIN:
+		break;
+	    case REQ_S2S_LEAVE:
+		break;
+	    case REQ_S2S_SAY:
+		break;
 	    default:
 		/* Do nothing, likey a bogus packet */
 		break;
