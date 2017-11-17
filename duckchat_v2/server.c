@@ -154,7 +154,23 @@ static void free_user(User *user) {
  * FIXME
  */
 static void malloc_neighbors(char *args[], int n) {
+    
+    struct hostent *host_end;
+    int i, num = ((n / 2) + 1);
 
+    if ((neighbors = (struct sockaddr_in **)malloc(sizeof(struct sockaddr_in *) * num)) != NULL) {
+	for (i = 0; i < n; i += 2) {
+	    if ((neighbors[i / 2] = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in))) == NULL)
+		return;
+	    if ((host_end = gethostbyname(args[i])) == NULL)
+		return;
+	    memset((char *)neighbors[i / 2], 0, sizeof(neighbors[i / 2]));
+	    neighbors[i / 2]->sin_family = AF_INET;
+	    memcpy((char *)&(neighbors[i / 2]->sin_addr), (char *)host_end->h_addr_list[0], host_end->h_length);
+	    neighbors[i / 2]->sin_port = htons(atoi(args[i + 1]));
+	}
+	neighbors[num - 1] = NULL;
+    }
 }
 
 /**
@@ -814,7 +830,7 @@ static void cleanup(void) {
     /* Destroy the hashmap containing all logged in users */
     if (users != NULL)
 	hm_destroy(users, (void *)free_user);
-    /* Destroy the list of neighboring server addresses */
+    /* Destroy the array of neighboring server addresses */
     if (neighbors != NULL) {
 	for (i = 0; neighbors[i] != NULL; i++)
 	    free(neighbors[i]);
