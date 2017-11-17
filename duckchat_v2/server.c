@@ -83,12 +83,11 @@ typedef struct {
 } User;
 
 /**
- * FIXME
+ * A structure to represent a neighboring server.
  */
 typedef struct {
-    struct sockaddr_in *addr;
-    socklen_t len;
-    char *ip_addr;
+    struct sockaddr_in *addr;	/* The address of the neighboring server */
+    char *ip_addr;		/* Full IP address of server in string format */
 } Server;
 
 /**
@@ -167,16 +166,14 @@ static void free_user(User *user) {
 /**
  * FIXME
  */
-static Server *malloc_server(const char *ip, struct sockaddr_in *addr, socklen_t len) {
+static Server *malloc_server(const char *ip, struct sockaddr_in *addr) {
 
     Server *new_server;
 
     if ((new_server = (Server *)malloc(sizeof(Server))) != NULL) {
-	/* Allocate memory for the server members */
 	new_server->addr = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
 	new_server->ip_addr = (char *)malloc(strlen(ip) + 1);
 
-	/* Do error checking for malloc(), free all members and return NULL if failed */
 	if (new_server->addr == NULL || new_server->ip_addr == NULL) {
 	    if (new_server->addr != NULL) free(new_server->addr);
 	    if (new_server->ip_addr != NULL) free(new_server->ip_addr);
@@ -184,9 +181,7 @@ static Server *malloc_server(const char *ip, struct sockaddr_in *addr, socklen_t
 	    return NULL;
 	}
 
-	/* Initialize all the members, return the pointer */
 	*new_server->addr = *addr;
-	new_server->len = len;
 	strcpy(new_server->ip_addr, ip);
     }
 
@@ -202,6 +197,40 @@ static void free_server(Server *server) {
 	free(server->addr);
 	free(server->ip_addr);
 	free(server);
+    }
+}
+
+/**
+ * FIXME
+ */
+static void malloc_neighbors(char *args[], int n) {
+    
+    struct hostent *host_end;
+    struct sockaddr_in addr;
+    Server *server;
+    char buffer[128];
+    int i;
+
+    for (i = 0; i < n; i += 2) {
+	
+	if ((host_end = gethostbyname(args[i])) == NULL) {
+	    //FIXME
+	    continue;
+	}
+
+	memset((char *)&addr, 0, sizeof(addr));
+	addr.sin_family = AF_INET;
+	memcpy((char *)&addr.sin_addr, (char *)host_end->h_addr_list[0], host_end->h_length);
+	addr.sin_port = htons(atoi(args[i + 1]));
+	sprintf(buffer, "%s:%d", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+	
+	if ((server = malloc_server(buffer, &addr)) == NULL) {
+	    //FIXME
+	}
+	if (!hm_put(neighbors, buffer, server, NULL)) {
+	    free_server(server);
+	    //FIXME
+	}
     }
 }
 
@@ -868,6 +897,9 @@ int main(int argc, char *argv[]) {
 	print_error("Failed to allocate a sufficient amount of memory.");
     if ((neighbors = hm_create(20L, 0.0f)) == NULL)
 	print_error("Failed to allocate a sufficient amount of memory.");
+    /* Allocate memory for neighboring servers */
+    argc -= 3; argv += 3;   /* Skip to neighboring server arg(s) */
+    malloc_neighbors(argv, argc);
 
     /* Display successful launch title & address */
     sprintf(server_addr, "%s:%d", inet_ntoa(server.sin_addr), ntohs(server.sin_port));
@@ -937,11 +969,14 @@ int main(int argc, char *argv[]) {
 		server_keep_alive_request(client_ip);
 		break;
 	    case REQ_S2S_JOIN:
-		break;
+		fprintf(stdout, "S2S JOIN\n");
+		break; /*FIXME*/
 	    case REQ_S2S_LEAVE:
-		break;
+		fprintf(stdout, "S2S LEAVE\n");
+		break; /*FIXME*/
 	    case REQ_S2S_SAY:
-		break;
+		fprintf(stdout, "S2S SAY\n");
+		break; /*FIXME*/
 	    default:
 		/* Do nothing, likey a bogus packet */
 		break;
