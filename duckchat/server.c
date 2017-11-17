@@ -960,6 +960,7 @@ int main(int argc, char *argv[]) {
 	    case REQ_KEEP_ALIVE:
 		/* Received from an inactive user, keeps them logged in */
 		server_keep_alive_request(client_ip);
+		break;
 	    default:
 		/* Do nothing, likey a bogus packet */
 		break;
