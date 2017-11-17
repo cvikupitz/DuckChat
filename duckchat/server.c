@@ -46,8 +46,6 @@
 #define REFRESH_RATE 2
 
 
-/* Socket address for the server */
-static struct sockaddr_in server;
 /* File descriptor for the socket to use */
 static int socket_fd = -1;
 /* Time variables/structs used for logging the current time */
@@ -829,7 +827,7 @@ static void server_exit(UNUSED int signo) {
  */
 int main(int argc, char *argv[]) {
 
-    struct sockaddr_in client;
+    struct sockaddr_in client, server;
     struct hostent *host_end;
     struct timeval timeout;
     socklen_t addr_len = sizeof(client);
