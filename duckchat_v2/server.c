@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 11/16/2017
+ * Last Modified: 11/18/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -164,16 +164,23 @@ static void free_user(User *user) {
 }
 
 /**
- * FIXME
+ * Creates a new instance of a connected server by allocating memory and returns a pointer to
+ * the new server instance. The server is created given an IP address in a string and the
+ * addressing information to send packets to. Returns a pointer to new server instance if creation
+ * was successful, or NULL if not (malloc() error).
  */
 static Server *malloc_server(const char *ip, struct sockaddr_in *addr) {
 
     Server *new_server;
 
+    /* Allocate memory for the struct itself */
     if ((new_server = (Server *)malloc(sizeof(Server))) != NULL) {
+	
+	/* Allocate memory for the server members */
 	new_server->addr = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
 	new_server->ip_addr = (char *)malloc(strlen(ip) + 1);
 
+	/* Do error checking for malloc(), free memory if failed */
 	if (new_server->addr == NULL || new_server->ip_addr == NULL) {
 	    if (new_server->addr != NULL) free(new_server->addr);
 	    if (new_server->ip_addr != NULL) free(new_server->ip_addr);
@@ -181,6 +188,7 @@ static Server *malloc_server(const char *ip, struct sockaddr_in *addr) {
 	    return NULL;
 	}
 
+	/* Initialize all the members, return the pointer */
 	*new_server->addr = *addr;
 	strcpy(new_server->ip_addr, ip);
     }
@@ -189,11 +197,13 @@ static Server *malloc_server(const char *ip, struct sockaddr_in *addr) {
 }
 
 /**
- * FIXME
+ * Destroys the server instance by freeing & returning all memory it reserved back
+ * to the heap.
  */
 static void free_server(Server *server) {
     
     if (server != NULL) {
+	/* Free all memory within the instance */
 	free(server->addr);
 	free(server->ip_addr);
 	free(server);
@@ -201,7 +211,10 @@ static void free_server(Server *server) {
 }
 
 /**
- * FIXME
+ * Creates instances of the server struct for each of the connected servers. Parses the
+ * specified command line args, allocates memory for the struct, and adds it into the map
+ * of connected servers. Reports any malloc() errors, but does not halt the program. Any
+ * malloc() errors will result in that server not being included in the topology.
  */
 static void malloc_neighbors(char *args[], int n) {
     
@@ -211,25 +224,36 @@ static void malloc_neighbors(char *args[], int n) {
     char buffer[128];
     int i;
 
+    /* Parse each of the command line arguments */
     for (i = 0; i < n; i += 2) {
 	
+	/* Assert that the host exists, report error if it doesnt */
+	/* Valgrind reports a leak here if result is NULL, but most likely false */
 	if ((host_end = gethostbyname(args[i])) == NULL) {
-	    //FIXME
+	    fprintf(stderr, "[Server]: Failed to locate host at %s:%s\n",
+			args[i], args[i + 1]);
 	    continue;
 	}
 
+	/* Create server address struct, set internet family, address, & port number */
 	memset((char *)&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
 	memcpy((char *)&addr.sin_addr, (char *)host_end->h_addr_list[0], host_end->h_length);
 	addr.sin_port = htons(atoi(args[i + 1]));
+	/* Create string for the server IP address */
 	sprintf(buffer, "%s:%d", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
 	
+	/* Create instance of the server, report error if failed */
 	if ((server = malloc_server(buffer, &addr)) == NULL) {
-	    //FIXME
+	    fprintf(stderr, "[Server]: Failed to allocate memory for server %s:%s\n",
+			args[i], args[i + 1]);
+	    continue;
 	}
+	/* Add server into neighboring database, report error if failed */
 	if (!hm_put(neighbors, buffer, server, NULL)) {
 	    free_server(server);
-	    //FIXME
+	    fprintf(stderr, "[Server]: Failed to allocate memory for server %s:%s\n",
+			args[i], args[i + 1]);
 	}
     }
 }
@@ -840,7 +864,7 @@ int main(int argc, char *argv[]) {
     /* Assert that the correct number of arguments were given */
     /* Print program usage otherwise */
     if (argc < 3 || argc % 2 != 1) {
-	fprintf(stdout, "Usage: %s domain_name port_num [domain_name] [port_num] ...\n", argv[0]);
+	fprintf(stdout, "Usage: %s domain_name port_num [domain_name port_num] ...\n", argv[0]);
 	fprintf(stdout, "  The first two arguments are the IP address and port number this server binds to.\n");
 	fprintf(stdout, "  The following optional arguments are the IP address and port number of adjacent server(s) to connect to.\n");
 	return 0;
@@ -896,6 +920,8 @@ int main(int argc, char *argv[]) {
     if (!hm_put(channels, DEFAULT_CHANNEL, default_ll, NULL))
 	print_error("Failed to allocate a sufficient amount of memory.");
     if ((neighbors = hm_create(20L, 0.0f)) == NULL)
+	print_error("Failed to allocate a sufficient amount of memory.");
+    if ((server_channels = hm_create(100L, 0.0f)) == NULL)
 	print_error("Failed to allocate a sufficient amount of memory.");
     /* Allocate memory for neighboring servers */
     argc -= 3; argv += 3;   /* Skip to neighboring server arg(s) */
