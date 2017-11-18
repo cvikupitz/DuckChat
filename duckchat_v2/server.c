@@ -264,7 +264,18 @@ static void malloc_neighbors(char *args[], int n) {
  * FIXME
  */
 UNUSED static long generate_id(void) {
-    return 0L;
+    
+    FILE *fd;
+    int res;
+    long n;
+    
+    if ((fd = fopen("/dev/urandom", "r")) == NULL)
+	return 0L;
+    if ((res = fread(&n, sizeof(n), 1, fd)) < 0)
+	return 0L;
+    fclose(fd);
+    
+    return n;
 }
 
 /**
