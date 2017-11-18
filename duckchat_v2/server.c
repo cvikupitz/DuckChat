@@ -53,9 +53,6 @@
 static char server_addr[128];
 /* File descriptor for the socket to use */
 static int socket_fd = -1;
-/* Time variables/structs used for logging the current time */
-struct tm *timestamp;
-time_t timer;
 /* HashMap of all users currently logged on */
 /* Maps the user's IP address in a string to the user struct */
 static HashMap *users = NULL;
@@ -98,6 +95,8 @@ typedef struct {
  */
 static User *malloc_user(const char *ip, const char *name, struct sockaddr_in *addr, socklen_t len) {
 
+    struct tm *timestamp;
+    time_t timer;
     User *new_user;
    
     /* Allocate memory for the struct itself */
@@ -139,6 +138,9 @@ static User *malloc_user(const char *ip, const char *name, struct sockaddr_in *a
  */
 static void update_user_time(User *user) {
     
+    struct tm *timestamp;
+    time_t timer;
+
     if (user != NULL) {
 	/* Retrieve current time, update user record */
 	time(&timer);
@@ -256,6 +258,13 @@ static void malloc_neighbors(char *args[], int n) {
 			args[i], args[i + 1]);
 	}
     }
+}
+
+/**
+ * FIXME
+ */
+UNUSED static long generate_id(void) {
+    return 0L;
 }
 
 /**
@@ -740,6 +749,8 @@ static void server_logout_request(char *client_ip) {
  */
 static int user_inactive(User *user) {
 
+    struct tm *timestamp;
+    time_t timer;
     int diff;
 
     /* Retrieve the current time */
