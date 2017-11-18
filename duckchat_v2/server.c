@@ -26,6 +26,7 @@
 #include <signal.h>
 #include <time.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/select.h>
 #include <sys/socket.h>
@@ -41,6 +42,8 @@
 #define UNUSED __attribute__((unused))
 /* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 80000
+/* Maximum size of list of message IDs */
+#define MSGQ_SIZE 30
 /* The default channel for the user to join upon logging in */
 /* This channel will also never be removed, even when empty */
 #define DEFAULT_CHANNEL "Common"
@@ -51,6 +54,9 @@
 
 /* String for displaying this server's full address */
 static char server_addr[128];
+/* List of IDs from most recently received packets */
+static long msg_IDs[MSGQ_SIZE];
+static int curr_index = 0;
 /* File descriptor for the socket to use */
 static int socket_fd = -1;
 /* HashMap of all users currently logged on */
@@ -270,12 +276,24 @@ UNUSED static long generate_id(void) {
     long n;
     
     if ((fd = fopen("/dev/urandom", "r")) == NULL)
-	return 0L;
+	return 10000L;
     if ((res = fread(&n, sizeof(n), 1, fd)) < 0)
-	return 0L;
+	return 20000L;
     fclose(fd);
     
     return n;
+}
+
+/**
+ * FIXME
+ */
+UNUSED static int id_unique(long id) {
+    
+    int i;
+    for (i = 0; i < MSGQ_SIZE; i++)
+	if (msg_IDs[i] == id)
+	    return 1;
+    return 0;
 }
 
 /**
@@ -880,7 +898,7 @@ int main(int argc, char *argv[]) {
     struct timeval timeout;
     socklen_t addr_len = sizeof(client);
     fd_set receiver;
-    int port_num, res;
+    int i, port_num, res;
     char buffer[BUFF_SIZE], client_ip[128];
 
     /* Assert that the correct number of arguments were given */
@@ -948,6 +966,9 @@ int main(int argc, char *argv[]) {
     /* Allocate memory for neighboring servers */
     argc -= 3; argv += 3;   /* Skip to neighboring server arg(s) */
     malloc_neighbors(argv, argc);
+
+    /* Initialize message ID queue */
+    for (i = 0; i < MSGQ_SIZE; i++) msg_IDs[i] = 0L;
 
     /* Display successful launch title & address */
     sprintf(server_addr, "%s:%d", inet_ntoa(server.sin_addr), ntohs(server.sin_port));
@@ -1018,13 +1039,13 @@ int main(int argc, char *argv[]) {
 		break;
 	    case REQ_S2S_JOIN:
 		fprintf(stdout, "S2S JOIN\n");
-		break; /*FIXME*/
+		break; /* FIXME */
 	    case REQ_S2S_LEAVE:
 		fprintf(stdout, "S2S LEAVE\n");
-		break; /*FIXME*/
+		break; /* FIXME */
 	    case REQ_S2S_SAY:
 		fprintf(stdout, "S2S SAY\n");
-		break; /*FIXME*/
+		break; /* FIXME */
 	    default:
 		/* Do nothing, likey a bogus packet */
 		break;
