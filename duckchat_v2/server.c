@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 11/18/2017
+ * Last Modified: 11/19/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -65,9 +65,6 @@ static HashMap *users = NULL;
 /* HashMap of all the channels currently available */
 /* Maps the channel name to a linked list of pointers of all users on the channel */
 static HashMap *channels = NULL;
-/* HashMap of all the neighboring servers */
-/* Maps the server's IP address to the server struct */
-static HashMap *neighbors = NULL;
 /* HashMap of all channels neighboring servers are subscribed to */
 /* Maps the channel name to a linked list of pointers of listening servers */
 static HashMap *server_channels = NULL;
@@ -92,6 +89,10 @@ typedef struct {
     struct sockaddr_in *addr;	/* The address of the neighboring server */
     char *ip_addr;		/* Full IP address of server in string format */
 } Server;
+
+/* Array of all the neighboring servers */
+static Server **neighbors = NULL;
+static int server_n = 0;
 
 /**
  * Creates a new instance of a user logged in the server by allocating memory and returns
@@ -219,27 +220,27 @@ static void free_server(Server *server) {
 }
 
 /**
- * Creates instances of the server struct for each of the connected servers. Parses the
- * specified command line args, allocates memory for the struct, and adds it into the map
- * of connected servers. Reports any malloc() errors, but does not halt the program. Any
- * malloc() errors will result in that server not being included in the topology.
+ * FIXME
  */
-static void malloc_neighbors(char *args[], int n) {
+static int malloc_neighbors(char *args[], int n) {
     
     struct hostent *host_end;
     struct sockaddr_in addr;
     Server *server;
     char buffer[128];
     int i;
+    
+    if (n == 0) return 1;
+    server_n = (n / 2);
+    if ((neighbors = (Server **)malloc(sizeof(Server *) * server_n)) == NULL)
+	return 0;
 
-    /* Parse each of the command line arguments */
     for (i = 0; i < n; i += 2) {
 	
-	/* Assert that the host exists, report error if it doesnt */
-	/* Valgrind reports a leak here if result is NULL, but most likely false */
 	if ((host_end = gethostbyname(args[i])) == NULL) {
-	    fprintf(stderr, "[Server]: Failed to locate host at %s:%s\n",
-			args[i], args[i + 1]);
+	    fprintf(stderr, "[Server]: Failed to locate the server at %s:%s\n",
+		    args[i], args[i + 1]);
+	    neighbors[i / 2] = NULL;
 	    continue;
 	}
 
@@ -248,46 +249,41 @@ static void malloc_neighbors(char *args[], int n) {
 	addr.sin_family = AF_INET;
 	memcpy((char *)&addr.sin_addr, (char *)host_end->h_addr_list[0], host_end->h_length);
 	addr.sin_port = htons(atoi(args[i + 1]));
-	/* Create string for the server IP address */
 	sprintf(buffer, "%s:%d", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
-	
-	/* Create instance of the server, report error if failed */
+
 	if ((server = malloc_server(buffer, &addr)) == NULL) {
-	    fprintf(stderr, "[Server]: Failed to allocate memory for server %s:%s\n",
-			args[i], args[i + 1]);
+	    fprintf(stderr, "[Server]: Failed to allocate memory for server at %s:%s\n",
+		    args[i], args[i + 1]);
 	    continue;
 	}
-	/* Add server into neighboring database, report error if failed */
-	if (!hm_put(neighbors, buffer, server, NULL)) {
-	    free_server(server);
-	    fprintf(stderr, "[Server]: Failed to allocate memory for server %s:%s\n",
-			args[i], args[i + 1]);
-	}
+	neighbors[i / 2] = server;
     }
+    
+    return 1;
 }
 
 /**
  * FIXME
  */
-UNUSED static long generate_id(void) {
+static long generate_id(void) {
     
     FILE *fd;
     int res;
-    long n;
+    long num;
     
     if ((fd = fopen("/dev/urandom", "r")) == NULL)
 	return 10000L;
-    if ((res = fread(&n, sizeof(n), 1, fd)) < 0)
+    if ((res = fread(&num, sizeof(num), 1, fd)) < 0)
 	return 20000L;
     fclose(fd);
     
-    return n;
+    return num;
 }
 
 /**
  * FIXME
  */
-UNUSED static int id_unique(long id) {
+static int id_unique(long id) {
     
     int i;
     for (i = 0; i < MSGQ_SIZE; i++)
@@ -862,9 +858,13 @@ static void cleanup(void) {
     /* Destroy the hashmap of channels neighboring servers are listening to */
     if (server_channels != NULL)
 	hm_destroy(server_channels, (void *)free_ll);
-    /* Destroy the hashmap containing neighboring servers */
-    if (neighbors != NULL)
-	hm_destroy(neighbors, (void *)free_server);
+    /* Destroy the array of neighboring servers */
+    int i;
+    if (neighbors != NULL) {
+	for (i = 0; i < server_n; i++)
+	    free_server(neighbors[i]);
+	free(neighbors);
+    }
 }
 
 /**
@@ -959,13 +959,12 @@ int main(int argc, char *argv[]) {
 	print_error("Failed to allocate a sufficient amount of memory.");
     if (!hm_put(channels, DEFAULT_CHANNEL, default_ll, NULL))
 	print_error("Failed to allocate a sufficient amount of memory.");
-    if ((neighbors = hm_create(20L, 0.0f)) == NULL)
-	print_error("Failed to allocate a sufficient amount of memory.");
     if ((server_channels = hm_create(100L, 0.0f)) == NULL)
 	print_error("Failed to allocate a sufficient amount of memory.");
     /* Allocate memory for neighboring servers */
     argc -= 3; argv += 3;   /* Skip to neighboring server arg(s) */
-    malloc_neighbors(argv, argc);
+    if (!malloc_neighbors(argv, argc))
+	print_error("Failed to allocate a sufficient amount of memory.");
 
     /* Initialize message ID queue */
     for (i = 0; i < MSGQ_SIZE; i++) msg_IDs[i] = 0L;
