@@ -56,7 +56,7 @@
 static char server_addr[128];
 /* List of IDs from most recently received packets */
 static long msg_IDs[MSGQ_SIZE];
-static int curr_index = 0;
+UNUSED static int curr_index = 0;
 /* File descriptor for the socket to use */
 static int socket_fd = -1;
 /* HashMap of all users currently logged on */
@@ -266,7 +266,7 @@ static int malloc_neighbors(char *args[], int n) {
 /**
  * FIXME
  */
-static long generate_id(void) {
+UNUSED static long generate_id(void) {
     
     FILE *fd;
     int res;
@@ -284,13 +284,82 @@ static long generate_id(void) {
 /**
  * FIXME
  */
-static int id_unique(long id) {
+UNUSED static int id_unique(long id) {
     
     int i;
     for (i = 0; i < MSGQ_SIZE; i++)
 	if (msg_IDs[i] == id)
 	    return 1;
     return 0;
+}
+
+/**
+ * FIXME
+ */
+static void neighbor_flood_channel(char *ch) {
+    
+    struct request_s2s_join join_packet;
+    int i;
+
+    memset(&join_packet, 0, sizeof(join_packet));
+    join_packet.req_type = REQ_S2S_JOIN;
+    strncpy(join_packet.req_channel, ch, (CHANNEL_MAX - 1));
+
+    for (i = 0; i < server_n; i++) {
+	if (neighbors[i] != NULL) {
+	    sendto(socket_fd, &join_packet, sizeof(join_packet), 0,
+		    (struct sockaddr *)neighbors[i]->addr, sizeof(*neighbors[i]->addr));
+	    fprintf(stdout, "%s %s send S2S JOIN %s\n",
+		    server_addr, neighbors[i]->ip_addr, ch);
+	}
+    }
+}
+
+/**
+ * FIXME
+ */
+static void neighbor_flood_all(void) {
+
+    char **channels;
+    long i, len;
+
+    if (hm_isEmpty(server_channels))
+	return;
+
+    if ((channels = hm_keyArray(server_channels, &len)) == NULL) {
+	fprintf(stdout, "%s Failed to flood servers, malloc() error\n", server_addr);
+	return;
+    }
+
+    for (i = 0L; i < len; i++)
+	neighbor_flood_channel(channels[i]);
+    free(channels);
+}
+
+/**
+ * FIXME
+ */
+static int server_join_channel(char *ch) {
+
+    LinkedList *servers;
+    long i;
+
+    if ((servers = ll_create()) == NULL)
+	return 0;
+    for (i = 0L; i < server_n; i++) {
+	if (neighbors[i] == NULL)
+	    continue;
+	if (!ll_add(servers, neighbors[i])) {
+	    ll_destroy(servers, NULL);
+	    return 0;
+	}
+    }
+    if (!hm_put(server_channels, ch, servers, NULL)) {
+	ll_destroy(servers, NULL);
+	return 0;
+    }
+
+    return 1;
 }
 
 /**
@@ -384,6 +453,19 @@ static void server_join_request(const char *packet, char *client_ip) {
     /* Extract the channel name from packet */
     memcpy(joined, join_packet->req_channel, ch_len);
     joined[ch_len] = '\0';
+
+    /*FIXME*/
+    if (!hm_containsKey(server_channels, joined) && server_n) {
+	if (!server_join_channel(joined)) {
+	    sprintf(buffer, "Error: Failed to join %s", joined);
+	    server_send_error(user->addr, user->len, buffer);
+	    free(joined);
+	    return;
+	}
+	neighbor_flood_channel(joined);
+    }
+    /*FIXME*/
+
     /* Add the channel to user's subscribed list, send error if failed, log error */
     if (!ll_add(user->channels, joined)) {
 	sprintf(buffer, "Error: Failed to join %s", joined);
@@ -830,6 +912,13 @@ static void logout_inactive_users(void) {
 }
 
 /**
+ * FIXME
+ */
+static void server_s2s_join_request(void) {
+    //fprintf(stdout, "S2S JOIN\n");
+}
+
+/**
  * Frees the reserved memory occupied by the specified LinkedList. Used by
  * the LinkedList destructor.
  */
@@ -968,7 +1057,8 @@ int main(int argc, char *argv[]) {
 	print_error("Failed to allocate a sufficient amount of memory.");
 
     /* Initialize message ID queue */
-    for (i = 0; i < MSGQ_SIZE; i++) msg_IDs[i] = 0L;
+    for (i = 0; i < MSGQ_SIZE; i++)
+	msg_IDs[i] = 0L;
 
     /* Display successful launch title & address */
     sprintf(server_addr, "%s:%d", inet_ntoa(server.sin_addr), ntohs(server.sin_port));
@@ -991,6 +1081,7 @@ int main(int argc, char *argv[]) {
 
 	/* FIXME */
 	if (res == 0) {
+	    neighbor_flood_all();
 	    mode++;
 	    if (mode == REFRESH_RATE) {
 		logout_inactive_users();
@@ -1043,14 +1134,17 @@ int main(int argc, char *argv[]) {
 		server_keep_alive_request(client_ip);
 		break;
 	    case REQ_S2S_JOIN:
-		fprintf(stdout, "S2S JOIN\n");
-		break; /* FIXME */
+		/* FIXME */
+		server_s2s_join_request();
+		break;
 	    case REQ_S2S_LEAVE:
+		/* FIXME */
 		fprintf(stdout, "S2S LEAVE\n");
-		break; /* FIXME */
+		break;
 	    case REQ_S2S_SAY:
+		/* FIXME */
 		fprintf(stdout, "S2S SAY\n");
-		break; /* FIXME */
+		break;
 	    default:
 		/* Do nothing, likey a bogus packet */
 		break;
