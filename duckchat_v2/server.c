@@ -20,6 +20,8 @@
  * These implementations are not my own.
  */
 
+//FIXME SERVER SUB LIST STILL CONTAINS EMPTY CHANNEL
+
 #include <stdio.h> 
 #include <stdlib.h>
 #include <string.h>
@@ -611,11 +613,17 @@ static void server_leave_request(const char *packet, char *client_ip) {
     }
 
     /* If the channel the user left becomes empty, remove it from channel list */
-    if (ll_isEmpty(user_list) && strcmp(channel, DEFAULT_CHANNEL)) {
-	/* Free all memory reserved by deleted channel */
-	fprintf(stdout, "%s Removed the empty channel %s\n", server_addr, channel);
-	(void)hm_remove(channels, channel, (void **)&user_list);
+    if (ll_isEmpty(user_list)) {
+	/* Remove channel from server subscription list */
+	(void)hm_remove(server_channels, channel, (void **)&user_list);
 	ll_destroy(user_list, NULL);
+	/* Remove the channel from the list */
+	if (strcmp(channel, DEFAULT_CHANNEL)) {
+	    /* Free all memory reserved by deleted channel */
+	    fprintf(stdout, "%s Removed the empty channel %s\n", server_addr, channel);
+	    (void)hm_remove(channels, channel, (void **)&user_list);
+	    ll_destroy(user_list, NULL);
+	}
     }
 }
 
@@ -847,10 +855,14 @@ static void logout_user(User *user) {
 	}
 
 	/* If the channel is now empty, server should now delete it */
-	if (ll_isEmpty(user_list) && strcmp(ch, DEFAULT_CHANNEL)) {
-	    (void)hm_remove(channels, ch, (void **)&user_list);
+	if (ll_isEmpty(user_list)) {
+	    (void)hm_remove(server_channels, ch, (void **)&user_list);
 	    ll_destroy(user_list, NULL);
-	    fprintf(stdout, "%s Removed the empty channel %s\n", server_addr, ch);
+	    if (strcmp(ch, DEFAULT_CHANNEL)) {
+		(void)hm_remove(channels, ch, (void **)&user_list);
+		ll_destroy(user_list, NULL);
+		fprintf(stdout, "%s Removed the empty channel %s\n", server_addr, ch);
+	    }
 	}
 	/* Free allocated memory */
 	free(ch);
@@ -939,9 +951,39 @@ static void logout_inactive_users(void) {
 }
 
 /**
- * FIXME
+ * Server receives a S2S join packet. If the server is not subscribed to the contained
+ * channel, it subscribes itself to the channel and forwards the packet to all of its
+ * neighboring servers. Otherwise, does nothing.
  */
-static void server_s2s_join_request(void) {/* FIXME */}
+static void server_s2s_join_request(const char *packet, char *client_ip) {
+
+    int i;
+    struct request_s2s_join *join_packet = (struct request_s2s_join *) packet;
+
+    /* Log the received packet, return if already subscribed */
+    fprintf(stdout, "%s %s recv S2S JOIN %s\n",
+	    server_addr, client_ip, join_packet->req_channel);
+    if (hm_containsKey(server_channels, join_packet->req_channel))
+	return;
+
+    /* Add the channel to the subscription list if not subscribed */
+    if (!server_join_channel(join_packet->req_channel)) {
+	fprintf(stdout, "%s Failed to add channel %s to server subscription list\n",
+		server_addr, join_packet->req_channel);
+	return;
+    }
+
+    /* Forwards the packet to all neighboring servers */
+    for (i = 0; i < server_n; i++) {
+	if (neighbors[i] == NULL || !strcmp(neighbors[i]->ip_addr, client_ip))
+	    continue;
+	sendto(socket_fd, join_packet, sizeof(*join_packet), 0,
+		(struct sockaddr *)neighbors[i]->addr, sizeof(*neighbors[i]->addr));
+	/* Log the sent packet */
+	fprintf(stdout, "%s %s send S2S JOIN %s\n",
+		server_addr, neighbors[i]->ip_addr, join_packet->req_channel);
+    }
+}
 
 /**
  * Frees the reserved memory occupied by the specified LinkedList. Used by
@@ -1162,7 +1204,7 @@ int main(int argc, char *argv[]) {
 		break;
 	    case REQ_S2S_JOIN:
 		/* FIXME */
-		server_s2s_join_request();
+		server_s2s_join_request(buffer, client_ip);
 		break;
 	    case REQ_S2S_LEAVE:
 		/* FIXME */
