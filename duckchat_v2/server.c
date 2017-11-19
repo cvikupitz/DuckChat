@@ -231,6 +231,7 @@ static int malloc_neighbors(char *args[], int n) {
     int i;
     
     if (n == 0) return 1;
+    
     server_n = (n / 2);
     if ((neighbors = (Server **)malloc(sizeof(Server *) * server_n)) == NULL)
 	return 0;
@@ -898,7 +899,7 @@ int main(int argc, char *argv[]) {
     struct timeval timeout;
     socklen_t addr_len = sizeof(client);
     fd_set receiver;
-    int i, port_num, res;
+    int i, port_num, res, mode;
     char buffer[BUFF_SIZE], client_ip[128];
 
     /* Assert that the correct number of arguments were given */
@@ -974,7 +975,8 @@ int main(int argc, char *argv[]) {
     fprintf(stdout, "------ Launched server at %s\n", server_addr);
     /* Set the timeout timer for select() */
     memset(&timeout, 0, sizeof(timeout));
-    timeout.tv_sec = (REFRESH_RATE * 60);
+    timeout.tv_sec = 60;
+    mode = 0;
 
     /**
      * Main application loop; a packet is received from one of the connected
@@ -987,10 +989,14 @@ int main(int argc, char *argv[]) {
 	FD_SET(socket_fd, &receiver);
 	res = select((socket_fd + 1), &receiver, NULL, NULL, &timeout);
 
-	/* Timer has expired, the server now will scan all users for inactivity */
+	/* FIXME */
 	if (res == 0) {
-	    logout_inactive_users();
-	    timeout.tv_sec = (REFRESH_RATE * 60);
+	    mode++;
+	    if (mode == REFRESH_RATE) {
+		logout_inactive_users();
+		mode = 0;
+	    }
+	    timeout.tv_sec = 60;
 	    continue;
 	}
     
