@@ -984,19 +984,47 @@ static void logout_inactive_users(void) {
  */
 static void server_s2s_join_request(const char *packet, char *client_ip) {
 
-    int i;
+    LinkedList *users;
+    char *joined;
+    int i, ch_len;
     struct request_s2s_join *join_packet = (struct request_s2s_join *) packet;
 
     /* Log the received packet, return if already subscribed */
     fprintf(stdout, "%s %s recv S2S JOIN %s\n",
 	    server_addr, client_ip, join_packet->req_channel);
-    if (hm_containsKey(server_channels, join_packet->req_channel))
+    if (hm_containsKey(server_channels, join_packet->req_channel) ||
+		!strcmp(join_packet->req_channel, DEFAULT_CHANNEL))
 	return;
-
     /* Add the channel to the subscription list if not subscribed */
     if (!server_join_channel(join_packet->req_channel)) {
 	fprintf(stdout, "%s Failed to add channel %s to server subscription list\n",
 		server_addr, join_packet->req_channel);
+	return;
+    }
+
+    /* Set the channel name length; shorten it down if exceeds max length allowed */
+    ch_len = ((strlen(join_packet->req_channel) > (CHANNEL_MAX - 1)) ?
+				(CHANNEL_MAX - 1) : strlen(join_packet->req_channel));
+    /* Allocate memory from heap for name, report and log error if failed */
+    if ((joined = (char *)malloc(ch_len + 1)) == NULL) {
+	fprintf(stdout, "%s Failed to join %s\n", server_addr, join_packet->req_channel);
+	return;
+    }
+
+    /* Extract the channel name from packet */
+    memcpy(joined, join_packet->req_channel, ch_len);
+    joined[ch_len] = '\0';
+
+    /* Create new list of users listening on channel */
+    if ((users = ll_create()) == NULL) {
+	fprintf(stdout, "%s Failed to join %s\n", server_addr, joined);
+	free(joined);
+	return;
+    }
+    /* Add the list to hashmap of available channels, report error if failed */
+    if (!hm_put(channels, joined, users, NULL)) {
+	fprintf(stdout, "%s Failed to join %s\n", server_addr, joined);
+	free(joined);
 	return;
     }
 
@@ -1013,7 +1041,10 @@ static void server_s2s_join_request(const char *packet, char *client_ip) {
 }
 
 /**
- * FIXME
+ * Server receives an S2S leave packet. The server that sent the packet is
+ * removed/unsubscribed from the channel list it wishes to leave. This way,
+ * the server wont send messages to this server to avoid loops, or empty
+ * server channels.
  */
 static void server_s2s_leave_request(const char *packet, char *client_ip) {
 
@@ -1022,14 +1053,18 @@ static void server_s2s_leave_request(const char *packet, char *client_ip) {
     long i;
     struct request_s2s_leave *leave_packet = (struct request_s2s_leave *) packet;
 
+    /* Log the packet received */
     fprintf(stdout, "%s %s recv S2S LEAVE %s\n",
 	    server_addr, client_ip, leave_packet->req_channel);
+    /* Retrieve the list of listening servers, return if channel non-existent */
     if (!hm_get(server_channels, leave_packet->req_channel, (void **)&servers))
 	return;
 
+    /* Find the server neighbor in list, remove it from the subscription list */
     for (i = 0L; i < ll_size(servers); i++) {
 	(void)ll_get(servers, i, (void **)&server);
 	if (!strcmp(server->ip_addr, client_ip)) {
+	    /* Connecting server found, remove it from list */
 	    (void)ll_remove(servers, i, (void **)&server);
 	    return;
 	}
@@ -1046,14 +1081,17 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
     struct request_s2s_leave leave_packet;
     struct request_s2s_say *say_packet = (struct request_s2s_say *) packet;
 
+    /* Log the received packet */
     fprintf(stdout, "%s %s recv S2S SAY %s %s \"%s\"\n",
 	    server_addr, client_ip, say_packet->req_username,
 	    say_packet->req_channel, say_packet->req_text);
     
+    /* Initialize and set members of the leave packet */
     memset(&leave_packet, 0, sizeof(leave_packet));
     leave_packet.req_type = REQ_S2S_LEAVE;
     strncpy(leave_packet.req_channel, say_packet->req_channel, (CHANNEL_MAX - 1));
 
+    /* Find the neighoring server that sent the packet */
     for (i = 0; i < server_n; i++) {
 	if (neighbors[i] != NULL && !strcmp(neighbors[i]->ip_addr, client_ip)) {
 	    sender = neighbors[i];
@@ -1061,14 +1099,13 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 	}	    
     }
     
+
+
     if (!id_unique(say_packet->id)) {
 	fprintf(stdout, "%s DUPLICATE\n", server_addr);
 	return;
     }
     queue_id(say_packet->id);
-
-    
-
     // FIXME
     // CHECK FOR UNIQUENESS
     // LEAVE IF LEAF AND NO CLIENTS
@@ -1297,13 +1334,16 @@ int main(int argc, char *argv[]) {
 		server_s2s_join_request(buffer, client_ip);
 		break;
 	    case REQ_S2S_LEAVE:
-		/* FIXME */
+		/* Server-to-server leave request, unsubscribe server from a channel */
 		server_s2s_leave_request(buffer, client_ip);
 		break;
 	    case REQ_S2S_SAY:
-		/* FIXME */
+		/* Server-to-server say request, forward to all subscribed servers */
 		server_s2s_say_request(buffer, client_ip);
 		break;
+	    /* FIXME */
+	    /* REQ_S2S_WHO */
+	    /* REQ_S2S_LIST */
 	    default:
 		/* Do nothing, likey a bogus packet */
 		break;

@@ -13,14 +13,14 @@ SERVER_NAME=`echo $SERVER | sed 's#.*/\(.*\)#\1#g'`
 #$SERVER localhost 4001 localhost 4000 &
 
 # Generate a simple 3-server lined topology
-#$SERVER localhost 4000 localhost 4001 &
-#$SERVER localhost 4001 localhost 4000 localhost 4002 &
-#$SERVER localhost 4002 localhost 4001 &
+$SERVER localhost 4000 localhost 4001 &
+$SERVER localhost 4001 localhost 4000 localhost 4002 &
+$SERVER localhost 4002 localhost 4001 &
 
 # Generate a triangular topology
-$SERVER localhost 4000 localhost 4001 localhost 4002 &
-$SERVER localhost 4001 localhost 4000 localhost 4002 &
-$SERVER localhost 4002 localhost 4001 localhost 4000 &
+#$SERVER localhost 4000 localhost 4001 localhost 4002 &
+#$SERVER localhost 4001 localhost 4000 localhost 4002 &
+#$SERVER localhost 4002 localhost 4001 localhost 4000 &
 
 # Generate a square-shaped topology
 #$SERVER localhost 4000 localhost 4001 localhost 4002 &
