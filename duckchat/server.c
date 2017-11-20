@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 11/6/2017
+ * Last Modified: 11/21/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -752,7 +752,6 @@ static void logout_inactive_users(void) {
 	return;
     }
 
-    print_log_message("Scanning server for inactive users...");
     for (i = 0L; i < len; i++) {
 	/* Assert the user exists in the map */
 	if (!hm_get(users, user_list[i], (void **)&user))
@@ -768,7 +767,6 @@ static void logout_inactive_users(void) {
     }
 
     /* Log the scan, free allocated memory */
-    print_log_message("Scan complete");
     free(user_list);
 }
 

@@ -1,7 +1,7 @@
 /**
  * client.c
  * Author: Cole Vikupitz
- * Last Modified: 11/15/2017
+ * Last Modified: 11/21/2017
  *
  * Client side of a chat application using the DuckChat protocol. The client sends
  * and receives packets from a server using this protocol and handles each of the
@@ -596,19 +596,15 @@ int main(int argc, char *argv[]) {
 		    if (strncmp(buffer, "/join ", 6) == 0) {
 			/* User joins/subscribes to a channel */
 			client_join_request(buffer);
-			timeout.tv_sec = KEEP_ALIVE_RATE;
 		    } else if (strncmp(buffer, "/leave ", 7) == 0) {
 			/* User unsubscribes from a channel */
 			client_leave_request(buffer);
-			timeout.tv_sec = KEEP_ALIVE_RATE;
 		    } else if (strcmp(buffer, "/list") == 0) {
 			/* User requests list of all channels on server */
 			client_list_request();
-			timeout.tv_sec = KEEP_ALIVE_RATE;
 		    } else if (strncmp(buffer, "/who ", 5) == 0) {
 			/* User requests list of users on a channel */
 			client_who_request(buffer);
-			timeout.tv_sec = KEEP_ALIVE_RATE;
 		    } else if (strncmp(buffer, "/switch ", 8) == 0) {
 			/* User switches active channel to another channel */
 			client_switch_request(buffer);
@@ -632,7 +628,6 @@ int main(int argc, char *argv[]) {
 		} else {
 		    /* No special command given, send say message to server */
 		    client_say_request(buffer);
-		    timeout.tv_sec = KEEP_ALIVE_RATE;
 		}
 		PROMPT;
 	    }
