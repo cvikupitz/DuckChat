@@ -1076,9 +1076,13 @@ static void server_s2s_leave_request(const char *packet, char *client_ip) {
  */
 static void server_s2s_say_request(const char *packet, char *client_ip) {
 
-    UNUSED Server *sender;
+    LinkedList *users;
+    User **listeners;
+    Server *sender;
     int i;
+    long j, len;
     struct request_s2s_leave leave_packet;
+    struct text_say msg_packet;
     struct request_s2s_say *say_packet = (struct request_s2s_say *) packet;
 
     /* Log the received packet */
@@ -1098,18 +1102,69 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 	    break;
 	}	    
     }
-    
 
-
+    /* Check to see if ID of packet is unique */
     if (!id_unique(say_packet->id)) {
-	fprintf(stdout, "%s DUPLICATE\n", server_addr);
+	/* Loop detected, reply with s2s leave request */
+	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
+		server_addr, sender->ip_addr, leave_packet.req_channel);
+	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
+		(struct sockaddr *)sender->addr, sizeof(*sender->addr));
 	return;
     }
+    /* Otherwise, queue the ID for future comparisons */
     queue_id(say_packet->id);
+
     // FIXME
-    // CHECK FOR UNIQUENESS
     // LEAVE IF LEAF AND NO CLIENTS
     // AFTER, BROADCAST
+    if (!hm_get(channels, say_packet->req_channel, (void **)&users)) {
+	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
+		server_addr, sender->ip_addr, leave_packet.req_channel);
+	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
+		(struct sockaddr *)sender->addr, sizeof(*sender->addr));
+	return;
+    }
+
+    /* FIXME */
+    if (ll_isEmpty(users) && (server_n < 2)) {
+	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
+		server_addr, sender->ip_addr, leave_packet.req_channel);
+	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
+		(struct sockaddr *)sender->addr, sizeof(*sender->addr));
+	/* FIXME */
+	if (hm_remove(server_channels, leave_packet.req_channel, (void **)&users))
+	    ll_destroy(users, NULL);
+	if (strcmp(leave_packet.req_channel, DEFAULT_CHANNEL)) {
+	    if (hm_remove(channels, leave_packet.req_channel, (void **)&users))
+		ll_destroy(users, NULL);
+	}
+	return;
+    }
+
+    /* Get the list of users listening to the channel */
+    /* Respond to user with error message if malloc() failure, log the error */
+    if (!hm_get(channels, say_packet->req_channel, (void **)&users))
+	return;
+    if ((listeners = (User **)ll_toArray(users, &len)) == NULL) {
+	fprintf(stdout, "%s Failed to send the message to %s\n",
+		server_addr, say_packet->req_channel);
+	return;
+    }
+
+    /* Initialize the SAY packet to send; set the type, channel, and username */
+    memset(&msg_packet, 0, sizeof(msg_packet));
+    msg_packet.txt_type = TXT_SAY;
+    strncpy(msg_packet.txt_channel, say_packet->req_channel, (CHANNEL_MAX - 1));
+    strncpy(msg_packet.txt_username, say_packet->req_username, (USERNAME_MAX - 1));
+    strncpy(msg_packet.txt_text, say_packet->req_text, (SAY_MAX - 1));
+
+    /* Send the packet to each user listening on the channel */
+    for (j = 0L; j < len; j++)
+	sendto(socket_fd, &msg_packet, sizeof(msg_packet), 0,
+		(struct sockaddr *)listeners[j]->addr, listeners[j]->len);
+    /* Free reserved memory */
+    free(listeners);
 }
 
 /**
