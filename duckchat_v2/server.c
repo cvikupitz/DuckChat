@@ -1,5 +1,5 @@
 /**
- * server.c
+ * server.c (version 2.0)
  * Author: Cole Vikupitz
  * Last Modified: 11/21/2017
  *
@@ -15,13 +15,14 @@
  * Resources Used:
  * Lots of help about basic socket programming received from Beej's Guide to Socket Programming:
  * https://beej.us/guide/bgnet/output/html/multipage/index.html
+ *
+ * Help on random number generation with /dev/urandom consulted from:
+ * http://www.cs.yale.edu/homes/aspnes/pinewiki/C(2f)Randomization.html
+ * 
  * Implementations for the LinkedList and HashMap ADTs that this server uses were borrowed from
  * professor Joe Sventek's ADT library on github (https://github.com/jsventek/ADTs).
  * These implementations are not my own.
  */
-
-//FIXME SERVER SUB LIST STILL CONTAINS EMPTY CHANNEL
-//FIXME EMPTY CHANNEL IN SERVER LIST
 
 #include <stdio.h> 
 #include <stdlib.h>
@@ -1072,7 +1073,11 @@ static void server_s2s_leave_request(const char *packet, char *client_ip) {
 }
 
 /**
- * FIXME
+ * Server recieves an S2S say request. The message gets broadcasted to all/any
+ * users listening on the channel. The request is also forwarded to all
+ * connected/listening neighboring servers. If the server is a leaf in the
+ * channelsub-tree, and no users are listening on the channel, the server replies
+ * by sending an S2S leave request.
  */
 static void server_s2s_say_request(const char *packet, char *client_ip) {
 
@@ -1115,9 +1120,7 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
     /* Otherwise, queue the ID for future comparisons */
     queue_id(say_packet->id);
 
-    // FIXME
-    // LEAVE IF LEAF AND NO CLIENTS
-    // AFTER, BROADCAST
+    /* Error checking, channel non-existent, send s2s leave request */
     if (!hm_get(channels, say_packet->req_channel, (void **)&users)) {
 	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
 		server_addr, sender->ip_addr, leave_packet.req_channel);
@@ -1126,13 +1129,13 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 	return;
     }
 
-    /* FIXME */
+    /* No listening users and server is a leaf, send a s2s leave request */
     if (ll_isEmpty(users) && (server_n < 2)) {
 	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
 		server_addr, sender->ip_addr, leave_packet.req_channel);
 	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
 		(struct sockaddr *)sender->addr, sizeof(*sender->addr));
-	/* FIXME */
+	/* Remove all records of channel from data structure(s) */
 	if (hm_remove(server_channels, leave_packet.req_channel, (void **)&users))
 	    ll_destroy(users, NULL);
 	if (strcmp(leave_packet.req_channel, DEFAULT_CHANNEL)) {
