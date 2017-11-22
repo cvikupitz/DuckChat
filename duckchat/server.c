@@ -481,7 +481,7 @@ static void server_list_request(char *client_ip) {
 
     User *user;
     int size;
-    long i, len;
+    long i, len = 0L;
     char **ch_list;
     char buffer[256];
     struct text_list *list_packet;
@@ -494,11 +494,13 @@ static void server_list_request(char *client_ip) {
     /* Retrieve the complete list of channel names */
     /* Send error message back to client if failed (malloc() error), log the error */
     if ((ch_list = hm_keyArray(channels, &len)) == NULL) {
-	server_send_error(user->addr, user->len, "Error: Failed to list the channels");
-	sprintf(buffer, "*** Failed to list channels for user %s, memory allocation failed",
+	if (!hm_isEmpty(channels)) {
+	    server_send_error(user->addr, user->len, "Error: Failed to list the channels");
+	    sprintf(buffer, "*** Failed to list channels for user %s, memory allocation failed",
 			user->username);
-	print_log_message(buffer);
-	return;
+	    print_log_message(buffer);
+	    return;
+	}
     }
 
     /* Calculate the exact size of packet to send back */
