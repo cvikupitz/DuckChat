@@ -1,7 +1,7 @@
 /**
  * client.c
  * Author: Cole Vikupitz
- * Last Modified: 11/21/2017
+ * Last Modified: 11/22/2017
  *
  * Client side of a chat application using the DuckChat protocol. The client sends
  * and receives packets from a server using this protocol and handles each of the
@@ -285,7 +285,7 @@ static void client_switch_request(const char *request) {
 	    return;
 	}
     }	/* Channel not found in list at this point, print status to user */
-    fprintf(stdout, "You are not subscribed to the channel %s\n", channel);
+    fprintf(stdout, "Error: You are not subscribed to the channel %s\n", channel);
 }
 
 /**
@@ -358,7 +358,7 @@ static void client_keep_alive_request(void) {
 static void server_error_reply(const char *packet) {
     
     struct text_error *error_packet = (struct text_error *) packet;
-    fprintf(stdout, "%s\n", error_packet->txt_error);
+    fprintf(stdout, "Error: %s\n", error_packet->txt_error);
 }
 
 /**

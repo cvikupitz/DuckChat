@@ -12,6 +12,7 @@
  * Resources Used:
  * Lots of help about basic socket programming received from Beej's Guide to Socket Programming:
  * https://beej.us/guide/bgnet/output/html/multipage/index.html
+ *
  * Implementations for the LinkedList and HashMap ADTs that this server uses were borrowed from
  * professor Joe Sventek's ADT library on github (https://github.com/jsventek/ADTs).
  * These implementations are not my own.
@@ -270,7 +271,7 @@ static void server_join_request(const char *packet, char *client_ip) {
 	return;
     }
 
-    /* User has joined a channel that already exists */
+    /* User has joined a channel that does not exist */
     if (!hm_get(channels, joined, (void **)&user_list)) {
 
 	/* Create the new channel list, send error back if failed, log the error */
@@ -307,7 +308,7 @@ static void server_join_request(const char *packet, char *client_ip) {
 	sprintf(buffer, "%s created the channel %s", user->username, joined);
 	print_log_message(buffer);
 
-    /* User has joined a channel that does not exist */
+    /* User has joined a channel that already exists */
     } else {
 	
 	/* Check to see if user is already subscribed; makes sure not to add duplicate instance(s) */
@@ -316,9 +317,6 @@ static void server_join_request(const char *packet, char *client_ip) {
 	    if (strcmp(user->ip_addr, tmp->ip_addr) == 0) {
 		/* User found, log the join event and return */
 		sprintf(buffer, "%s joined the channel %s", user->username, joined);
-		print_log_message(buffer);
-		sprintf(buffer, "*** Failed to add %s to channel %s, memory allocation failed",
-		    user->username, joined);
 		print_log_message(buffer);
 		return;
 	    }
@@ -545,7 +543,7 @@ static void server_who_request(const char *packet, char *client_ip) {
     User *user, **user_list;
     LinkedList *subscribers;
     int size;
-    long i, len;
+    long i, len = 0L;
     char buffer[256];
     struct text_who *send_packet;
     struct request_who *who_packet = (struct request_who *) packet;
@@ -565,25 +563,17 @@ static void server_who_request(const char *packet, char *client_ip) {
 	return;
     }
 
-    /* Check to see if channel is empty, send message to cient if so */
-    /* Should not happen for any channel other than the default channel */
-    if (ll_isEmpty(subscribers)) {
-	sprintf(buffer, "The channel %s is currently empty", who_packet->req_channel);
-	server_send_error(user->addr, user->len, buffer);
-	sprintf(buffer, "%s listed all users on channel %s", user->username, who_packet->req_channel);
-	print_log_message(buffer);
-	return;
-    }
-
     /* Retrieve the list of users subscribed to the requested channel */
     /* Send error message back to client if failed (malloc() error), log the error */
     if ((user_list = (User **)ll_toArray(subscribers, &len)) == NULL) {
-	sprintf(buffer, "Error: Failed to list users on %s", who_packet->req_channel);
-	server_send_error(user->addr, user->len, buffer);
-	sprintf(buffer, "*** Failed to list users on channel %s for user %s, memory allocation failed",
-		    who_packet->req_channel, user->username);
-	print_log_message(buffer);
-	return;    
+	if (!ll_isEmpty(subscribers)) {
+	    sprintf(buffer, "Error: Failed to list users on %s", who_packet->req_channel);
+	    server_send_error(user->addr, user->len, buffer);
+	    sprintf(buffer, "*** Failed to list users on channel %s for user %s, memory allocation failed",
+			who_packet->req_channel, user->username);
+	    print_log_message(buffer);
+	    return;
+	}
     }
 
     /* Calculate the exact size of packet to send back */

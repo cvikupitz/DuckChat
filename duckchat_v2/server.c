@@ -498,7 +498,7 @@ static void server_join_request(const char *packet, char *client_ip) {
     joined[ch_len] = '\0';
 
     /* Add this channel to the neighboring server's subscription list */
-    if (!hm_containsKey(server_channels, joined) && server_n) {
+    if (!hm_containsKey(server_channels, joined)) {
 	if (!server_join_channel(joined)) {
 	    sprintf(buffer, "Error: Failed to join %s", joined);
 	    server_send_error(user->addr, user->len, buffer);
@@ -772,7 +772,7 @@ static void server_who_request(const char *packet, char *client_ip) {
     User *user, **user_list;
     LinkedList *subscribers;
     int size;
-    long i, len;
+    long i, len = 0L;
     char buffer[256];
     struct text_who *send_packet;
     struct request_who *who_packet = (struct request_who *) packet;
@@ -792,20 +792,14 @@ static void server_who_request(const char *packet, char *client_ip) {
 	return;
     }
 
-    /* Check to see if channel is empty, send message to cient if so */
-    /* Should not happen for any channel other than the default channel */
-    if (ll_isEmpty(subscribers)) {
-	sprintf(buffer, "The channel %s is currently empty", who_packet->req_channel);
-	server_send_error(user->addr, user->len, buffer);
-	return;
-    }
-
     /* Retrieve the list of users subscribed to the requested channel */
     /* Send error message back to client if failed (malloc() error), log the error */
     if ((user_list = (User **)ll_toArray(subscribers, &len)) == NULL) {
-	sprintf(buffer, "Error: Failed to list users on %s", who_packet->req_channel);
-	server_send_error(user->addr, user->len, buffer);
-	return;    
+	if (!ll_isEmpty(subscribers)) {
+	    sprintf(buffer, "Error: Failed to list users on %s", who_packet->req_channel);
+	    server_send_error(user->addr, user->len, buffer);
+	    return;
+	}
     }
 
     /* Calculate the exact size of packet to send back */
