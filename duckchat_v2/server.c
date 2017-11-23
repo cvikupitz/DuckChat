@@ -620,6 +620,10 @@ static int broadcast_message(LinkedList *users, char *username, char *channel, c
     long i, len = 0L;
     struct text_say msg_packet;
 
+    /* NULL checking */
+    if (users == NULL)
+	return 0;
+
     /* Get list of users, return 0 if malloc() fails */
     if ((listeners = (User **)ll_toArray(users, &len)) == NULL)
 	if (!ll_isEmpty(users))
@@ -1040,7 +1044,8 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
     /* Log the received packet */
     fprintf(stdout, "%s %s recv S2S SAY %s %s \"%s\"\n", server_addr, client_ip,
 	    say_packet->req_username, say_packet->req_channel, say_packet->req_text);
-	
+    
+    /* Get neighboring sender */
     for (i = 0; i < server_n; i++)
 	if (neighbors[i] != NULL && !strcmp(neighbors[i]->ip_addr, client_ip))
 	    sender = neighbors[i];
@@ -1050,9 +1055,8 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
     leave_packet.req_type = REQ_S2S_LEAVE;
     strncpy(leave_packet.req_channel, say_packet->req_channel, (CHANNEL_MAX - 1));
 
-    /* Retrieve list of users subscribe on this server, return if failed (should not happen) */
-    if (!hm_get(channels, say_packet->req_channel, (void **)&users))
-	return;
+    /* Retrieve list of users subscribe on this server for broadcasting */
+    (void)hm_get(channels, say_packet->req_channel, (void **)&users);
     /* Broadcast message to all local users */
     (void)broadcast_message(users, say_packet->req_username,
 	    say_packet->req_channel, say_packet->req_text);
@@ -1062,6 +1066,16 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 	return;
 
     /* FIXME - CHECK FOR DUPLICATES & LEAF/NO LISTENERS */
+    ///127.0.0.1:4001 Channel greens - Servers [1], Users[4710021231305902168]
+    /*if ((ll_size(servers) < 2L && ll_isEmpty(users)) || (!id_unique(say_packet->id))) {
+	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
+		(struct sockaddr *)sender->addr, sizeof(*sender->addr));
+	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
+		server_addr, sender->ip_addr, leave_packet.req_channel);
+	(void)hm_remove(server_channels, leave_packet.req_channel, (void **)&servers);
+	return;
+    }*/
+    fprintf(stdout, "%s Channel %s - Servers [%ld], Users[%ld]\n", server_addr,say_packet->req_channel, ll_size(servers),ll_size(users));
 
     /* Forward the S2S say to all listening neighboring servers */
     for (i = 0; i < ll_size(servers); i++) {
@@ -1069,7 +1083,7 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 	/* Forward to a neighboring server, do not send back to sender */
 	if (strcmp(sender->ip_addr, server->ip_addr)) {
 	    sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
-		(struct sockaddr *)sender->addr, sizeof(*sender));
+		(struct sockaddr *)sender->addr, sizeof(*sender->addr));
 	    /* Log the sent packet */
 	    fprintf(stdout, "%s %s send S2S SAY %s %s \"%s\"\n", server_addr, server->ip_addr,
 		    say_packet->req_username, say_packet->req_channel, say_packet->req_text);
