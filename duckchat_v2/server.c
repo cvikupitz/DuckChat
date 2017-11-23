@@ -222,6 +222,19 @@ static void free_server(Server *server) {
 }
 
 /**
+ * FIXME
+ */
+static Server *get_server(char *ip_addr) {
+
+    int i;
+
+    for (i = 0; i < server_n; i++)
+	if (neighbors[i] != NULL && !strcmp(neighbors[i]->ip_addr, ip_addr))
+	    return neighbors[i];
+    return NULL;
+}
+
+/**
  * Creates an array of server structs for all the neighboring servers. Parses
  * the command line arguments given, and creates a server struct for each
  * neighboring server. Will also verify that the address(s) given exist, and
@@ -974,14 +987,28 @@ static void logout_inactive_users(void) {
  */
 static void server_s2s_join_request(const char *packet, char *client_ip) {
 
+    Server *server, *sender;
+    LinkedList *servers;
+    long i;
     struct request_s2s_join *join_packet = (struct request_s2s_join *) packet;
     
     /* Log the received packet */
     fprintf(stdout, "%s %s recv S2S JOIN %s\n",
 	    server_addr, client_ip, join_packet->req_channel);
-    /* If server is already subscribed, request dies here */
-    if (hm_containsKey(server_channels, join_packet->req_channel))
+
+    /* Get neighboring sender */
+    if ((sender = get_server(client_ip)) == NULL)
 	return;
+    /* If server is already subscribed, request dies here */
+    if (hm_get(server_channels, join_packet->req_channel, (void **)&servers)) {
+	for (i = 0L; i < ll_size(servers); i++) {
+	    (void)ll_get(servers, i, (void **)&server);
+	    if (!strcmp(server->ip_addr, client_ip))
+		return;
+	}//FIXME
+	(void)ll_add(servers, sender);
+	return;
+    }
 
     /* Adds the channel, and all neighboring servers to subscription map */
     if (!server_join_channel(join_packet->req_channel)) {
@@ -1035,7 +1062,7 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 
     Server *sender, *server;
     LinkedList *users, *servers;
-    int i;
+    int i, remove = 0;
     struct request_s2s_leave leave_packet;
     struct request_s2s_say *say_packet = (struct request_s2s_say *) packet;
 
@@ -1044,36 +1071,38 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 	    say_packet->req_username, say_packet->req_channel, say_packet->req_text);
     
     /* Get neighboring sender */
-    for (i = 0; i < server_n; i++)
-	if (neighbors[i] != NULL && !strcmp(neighbors[i]->ip_addr, client_ip))
-	    sender = neighbors[i];
+    if ((sender = get_server(client_ip)) == NULL)
+	return;
 
     /* Initialize and set members for leave packet */
     memset(&leave_packet, 0, sizeof(leave_packet));
     leave_packet.req_type = REQ_S2S_LEAVE;
     strncpy(leave_packet.req_channel, say_packet->req_channel, (CHANNEL_MAX - 1));
 
-    /* Retrieve list of users subscribe on this server for broadcasting */
-    (void)hm_get(channels, say_packet->req_channel, (void **)&users);
-    /* Broadcast message to all local users */
-    (void)broadcast_message(users, say_packet->req_username,
-	    say_packet->req_channel, say_packet->req_text);
-
     /* Retrieve list of listening neighboring servers, return if failed (should not happen) */
     if (!hm_get(server_channels, say_packet->req_channel, (void **)&servers))
 	return;
 
-    /* FIXME - CHECK FOR DUPLICATES & LEAF/NO LISTENERS */
-    ///127.0.0.1:4001 Channel greens - Servers [1], Users[4710021231305902168]
-    /*if ((ll_size(servers) < 2L && ll_isEmpty(users)) || (!id_unique(say_packet->id))) {
+    /* Retrieve list of users subscribe on this server for broadcasting */
+    if (hm_get(channels, say_packet->req_channel, (void **)&users)) {
+	/* Broadcast message to all local users */
+	(void)broadcast_message(users, say_packet->req_username,
+		say_packet->req_channel, say_packet->req_text);
+	if ((ll_size(servers) < 2L && ll_isEmpty(users)) || (!id_unique(say_packet->id)))
+	    remove = 1;    
+    } else {
+	if (ll_size(servers) < 2L)
+	    remove = 1;
+    }
+
+    if (remove) {
 	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
 		(struct sockaddr *)sender->addr, sizeof(*sender->addr));
 	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
 		server_addr, sender->ip_addr, leave_packet.req_channel);
 	(void)hm_remove(server_channels, leave_packet.req_channel, (void **)&servers);
 	return;
-    }*/
-    fprintf(stdout, "%s Channel %s - Servers [%ld], Users[%ld]\n", server_addr,say_packet->req_channel, ll_size(servers),ll_size(users));
+    }
 
     /* Forward the S2S say to all listening neighboring servers */
     for (i = 0; i < ll_size(servers); i++) {
