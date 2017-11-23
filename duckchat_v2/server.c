@@ -309,7 +309,7 @@ static long generate_id(void) {
  * inside the server's recently received message IDs. Returns 1 if unique, 0 if
  * not (is a duplicate, indicating a loop).
  */
-UNUSED static int id_unique(long id) {
+static int id_unique(long id) {
     
     int i;
     for (i = 0; i < MSGQ_SIZE; i++)
@@ -345,32 +345,6 @@ static void neighbor_flood_channel(char *channel, char *sender_ip) {
 	}
     }
 }
-
-/**
- * Floods all neighboring servers with an S2S JOIN request, sends a request for
- * each available channel subscribed to. Invoked every minute by the server to
- * avoid network failures.
- */
-/*UNUSED static void neighbor_flood_all(void) {
-
-    char **channels;
-    long i, len;
-
-    // No channels are subscribed to, don't bother flooding
-    if (hm_isEmpty(server_channels))
-	return;
-
-    // Get list of channel names, report malloc() error if failed
-    if ((channels = hm_keyArray(server_channels, &len)) == NULL) {
-	fprintf(stdout, "%s Failed to flood servers, malloc() error\n", server_addr);
-	return;
-    }
-
-    // Flood each neighboring server with S2S Join with channel name 
-    for (i = 0L; i < len; i++)
-	neighbor_flood_channel(channels[i]);
-    free(channels);
-}*/
 
 /**
  * Adds the specified channel into the neighboring server's subscription list
@@ -640,10 +614,10 @@ static void server_leave_request(const char *packet, char *client_ip) {
  * Sends a say packet to each subscribed client inside the list 'users', broadcasting
  * the message.
  */
-static int broadcast_message(char *uname, LinkedList *users, struct request_say *packet) {
+static int broadcast_message(LinkedList *users, char *username, char *channel, char *text) {
     
     User **listeners;
-    long i, len;
+    long i, len = 0L;
     struct text_say msg_packet;
 
     /* Get list of users, return 0 if malloc() fails */
@@ -654,9 +628,9 @@ static int broadcast_message(char *uname, LinkedList *users, struct request_say 
     /* Initialize the SAY packet to send; set the type, channel, and username */
     memset(&msg_packet, 0, sizeof(msg_packet));
     msg_packet.txt_type = TXT_SAY;
-    strncpy(msg_packet.txt_channel, packet->req_channel, (CHANNEL_MAX - 1));
-    strncpy(msg_packet.txt_username, uname, (USERNAME_MAX - 1));
-    strncpy(msg_packet.txt_text, packet->req_text, (SAY_MAX - 1));
+    strncpy(msg_packet.txt_channel, channel, (CHANNEL_MAX - 1));
+    strncpy(msg_packet.txt_username, username, (USERNAME_MAX - 1));
+    strncpy(msg_packet.txt_text, text, (SAY_MAX - 1));
 
     /* Send the packet to each user listening on the channel */
     for (i = 0L; i < len; i++)
@@ -695,7 +669,7 @@ static void server_say_request(const char *packet, char *client_ip) {
 		user->username, say_packet->req_channel, say_packet->req_text);
 
     /* Respond to user with error message if malloc() failure, log the error */
-    if (!broadcast_message(user->username, ch_users, say_packet)) {
+    if (!broadcast_message(ch_users, user->username, say_packet->req_channel, say_packet->req_text)) {
 	sprintf(buffer, "Failed to send the message");
 	server_send_error(user->addr, user->len, buffer);
 	return;
@@ -1057,23 +1031,50 @@ static void server_s2s_leave_request(const char *packet, char *client_ip) {
  */
 static void server_s2s_say_request(const char *packet, char *client_ip) {
 
+    Server *sender, *server;
+    LinkedList *users, *servers;
+    int i;
     struct request_s2s_leave leave_packet;
     struct request_s2s_say *say_packet = (struct request_s2s_say *) packet;
 
     /* Log the received packet */
     fprintf(stdout, "%s %s recv S2S SAY %s %s \"%s\"\n", server_addr, client_ip,
 	    say_packet->req_username, say_packet->req_channel, say_packet->req_text);
+	
+    for (i = 0; i < server_n; i++)
+	if (neighbors[i] != NULL && !strcmp(neighbors[i]->ip_addr, client_ip))
+	    sender = neighbors[i];
 
     /* Initialize and set members for leave packet */
     memset(&leave_packet, 0, sizeof(leave_packet));
     leave_packet.req_type = REQ_S2S_LEAVE;
     strncpy(leave_packet.req_channel, say_packet->req_channel, (CHANNEL_MAX - 1));
 
-    // CHECK TO SEE IF CHANNEL EXISTS
-    // CHECK TO SEE IF LEAF AND NO SUBS -> LEAVE
-    // CHECK TO SEE IF ID UNIQUE -> LEAVE
-    // BROADCAST
-    // FORWARD TO CONNECTED CLIENTS (EXCEPT SENDER)
+    /* Retrieve list of users subscribe on this server, return if failed (should not happen) */
+    if (!hm_get(channels, say_packet->req_channel, (void **)&users))
+	return;
+    /* Broadcast message to all local users */
+    (void)broadcast_message(users, say_packet->req_username,
+	    say_packet->req_channel, say_packet->req_text);
+
+    /* Retrieve list of listening neighboring servers, return if failed (should not happen) */
+    if (!hm_get(server_channels, say_packet->req_channel, (void **)&servers))
+	return;
+
+    /* FIXME - CHECK FOR DUPLICATES & LEAF/NO LISTENERS */
+
+    /* Forward the S2S say to all listening neighboring servers */
+    for (i = 0; i < ll_size(servers); i++) {
+	(void)ll_get(servers, i, (void **)&server);
+	/* Forward to a neighboring server, do not send back to sender */
+	if (strcmp(sender->ip_addr, server->ip_addr)) {
+	    sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
+		(struct sockaddr *)sender->addr, sizeof(*sender));
+	    /* Log the sent packet */
+	    fprintf(stdout, "%s %s send S2S SAY %s %s \"%s\"\n", server_addr, server->ip_addr,
+		    say_packet->req_username, say_packet->req_channel, say_packet->req_text);
+	}
+    }
 }
 
 /**
