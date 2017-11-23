@@ -637,6 +637,38 @@ static void server_leave_request(const char *packet, char *client_ip) {
 }
 
 /**
+ * Sends a say packet to each subscribed client inside the list 'users', broadcasting
+ * the message.
+ */
+static int broadcast_message(char *uname, LinkedList *users, struct request_say *packet) {
+    
+    User **listeners;
+    long i, len;
+    struct text_say msg_packet;
+
+    /* Get list of users, return 0 if malloc() fails */
+    if ((listeners = (User **)ll_toArray(users, &len)) == NULL)
+	if (!ll_isEmpty(users))
+	    return 0;
+
+    /* Initialize the SAY packet to send; set the type, channel, and username */
+    memset(&msg_packet, 0, sizeof(msg_packet));
+    msg_packet.txt_type = TXT_SAY;
+    strncpy(msg_packet.txt_channel, packet->req_channel, (CHANNEL_MAX - 1));
+    strncpy(msg_packet.txt_username, uname, (USERNAME_MAX - 1));
+    strncpy(msg_packet.txt_text, packet->req_text, (SAY_MAX - 1));
+
+    /* Send the packet to each user listening on the channel */
+    for (i = 0L; i < len; i++)
+	sendto(socket_fd, &msg_packet, sizeof(msg_packet), 0,
+		(struct sockaddr *)listeners[i]->addr, listeners[i]->len);
+    /* Free reserved memory */
+    free(listeners);
+
+    return 1;	/* Successful broadcast(s), return 1 */
+}
+
+/**
  * Server receiveds a say packet from a client; the server broadcasts the message
  * back to all connected clients subscribed to the requested channel by sending
  * a packet to each of the subscribed clients.
@@ -644,13 +676,11 @@ static void server_leave_request(const char *packet, char *client_ip) {
 static void server_say_request(const char *packet, char *client_ip) {
     
     User *user;
-    User **listeners;
     Server *server;
     LinkedList *ch_users;
-    long i, len;
+    long i;
     char buffer[256];
     struct request_say *say_packet = (struct request_say *) packet;
-    struct text_say msg_packet;
     struct request_s2s_say s2s_say;
 
     /* Assert user is logged in; do nothing if not */
@@ -664,27 +694,12 @@ static void server_say_request(const char *packet, char *client_ip) {
     fprintf(stdout, "%s %s recv Request SAY %s %s \"%s\"\n", server_addr, user->ip_addr,
 		user->username, say_packet->req_channel, say_packet->req_text);
 
-    /* Get the list of users listening to the channel */
     /* Respond to user with error message if malloc() failure, log the error */
-    if ((listeners = (User **)ll_toArray(ch_users, &len)) == NULL) {
+    if (!broadcast_message(user->username, ch_users, say_packet)) {
 	sprintf(buffer, "Failed to send the message");
 	server_send_error(user->addr, user->len, buffer);
 	return;
     }
-
-    /* Initialize the SAY packet to send; set the type, channel, and username */
-    memset(&msg_packet, 0, sizeof(msg_packet));
-    msg_packet.txt_type = TXT_SAY;
-    strncpy(msg_packet.txt_channel, say_packet->req_channel, (CHANNEL_MAX - 1));
-    strncpy(msg_packet.txt_username, user->username, (USERNAME_MAX - 1));
-    strncpy(msg_packet.txt_text, say_packet->req_text, (SAY_MAX - 1));
-
-    /* Send the packet to each user listening on the channel */
-    for (i = 0L; i < len; i++)
-	sendto(socket_fd, &msg_packet, sizeof(msg_packet), 0,
-		(struct sockaddr *)listeners[i]->addr, listeners[i]->len);
-    /* Free reserved memory */
-    free(listeners);
 
     /* Initialize the S2S SAY packet to send; set the ID, channel, and username */
     memset(&s2s_say, 0, sizeof(s2s_say));
@@ -986,7 +1001,8 @@ static void server_s2s_join_request(const char *packet, char *client_ip) {
     struct request_s2s_join *join_packet = (struct request_s2s_join *) packet;
     
     /* Log the received packet */
-    fprintf(stdout, "%s %s recv Request S2S JOIN\n", server_addr, client_ip);
+    fprintf(stdout, "%s %s recv S2S JOIN %s\n",
+	    server_addr, client_ip, join_packet->req_channel);
     /* If server is already subscribed, request dies here */
     if (hm_containsKey(server_channels, join_packet->req_channel))
 	return;
@@ -1007,9 +1023,29 @@ static void server_s2s_join_request(const char *packet, char *client_ip) {
  * the server wont send messages to this server to avoid loops, or empty
  * server channels.
  */
-static void server_s2s_leave_request(UNUSED const char *packet, char *client_ip) {
+static void server_s2s_leave_request(const char *packet, char *client_ip) {
 
-    fprintf(stdout, "%s %s recv Request S2S LEAVE\n", server_addr, client_ip);
+    LinkedList *servers;
+    Server *server;
+    long i;
+    struct request_s2s_leave *leave_packet = (struct request_s2s_leave *) packet;
+
+    /* Log the received packet */
+    fprintf(stdout, "%s %s recv S2S LEAVE %s\n",
+	    server_addr, client_ip, leave_packet->req_channel);
+    /* Assert the channel is subscribed to, return if not */
+    if (!hm_get(server_channels, leave_packet->req_channel, (void **)&servers))
+	return;
+
+    /* Check each subscribed server in the list */
+    for (i = 0L; i < ll_size(servers); i++) {
+	(void)ll_get(servers, i, (void **)&server);
+	/* Server found, remove from subscription list */
+	if (!strcmp(server->ip_addr, client_ip)) {
+	    ll_remove(servers, i, (void **)&server);
+	    break;
+	}
+    }
 }
 
 /**
@@ -1019,9 +1055,25 @@ static void server_s2s_leave_request(UNUSED const char *packet, char *client_ip)
  * channelsub-tree, and no users are listening on the channel, the server replies
  * by sending an S2S leave request.
  */
-static void server_s2s_say_request(UNUSED const char *packet, UNUSED char *client_ip) {
+static void server_s2s_say_request(const char *packet, char *client_ip) {
 
-    fprintf(stdout, "%s %s recv Request S2S SAY\n", server_addr, client_ip);
+    struct request_s2s_leave leave_packet;
+    struct request_s2s_say *say_packet = (struct request_s2s_say *) packet;
+
+    /* Log the received packet */
+    fprintf(stdout, "%s %s recv S2S SAY %s %s \"%s\"\n", server_addr, client_ip,
+	    say_packet->req_username, say_packet->req_channel, say_packet->req_text);
+
+    /* Initialize and set members for leave packet */
+    memset(&leave_packet, 0, sizeof(leave_packet));
+    leave_packet.req_type = REQ_S2S_LEAVE;
+    strncpy(leave_packet.req_channel, say_packet->req_channel, (CHANNEL_MAX - 1));
+
+    // CHECK TO SEE IF CHANNEL EXISTS
+    // CHECK TO SEE IF LEAF AND NO SUBS -> LEAVE
+    // CHECK TO SEE IF ID UNIQUE -> LEAVE
+    // BROADCAST
+    // FORWARD TO CONNECTED CLIENTS (EXCEPT SENDER)
 }
 
 /**
