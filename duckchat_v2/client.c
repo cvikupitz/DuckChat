@@ -1,7 +1,7 @@
 /**
  * client.c
  * Author: Cole Vikupitz
- * Last Modified: 11/22/2017
+ * Last Modified: 11/23/2017
  *
  * Client side of a chat application using the DuckChat protocol. The client sends
  * and receives packets from a server using this protocol and handles each of the
@@ -40,8 +40,6 @@
 #define KEEP_ALIVE_RATE 60
 /* Default channel to join upon login */
 #define DEFAULT_CHANNEL "Common"
-/* Prompt to display to user for input */
-#define PROMPT {fprintf(stdout, "> ");fflush(stdout);}
 
 
 /* Socket address for the server */
@@ -394,6 +392,15 @@ static void print_error(const char *msg) {
 }
 
 /**
+ * Prints the prompt message, prompting the user for input.
+ */
+static void prompt(void) {
+
+    fprintf(stdout, "> ");
+    fflush(stdout);
+}
+
+/**
  * Runs the client system.
  */
 int main(int argc, char *argv[]) {
@@ -491,7 +498,7 @@ int main(int argc, char *argv[]) {
     i = 0;
     fprintf(stdout, "---------------  Duck Chat  ---------------\n");
     fprintf(stdout, "Type '/help' for help, '/exit' to exit.\n");
-    PROMPT;
+    prompt();
     /* Set the timeout timer for select() */
     memset(&timeout, 0, sizeof(timeout));
     timeout.tv_sec = KEEP_ALIVE_RATE;
@@ -559,7 +566,7 @@ int main(int argc, char *argv[]) {
 		}
 
 		/* Redisplays the prompt and all text the user typed in before */
-		PROMPT;
+		prompt();
 		for (j = 0; j < i; j++)
 		    putchar(buffer[j]);
 		fflush(stdout);
@@ -629,7 +636,7 @@ int main(int argc, char *argv[]) {
 		    /* No special command given, send say message to server */
 		    client_say_request(buffer);
 		}
-		PROMPT;
+		prompt();
 	    }
 	}
     }

@@ -1,7 +1,7 @@
 /**
  * server.c (version 2.0)
  * Author: Cole Vikupitz
- * Last Modified: 11/21/2017
+ * Last Modified: 11/23/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -51,7 +51,7 @@
 /* The default channel for the user to join upon logging in */
 /* This channel will also never be removed, even when empty */
 #define DEFAULT_CHANNEL "Common"
-/* Refresh rate (in minutes) of the server to scan for and logout inactive users */
+/* Refresh rate (in minutes) FIXME */
 /* Should be kept at 2 minutes or greater */
 #define REFRESH_RATE 2
 
@@ -309,7 +309,7 @@ static long generate_id(void) {
  * inside the server's recently received message IDs. Returns 1 if unique, 0 if
  * not (is a duplicate, indicating a loop).
  */
-static int id_unique(long id) {
+UNUSED static int id_unique(long id) {
     
     int i;
     for (i = 0; i < MSGQ_SIZE; i++)
@@ -320,9 +320,10 @@ static int id_unique(long id) {
 
 /**
  * Floods all the neighboring servers with an S2S JOIN request given the specified
- * channel name.
+ * channel name and the sender's IP address. The sender is skipped over; no packet
+ * needs to be sent back to the sender.
  */
-static void neighbor_flood_channel(char *ch) {
+static void neighbor_flood_channel(char *channel, char *sender_ip) {
     
     struct request_s2s_join join_packet;
     int i;
@@ -330,16 +331,17 @@ static void neighbor_flood_channel(char *ch) {
     /* Initializes & sets the packet's contents */
     memset(&join_packet, 0, sizeof(join_packet));
     join_packet.req_type = REQ_S2S_JOIN;
-    strncpy(join_packet.req_channel, ch, (CHANNEL_MAX - 1));
+    strncpy(join_packet.req_channel, channel, (CHANNEL_MAX - 1));
 
     /* Send the packet to each of the connecting servers */
+    /* Do not send it to the server that it received from */
     for (i = 0; i < server_n; i++) {
-	if (neighbors[i] != NULL) {
+	if (neighbors[i] != NULL && strcmp(neighbors[i]->ip_addr, sender_ip)) {
 	    sendto(socket_fd, &join_packet, sizeof(join_packet), 0,
 		    (struct sockaddr *)neighbors[i]->addr, sizeof(*neighbors[i]->addr));
 	    /* Log the sent packet */
 	    fprintf(stdout, "%s %s send S2S JOIN %s\n",
-		    server_addr, neighbors[i]->ip_addr, ch);
+		    server_addr, neighbors[i]->ip_addr, channel);
 	}
     }
 }
@@ -349,26 +351,26 @@ static void neighbor_flood_channel(char *ch) {
  * each available channel subscribed to. Invoked every minute by the server to
  * avoid network failures.
  */
-static void neighbor_flood_all(void) {
+/*UNUSED static void neighbor_flood_all(void) {
 
     char **channels;
     long i, len;
 
-    /* No channels are subscribed to, don't bother flooding */
+    // No channels are subscribed to, don't bother flooding
     if (hm_isEmpty(server_channels))
 	return;
 
-    /* Get list of channel names, report malloc() error if failed */
+    // Get list of channel names, report malloc() error if failed
     if ((channels = hm_keyArray(server_channels, &len)) == NULL) {
 	fprintf(stdout, "%s Failed to flood servers, malloc() error\n", server_addr);
 	return;
     }
 
-    /* Flood each neighboring server with S2S Join with channel name */
+    // Flood each neighboring server with S2S Join with channel name 
     for (i = 0L; i < len; i++)
 	neighbor_flood_channel(channels[i]);
     free(channels);
-}
+}*/
 
 /**
  * Adds the specified channel into the neighboring server's subscription list
@@ -376,7 +378,7 @@ static void neighbor_flood_all(void) {
  * linked list to hold the subscribed servers. Also adds all neighboring servers
  * to the list initially. Returns 1 if fully successful, 0 if not (malloc() error(s)).
  */
-static int server_join_channel(char *ch) {
+static int server_join_channel(char *channel) {
 
     LinkedList *servers;
     long i;
@@ -397,7 +399,7 @@ static int server_join_channel(char *ch) {
     }
 
     /* Add the list of neighbors into the subscription hashmap */
-    if (!hm_put(server_channels, ch, servers, NULL)) {
+    if (!hm_put(server_channels, channel, servers, NULL)) {
 	ll_destroy(servers, NULL);
 	return 0;
     }
@@ -444,14 +446,14 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
     /* Create a new instance of the user */
     /* Send error back to client if malloc() failed, log the error */
     if ((user = malloc_user(client_ip, name, addr, len)) == NULL) {
-	server_send_error(addr, len, "Error: Failed to log into the server");
+	server_send_error(addr, len, "Failed to log into the server");
 	return;
     }
 
     /* Add the new user into the users hashmap */
     /* Send error back to client if failed, log the error */
     if (!hm_put(users, client_ip, user, NULL)) {
-	server_send_error(addr, len, "Error: Failed to log into the server.");
+	server_send_error(addr, len, " Failed to log into the server.");
 	free(user);
 	return;
     }
@@ -488,7 +490,7 @@ static void server_join_request(const char *packet, char *client_ip) {
 				(CHANNEL_MAX - 1) : strlen(join_packet->req_channel));
     /* Allocate memory from heap for name, report and log error if failed */
     if ((joined = (char *)malloc(ch_len + 1)) == NULL) {
-	sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
+	sprintf(buffer, "Failed to join %s", join_packet->req_channel);
 	server_send_error(user->addr, user->len, buffer);
 	return;
     }
@@ -500,35 +502,35 @@ static void server_join_request(const char *packet, char *client_ip) {
     /* Add this channel to the neighboring server's subscription list */
     if (!hm_containsKey(server_channels, joined)) {
 	if (!server_join_channel(joined)) {
-	    sprintf(buffer, "Error: Failed to join %s", joined);
+	    sprintf(buffer, "Failed to join %s", joined);
 	    server_send_error(user->addr, user->len, buffer);
 	    free(joined);
 	    return;
 	}
-	neighbor_flood_channel(joined);
+	neighbor_flood_channel(joined, server_addr);
     }
 
     /* Add the channel to user's subscribed list, send error if failed, log error */
     if (!ll_add(user->channels, joined)) {
-	sprintf(buffer, "Error: Failed to join %s", joined);
+	sprintf(buffer, "Failed to join %s", joined);
 	server_send_error(user->addr, user->len, buffer);
 	free(joined);
 	return;
     }
 
-    /* User has joined a channel that already exists */
+    /* User has joined a channel that does not exist */
     if (!hm_get(channels, joined, (void **)&user_list)) {
 
 	/* Create the new channel list, send error back if failed, log the error */
 	if ((user_list = ll_create()) == NULL) {
-	    sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
+	    sprintf(buffer, "Failed to join %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
 	/* Add the user to the list, send error back if failed, log the error */
 	if (!ll_add(user_list, user)) {
 	    ll_destroy(user_list, NULL);
-	    sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
+	    sprintf(buffer, "Failed to join %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
@@ -536,12 +538,12 @@ static void server_join_request(const char *packet, char *client_ip) {
 	/* Send error back to client if failed, log the error */
 	if (!hm_put(channels, joined, user_list, NULL)) {
 	    ll_destroy(user_list, NULL);
-	    sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
+	    sprintf(buffer, "Failed to join %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
 
-    /* User has joined a channel that does not exist */
+    /* User has joined a channel that already exists */
     } else {
 	
 	/* Check to see if user is already subscribed; makes sure not to add duplicate instance(s) */
@@ -554,7 +556,7 @@ static void server_join_request(const char *packet, char *client_ip) {
 	/* User was not found, so add them to subscription list */
 	/* If failed, send error back to client, log the error */
 	if (!ll_add(user_list, user)) {
-	    sprintf(buffer, "Error: Failed to join %s", join_packet->req_channel);
+	    sprintf(buffer, "Failed to join %s", join_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
@@ -665,7 +667,7 @@ static void server_say_request(const char *packet, char *client_ip) {
     /* Get the list of users listening to the channel */
     /* Respond to user with error message if malloc() failure, log the error */
     if ((listeners = (User **)ll_toArray(ch_users, &len)) == NULL) {
-	sprintf(buffer, "Error: Failed to send the message");
+	sprintf(buffer, "Failed to send the message");
 	server_send_error(user->addr, user->len, buffer);
 	return;
     }
@@ -684,7 +686,7 @@ static void server_say_request(const char *packet, char *client_ip) {
     /* Free reserved memory */
     free(listeners);
 
-    /* Initialize the S2S SAY packet to send; set the ID, type, channel, and username */
+    /* Initialize the S2S SAY packet to send; set the ID, channel, and username */
     memset(&s2s_say, 0, sizeof(s2s_say));
     s2s_say.req_type = REQ_S2S_SAY;
     s2s_say.id = generate_id();
@@ -732,7 +734,7 @@ static void server_list_request(char *client_ip) {
     /* Send error message back to client if failed (malloc() error), log the error */
     if ((ch_list = hm_keyArray(channels, &len)) == NULL) {
 	if (!hm_isEmpty(channels)) {
-	    server_send_error(user->addr, user->len, "Error: Failed to list the channels");
+	    server_send_error(user->addr, user->len, "Failed to list the channels");
 	    return;
 	}
     }
@@ -742,7 +744,7 @@ static void server_list_request(char *client_ip) {
     /* Allocate memory for the packet using calculated size */
     /* Send error back to user if failed (malloc() error), log the error */
     if ((list_packet = malloc(size)) == NULL) {
-	server_send_error(user->addr, user->len, "Error: Failed to list the channels");
+	server_send_error(user->addr, user->len, "Failed to list the channels");
 	free(ch_list);
 	return;
     }
@@ -798,7 +800,7 @@ static void server_who_request(const char *packet, char *client_ip) {
     /* Send error message back to client if failed (malloc() error), log the error */
     if ((user_list = (User **)ll_toArray(subscribers, &len)) == NULL) {
 	if (!ll_isEmpty(subscribers)) {
-	    sprintf(buffer, "Error: Failed to list users on %s", who_packet->req_channel);
+	    sprintf(buffer, "Failed to list users on %s", who_packet->req_channel);
 	    server_send_error(user->addr, user->len, buffer);
 	    return;
 	}
@@ -809,7 +811,7 @@ static void server_who_request(const char *packet, char *client_ip) {
     /* Allocate memory for the packet using calculated size */
     /* Send error back to user if failed (malloc() error), log the error */
     if ((send_packet = malloc(size)) == NULL) {
-	sprintf(buffer, "Error: Failed to list users on %s", who_packet->req_channel);
+	sprintf(buffer, "Failed to list users on %s", who_packet->req_channel);
 	server_send_error(user->addr, user->len, buffer);
 	free(user_list);
 	return;
@@ -981,60 +983,22 @@ static void logout_inactive_users(void) {
  */
 static void server_s2s_join_request(const char *packet, char *client_ip) {
 
-    LinkedList *users;
-    char *joined;
-    int i, ch_len;
     struct request_s2s_join *join_packet = (struct request_s2s_join *) packet;
-
-    /* Log the received packet, return if already subscribed */
-    fprintf(stdout, "%s %s recv S2S JOIN %s\n",
-	    server_addr, client_ip, join_packet->req_channel);
-    if (hm_containsKey(server_channels, join_packet->req_channel) ||
-		!strcmp(join_packet->req_channel, DEFAULT_CHANNEL))
+    
+    /* Log the received packet */
+    fprintf(stdout, "%s %s recv Request S2S JOIN\n", server_addr, client_ip);
+    /* If server is already subscribed, request dies here */
+    if (hm_containsKey(server_channels, join_packet->req_channel))
 	return;
-    /* Add the channel to the subscription list if not subscribed */
+
+    /* Adds the channel, and all neighboring servers to subscription map */
     if (!server_join_channel(join_packet->req_channel)) {
-	fprintf(stdout, "%s Failed to add channel %s to server subscription list\n",
+	fprintf(stdout, "%s Failed to add channel %s to server's subscription list\n",
 		server_addr, join_packet->req_channel);
 	return;
     }
-
-    /* Set the channel name length; shorten it down if exceeds max length allowed */
-    ch_len = ((strlen(join_packet->req_channel) > (CHANNEL_MAX - 1)) ?
-				(CHANNEL_MAX - 1) : strlen(join_packet->req_channel));
-    /* Allocate memory from heap for name, report and log error if failed */
-    if ((joined = (char *)malloc(ch_len + 1)) == NULL) {
-	fprintf(stdout, "%s Failed to join %s\n", server_addr, join_packet->req_channel);
-	return;
-    }
-
-    /* Extract the channel name from packet */
-    memcpy(joined, join_packet->req_channel, ch_len);
-    joined[ch_len] = '\0';
-
-    /* Create new list of users listening on channel */
-    if ((users = ll_create()) == NULL) {
-	fprintf(stdout, "%s Failed to join %s\n", server_addr, joined);
-	free(joined);
-	return;
-    }
-    /* Add the list to hashmap of available channels, report error if failed */
-    if (!hm_put(channels, joined, users, NULL)) {
-	fprintf(stdout, "%s Failed to join %s\n", server_addr, joined);
-	free(joined);
-	return;
-    }
-
-    /* Forwards the packet to all neighboring servers */
-    for (i = 0; i < server_n; i++) {
-	if (neighbors[i] == NULL || !strcmp(neighbors[i]->ip_addr, client_ip))
-	    continue;
-	sendto(socket_fd, join_packet, sizeof(*join_packet), 0,
-		(struct sockaddr *)neighbors[i]->addr, sizeof(*neighbors[i]->addr));
-	/* Log the sent packet */
-	fprintf(stdout, "%s %s send S2S JOIN %s\n",
-		server_addr, neighbors[i]->ip_addr, join_packet->req_channel);
-    }
+    /* Flood all neighboring servers with S2S join request */
+    neighbor_flood_channel(join_packet->req_channel, client_ip);
 }
 
 /**
@@ -1043,29 +1007,9 @@ static void server_s2s_join_request(const char *packet, char *client_ip) {
  * the server wont send messages to this server to avoid loops, or empty
  * server channels.
  */
-static void server_s2s_leave_request(const char *packet, char *client_ip) {
+static void server_s2s_leave_request(UNUSED const char *packet, char *client_ip) {
 
-    LinkedList *servers;
-    Server *server;
-    long i;
-    struct request_s2s_leave *leave_packet = (struct request_s2s_leave *) packet;
-
-    /* Log the packet received */
-    fprintf(stdout, "%s %s recv S2S LEAVE %s\n",
-	    server_addr, client_ip, leave_packet->req_channel);
-    /* Retrieve the list of listening servers, return if channel non-existent */
-    if (!hm_get(server_channels, leave_packet->req_channel, (void **)&servers))
-	return;
-
-    /* Find the server neighbor in list, remove it from the subscription list */
-    for (i = 0L; i < ll_size(servers); i++) {
-	(void)ll_get(servers, i, (void **)&server);
-	if (!strcmp(server->ip_addr, client_ip)) {
-	    /* Connecting server found, remove it from list */
-	    (void)ll_remove(servers, i, (void **)&server);
-	    return;
-	}
-    }
+    fprintf(stdout, "%s %s recv Request S2S LEAVE\n", server_addr, client_ip);
 }
 
 /**
@@ -1075,95 +1019,9 @@ static void server_s2s_leave_request(const char *packet, char *client_ip) {
  * channelsub-tree, and no users are listening on the channel, the server replies
  * by sending an S2S leave request.
  */
-static void server_s2s_say_request(const char *packet, char *client_ip) {
+static void server_s2s_say_request(UNUSED const char *packet, UNUSED char *client_ip) {
 
-    LinkedList *users;
-    User **listeners;
-    Server *sender;
-    int i;
-    long j, len;
-    struct request_s2s_leave leave_packet;
-    struct text_say msg_packet;
-    struct request_s2s_say *say_packet = (struct request_s2s_say *) packet;
-
-    /* Log the received packet */
-    fprintf(stdout, "%s %s recv S2S SAY %s %s \"%s\"\n",
-	    server_addr, client_ip, say_packet->req_username,
-	    say_packet->req_channel, say_packet->req_text);
-    
-    /* Initialize and set members of the leave packet */
-    memset(&leave_packet, 0, sizeof(leave_packet));
-    leave_packet.req_type = REQ_S2S_LEAVE;
-    strncpy(leave_packet.req_channel, say_packet->req_channel, (CHANNEL_MAX - 1));
-
-    /* Find the neighoring server that sent the packet */
-    for (i = 0; i < server_n; i++) {
-	if (neighbors[i] != NULL && !strcmp(neighbors[i]->ip_addr, client_ip)) {
-	    sender = neighbors[i];
-	    break;
-	}	    
-    }
-
-    /* Check to see if ID of packet is unique */
-    if (!id_unique(say_packet->id)) {
-	/* Loop detected, reply with s2s leave request */
-	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
-		server_addr, sender->ip_addr, leave_packet.req_channel);
-	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
-		(struct sockaddr *)sender->addr, sizeof(*sender->addr));
-	return;
-    }
-    /* Otherwise, queue the ID for future comparisons */
-    queue_id(say_packet->id);
-
-    /* Error checking, channel non-existent, send s2s leave request */
-    if (!hm_get(channels, say_packet->req_channel, (void **)&users)) {
-	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
-		server_addr, sender->ip_addr, leave_packet.req_channel);
-	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
-		(struct sockaddr *)sender->addr, sizeof(*sender->addr));
-	return;
-    }
-
-    /* No listening users and server is a leaf, send a s2s leave request */
-    if (ll_isEmpty(users) && (server_n < 2)) {
-	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
-		server_addr, sender->ip_addr, leave_packet.req_channel);
-	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
-		(struct sockaddr *)sender->addr, sizeof(*sender->addr));
-	/* Remove all records of channel from data structure(s) */
-	if (hm_remove(server_channels, leave_packet.req_channel, (void **)&users))
-	    ll_destroy(users, NULL);
-	if (strcmp(leave_packet.req_channel, DEFAULT_CHANNEL)) {
-	    if (hm_remove(channels, leave_packet.req_channel, (void **)&users))
-		ll_destroy(users, NULL);
-	}
-	return;
-    }
-
-    /* Get the list of users listening to the channel */
-    /* Respond to user with error message if malloc() failure, log the error */
-    if (!hm_get(channels, say_packet->req_channel, (void **)&users))
-	return;
-    if ((listeners = (User **)ll_toArray(users, &len)) == NULL) {
-	fprintf(stdout, "%s Failed to send the message to %s\n",
-		server_addr, say_packet->req_channel);
-	return;
-    }
-
-    /* Initialize the SAY packet to send; set the type, channel, and username */
-    memset(&msg_packet, 0, sizeof(msg_packet));
-    msg_packet.txt_type = TXT_SAY;
-    strncpy(msg_packet.txt_channel, say_packet->req_channel, (CHANNEL_MAX - 1));
-    strncpy(msg_packet.txt_username, say_packet->req_username, (USERNAME_MAX - 1));
-    strncpy(msg_packet.txt_text, say_packet->req_text, (SAY_MAX - 1));
-
-    /* Send the packet to each user listening on the channel */
-    for (j = 0L; j < len; j++)
-	sendto(socket_fd, &msg_packet, sizeof(msg_packet), 0,
-		(struct sockaddr *)listeners[j]->addr, listeners[j]->len);
-    /* Free reserved memory */
-    free(listeners);
+    fprintf(stdout, "%s %s recv Request S2S SAY\n", server_addr, client_ip);
 }
 
 /**
@@ -1329,10 +1187,10 @@ int main(int argc, char *argv[]) {
 
 	/* A minute passes, flood all servers with JOIN requests */
 	if (res == 0) {
-	    neighbor_flood_all();
+	    //FIXME neighbor_flood_all();
 	    mode++;
 	    /* Checks for inactive users */
-	    if (mode == REFRESH_RATE) {
+	    if (mode >= REFRESH_RATE) {
 		logout_inactive_users();
 		mode = 0;
 	    }
