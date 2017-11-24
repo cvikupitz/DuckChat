@@ -222,14 +222,15 @@ static void free_server(Server *server) {
 }
 
 /**
- * FIXME
+ * Returns the pointer to the neighboring server with the specified IP address, or
+ * NULL if not found (generally should never happen).
  */
-static Server *get_server(char *ip_addr) {
+static Server *get_server(char *ip) {
 
     int i;
 
     for (i = 0; i < server_n; i++)
-	if (neighbors[i] != NULL && !strcmp(neighbors[i]->ip_addr, ip_addr))
+	if (neighbors[i] != NULL && !strcmp(neighbors[i]->ip_addr, ip))
 	    return neighbors[i];
     return NULL;
 }
@@ -991,7 +992,7 @@ static void server_s2s_join_request(const char *packet, char *client_ip) {
     LinkedList *servers;
     long i;
     struct request_s2s_join *join_packet = (struct request_s2s_join *) packet;
-    
+
     /* Log the received packet */
     fprintf(stdout, "%s %s recv S2S JOIN %s\n",
 	    server_addr, client_ip, join_packet->req_channel);
@@ -1003,9 +1004,11 @@ static void server_s2s_join_request(const char *packet, char *client_ip) {
     if (hm_get(server_channels, join_packet->req_channel, (void **)&servers)) {
 	for (i = 0L; i < ll_size(servers); i++) {
 	    (void)ll_get(servers, i, (void **)&server);
+	    /* Server already subscribed, return */
 	    if (!strcmp(server->ip_addr, client_ip))
 		return;
-	}//FIXME
+	}
+	/* Server not subscribed, add it to list */
 	(void)ll_add(servers, sender);
 	return;
     }
@@ -1055,7 +1058,7 @@ static void server_s2s_leave_request(const char *packet, char *client_ip) {
  * Server recieves an S2S say request. The message gets broadcasted to all/any
  * users listening on the channel. The request is also forwarded to all
  * connected/listening neighboring servers. If the server is a leaf in the
- * channelsub-tree, and no users are listening on the channel, the server replies
+ * channel sub-tree, and no users are listening on the channel, the server replies
  * by sending an S2S leave request.
  */
 static void server_s2s_say_request(const char *packet, char *client_ip) {
@@ -1088,16 +1091,21 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 	/* Broadcast message to all local users */
 	(void)broadcast_message(users, say_packet->req_username,
 		say_packet->req_channel, say_packet->req_text);
+	/* Remove if server is leaf in channel tree & no one is listening */
 	if ((ll_size(servers) < 2L && ll_isEmpty(users)) || (!id_unique(say_packet->id)))
 	    remove = 1;    
     } else {
+	/* Same here; if leaf node, remove from channel tree */
 	if (ll_size(servers) < 2L)
 	    remove = 1;
     }
 
+    /* Server is to be removed from the channel subtree */
     if (remove) {
+	/* Send S2S leave request back to sender */
 	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
 		(struct sockaddr *)sender->addr, sizeof(*sender->addr));
+	/* Log the received packet, remove channel from map */
 	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
 		server_addr, sender->ip_addr, leave_packet.req_channel);
 	(void)hm_remove(server_channels, leave_packet.req_channel, (void **)&servers);
@@ -1105,12 +1113,13 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
     }
 
     /* Forward the S2S say to all listening neighboring servers */
+    queue_id(say_packet->id);
     for (i = 0; i < ll_size(servers); i++) {
 	(void)ll_get(servers, i, (void **)&server);
 	/* Forward to a neighboring server, do not send back to sender */
 	if (strcmp(sender->ip_addr, server->ip_addr)) {
-	    sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
-		(struct sockaddr *)sender->addr, sizeof(*sender->addr));
+	    sendto(socket_fd, say_packet, sizeof(*say_packet), 0,
+		(struct sockaddr *)server->addr, sizeof(*server->addr));
 	    /* Log the sent packet */
 	    fprintf(stdout, "%s %s send S2S SAY %s %s \"%s\"\n", server_addr, server->ip_addr,
 		    say_packet->req_username, say_packet->req_channel, say_packet->req_text);
