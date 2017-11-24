@@ -115,17 +115,13 @@ struct request_s2s_say {
 
 struct request_s2s_who {
 	request_t req_type; /* = REQ_S2S_WHO */
-	long id;
-	char req_username[USERNAME_MAX];
-	char req_channel[CHANNEL_MAX];
-	/* FIXME */
 } packed;
 
 struct request_s2s_list {
 	request_t req_type; /* = REQ_S2S_LIST */
 	long id;
-	char req_username[USERNAME_MAX];
-	/* FIXME */
+	char ip_origin[256];
+	
 } packed;
 
 /* This structure is used for a generic text type, to the client. */
