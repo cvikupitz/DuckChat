@@ -6,7 +6,7 @@
 
 
 FILES=client.c duckchat.h hashmap.c hashmap.h linkedlist.c linkedlist.h \
-	Makefile properties.h raw.c raw.h README.md server.c start_servers.sh
+	Makefile properties.h raw.c raw.h server.c
 
 CC=gcc
 CFLAGS=-Wall -W -g
@@ -41,9 +41,9 @@ help:
 clean:
 	rm -f $(OBJECTS) $(EXECS)
 
-client.o: client.c duckchat.h raw.h
+client.o: client.c duckchat.h properties.h raw.h
 hashmap.o: hashmap.c hashmap.h
 linkedlist.o: linkedlist.c linkedlist.h
 raw.o: raw.c raw.h
-server.o: server.c duckchat.h hashmap.h linkedlist.h
+server.o: server.c duckchat.h hashmap.h linkedlist.h properties.h
 
