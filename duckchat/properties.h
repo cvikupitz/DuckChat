@@ -26,7 +26,6 @@
 
 /* Refresh rate (in minutes) of the server to refresh its internal data structures */
 /* The server will scan and remove users who have not sent a packet past the refresh rate */
-/* (Version 2) Server also removes neighboring servers that have not sent an S2S Join for a channel */
 /* Should be kept at 2-5 minutes */
 #define REFRESH_RATE 2
 
@@ -37,3 +36,4 @@
 
 
 #endif	/* __PROPERTIES_H_ */
+
