@@ -1398,7 +1398,7 @@ int main(int argc, char *argv[]) {
 
 	/* A minute passes, flood all servers with JOIN requests */
 	if (res == 0) {
-	    //neighbor_flood_all();////FIXME
+	    neighbor_flood_all();////FIXME
 	    mode++;
 	    /* Checks for inactive users */
 	    if (mode >= REFRESH_RATE) {

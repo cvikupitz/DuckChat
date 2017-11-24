@@ -1,12 +1,13 @@
 #
 # DuckChat Makefile
 # Author: Cole Vikupitz
-# Last Modified: 11/3/2017
+# Last Modified: 11/25/2017
 #
 
 
-FILES=Makefile client.c server.c raw.h raw.c duckchat.h\
-	hashmap.h hashmap.c linkedlist.h linkedlist.c README.md
+FILES=client.c duckchat.h hashmap.c hashmap.h linkedlist.c \
+	linkedlist.h Makefile properties.h raw.c raw.h \
+	README.md server.c
 
 CC=gcc
 CFLAGS=-Wall -W -g
@@ -41,8 +42,8 @@ help:
 clean:
 	rm -f $(OBJECTS) $(EXECS)
 
-client.o: client.c duckchat.h raw.h
-server.o: server.c duckchat.h
+client.o: client.c duckchat.h properties.h raw.h
+server.o: server.c duckchat.h hashmap.h linkedlist.h properties.h
 raw.o: raw.c raw.h
 hashmap.o: hashmap.c hashmap.h
 linkedlist.o: linkedlist.c linkedlist.h

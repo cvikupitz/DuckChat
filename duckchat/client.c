@@ -1,7 +1,7 @@
 /**
  * client.c
  * Author: Cole Vikupitz
- * Last Modified: 11/23/2017
+ * Last Modified: 11/25/2017
  *
  * Client side of a chat application using the DuckChat protocol. The client sends
  * and receives packets from a server using this protocol and handles each of the
@@ -27,19 +27,8 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include "duckchat.h"
+#include "properties.h"
 #include "raw.h"
-
-/* Suppress compiler warnings for unused parameters */
-#define UNUSED __attribute__((unused))
-/* Maximum buffer size for messages and packets */
-#define BUFF_SIZE 80000
-/* Maximum channels client may be subscribed to at once */
-#define MAX_CHANNELS 10
-/* The rate (in seconds) to send keep-alive packet when inactive */
-/* Should be kept at 45-60 seconds */
-#define KEEP_ALIVE_RATE 60
-/* Default channel to join upon login */
-#define DEFAULT_CHANNEL "Common"
 
 
 /* Socket address for the server */
