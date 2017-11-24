@@ -1,5 +1,5 @@
 /**
- * server.c (version 2.0)
+ * server.c (v2.0)
  * Author: Cole Vikupitz
  * Last Modified: 11/25/2017
  *
@@ -1386,7 +1386,7 @@ int main(int argc, char *argv[]) {
 
 	/* A minute passes, flood all servers with JOIN requests */
 	if (res == 0) {
-	    neighbor_flood_all();////FIXME
+	    //neighbor_flood_all();////FIXME
 	    mode++;
 	    /* Checks for inactive users */
 	    if (mode >= REFRESH_RATE) {
