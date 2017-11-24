@@ -47,11 +47,11 @@
 /* Maximum buffer size for messages and packets */
 #define BUFF_SIZE 80000
 /* Maximum size of list of message IDs */
-#define MSGQ_SIZE 30
+#define MSGQ_SIZE 45
 /* The default channel for the user to join upon logging in */
 /* This channel will also never be removed, even when empty */
 #define DEFAULT_CHANNEL "Common"
-/* Refresh rate (in minutes) FIXME */
+/* Refresh rate (in minutes) for server to refresh user(s) and server(s) */
 /* Should be kept at 2 minutes or greater */
 #define REFRESH_RATE 2
 
@@ -91,6 +91,7 @@ typedef struct {
 typedef struct {
     struct sockaddr_in *addr;	/* The address of the neighboring server */
     char *ip_addr;		/* Full IP address of server in string format */
+    short last_min;		/* Clock minute of last received S2S Join request */
 } Server;
 
 /* Array of all the neighboring servers */
@@ -182,6 +183,8 @@ static void free_user(User *user) {
  */
 static Server *malloc_server(const char *ip, struct sockaddr_in *addr) {
 
+    struct tm *timestamp;
+    time_t timer;
     Server *new_server;
 
     /* Allocate memory for the struct itself */
@@ -202,6 +205,9 @@ static Server *malloc_server(const char *ip, struct sockaddr_in *addr) {
 	/* Initialize all the members, return the pointer */
 	*new_server->addr = *addr;
 	strcpy(new_server->ip_addr, ip);
+	time(&timer);
+	timestamp = localtime(&timer);
+	new_server->last_min = timestamp->tm_min;
     }
 
     return new_server;
@@ -228,7 +234,6 @@ static void free_server(Server *server) {
 static Server *get_server(char *ip) {
 
     int i;
-
     for (i = 0; i < server_n; i++)
 	if (neighbors[i] != NULL && !strcmp(neighbors[i]->ip_addr, ip))
 	    return neighbors[i];
@@ -251,14 +256,14 @@ static int malloc_neighbors(char *args[], int n) {
     int i;
     
     /* If no args given, do nothing */
-    if (n == 0) return 1;
+    if (n == 0)
+	return 1;
     /* Create the array of neighbors */
     server_n = (n / 2);
     if ((neighbors = (Server **)malloc(sizeof(Server *) * server_n)) == NULL)
 	return 0;
 
     for (i = 0; i < n; i += 2) {
-	
 	/* Verify that the given address exists, report and skip over if not */
 	if ((host_end = gethostbyname(args[i])) == NULL) {
 	    fprintf(stderr, "[Server]: Failed to locate the server at %s:%s\n",
@@ -363,7 +368,7 @@ static void neighbor_flood_channel(char *channel, char *sender_ip) {
  * subscribed channels. Done every interval specified by 'REFRESH_RATE' (in minutes)
  * to guard against network errors.
  */
-UNUSED static void neighbor_flood_all(void) {
+UNUSED static void neighbor_flood_all(void) {//FIXME
     
     char **chs;
     int i;
@@ -981,12 +986,11 @@ static void server_logout_request(char *client_ip) {
 }
 
 /**
- * Local method to verify the specified user is inactive. Calculates the
- * number of minutes since the server received a packet from the specified
- * user. If the time difference is greater than the server's refresh rate,
- * the user is deemed inactive. Returns 1 if considered inactive, 0 if active.
+ * Checks the specified clock minute and determines whether the client/server
+ * is inactive. If the clock minute is past the refresh rate, then the client or
+ * server is deemed inactive. Return 1 if inactive, 0 if not.
  */
-static int user_inactive(User *user) {
+static int is_inactive(short last_min) {
 
     struct tm *timestamp;
     time_t timer;
@@ -996,10 +1000,10 @@ static int user_inactive(User *user) {
     time(&timer);
     timestamp = localtime(&timer);
     /* Calculate the number of minutes the client last sent a packet */
-    if (timestamp->tm_min >= user->last_min)
-	diff = (timestamp->tm_min - user->last_min);
+    if (timestamp->tm_min >= last_min)
+	diff = (timestamp->tm_min - last_min);
     else
-	diff = ((60 - user->last_min) + timestamp->tm_min);
+	diff = ((60 - last_min) + timestamp->tm_min);
     /* Check and return user inactivity */
     return (diff >= REFRESH_RATE);
 }
@@ -1029,7 +1033,7 @@ static void logout_inactive_users(void) {
 	if (!hm_get(users, user_list[i], (void **)&user))
 	    continue;
 	/* Determines if the user is inactive */
-	if (user_inactive(user)) {
+	if (is_inactive(user->last_min)) {
 	    /* User is deemed inactive, logout & remove the user */
 	    (void)hm_remove(users, user->ip_addr, (void **)&user);
 	    fprintf(stdout, "%s Forcefully logged out inactive user %s\n",
@@ -1204,6 +1208,28 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 }
 
 /**
+ * FIXME
+ */
+static void server_s2s_list_request(const char *packet, char *client_ip) {
+    
+    struct request_s2s_list *list_packet = (struct request_s2s_list *) packet;
+    
+    fprintf(stdout, "%s %s recv S2S LIST %s\n",
+	    server_addr, client_ip, list_packet->req_username);
+}
+
+/**
+ * FIXME
+ */
+static void server_s2s_who_request(const char *packet, char *client_ip) {
+    
+    struct request_s2s_who *who_packet = (struct request_s2s_who *) packet;
+    
+    fprintf(stdout, "%s %s recv S2S WHO %s %s\n",
+	    server_addr, client_ip, who_packet->req_username, who_packet->req_channel);
+}
+
+/**
  * Frees the reserved memory occupied by the specified LinkedList. Used by
  * the LinkedList destructor.
  */
@@ -1372,8 +1398,7 @@ int main(int argc, char *argv[]) {
 
 	/* A minute passes, flood all servers with JOIN requests */
 	if (res == 0) {
-	    //FIXME 
-	    //neighbor_flood_all();
+	    //neighbor_flood_all();////FIXME
 	    mode++;
 	    /* Checks for inactive users */
 	    if (mode >= REFRESH_RATE) {
@@ -1439,9 +1464,14 @@ int main(int argc, char *argv[]) {
 		/* Server-to-server say request, forward to all subscribed servers */
 		server_s2s_say_request(buffer, client_ip);
 		break;
-	    /* FIXME */
-	    /* REQ_S2S_WHO */
-	    /* REQ_S2S_LIST */
+	    case REQ_S2S_WHO:
+		/* Server-to-server who request, get bundle of users on a channel */
+		server_s2s_who_request(buffer, client_ip);
+		break;
+	    case REQ_S2S_LIST:
+		/* Server-to-server list request, get bundle of all existing channels */
+		server_s2s_list_request(buffer, client_ip);
+		break;
 	    default:
 		/* Do nothing, likey a bogus packet */
 		break;
