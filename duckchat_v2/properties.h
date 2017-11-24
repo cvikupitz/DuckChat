@@ -30,6 +30,10 @@
 /* Should be kept at 2-5 minutes */
 #define REFRESH_RATE 2
 
+/* Size of the server's array for caching IDs of received S2S packets */
+/* The server will cache this many IDs before replacing older ones */
+#define MSGQ_SIZE 45
+
 /* The name of the application's default channel */
 /* Upon login, every client will send a join request for this channel */
 /* The server will also never remove this channel, even when its empty */
@@ -37,3 +41,4 @@
 
 
 #endif	/* __PROPERTIES_H_ */
+

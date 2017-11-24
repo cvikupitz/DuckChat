@@ -1,7 +1,7 @@
 /**
  * server.c (version 2.0)
  * Author: Cole Vikupitz
- * Last Modified: 11/23/2017
+ * Last Modified: 11/25/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -41,19 +41,7 @@
 #include "duckchat.h"
 #include "hashmap.h"
 #include "linkedlist.h"
-
-/* Suppress compiler warnings for unused parameters */
-#define UNUSED __attribute__((unused))
-/* Maximum buffer size for messages and packets */
-#define BUFF_SIZE 80000
-/* Maximum size of list of message IDs */
-#define MSGQ_SIZE 45
-/* The default channel for the user to join upon logging in */
-/* This channel will also never be removed, even when empty */
-#define DEFAULT_CHANNEL "Common"
-/* Refresh rate (in minutes) for server to refresh user(s) and server(s) */
-/* Should be kept at 2 minutes or greater */
-#define REFRESH_RATE 2
+#include "properties.h"
 
 
 /* String for displaying this server's full address */
