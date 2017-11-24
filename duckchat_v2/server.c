@@ -359,6 +359,39 @@ static void neighbor_flood_channel(char *channel, char *sender_ip) {
 }
 
 /**
+ * FIXME
+ */
+UNUSED static void neighbor_flood_all(void) {
+    
+    char **chs;
+    int i;
+    long j, len;
+    struct request_s2s_join join_packet;
+
+    if ((chs = hm_keyArray(channels, &len)) == NULL) {
+	if (!hm_isEmpty(channels))
+	    fprintf(stdout, "%s Failed to flood all neighbors, malloc() error.\n",
+		    server_addr);
+	return;
+    }
+
+    memset(&join_packet, 0, sizeof(join_packet));
+    join_packet.req_type = REQ_S2S_JOIN;
+
+    for (j = 0L; j < len; j++) {
+	strncpy(join_packet.req_channel, chs[j], (CHANNEL_MAX - 1));
+	for (i = 0; i < server_n; i++) {
+	    if (neighbors[i] != NULL) {
+		sendto(socket_fd, &join_packet, sizeof(join_packet), 0,
+		    (struct sockaddr *)neighbors[i]->addr, sizeof(*neighbors[i]->addr));
+		fprintf(stdout, "%s %s send S2S JOIN %s\n",
+		    server_addr, neighbors[i]->ip_addr, chs[j]);
+	    }
+	}
+    }
+}
+
+/**
  * Adds the specified channel into the neighboring server's subscription list
  * by allocating memory for space in the hashmap of channels, and creates a
  * linked list to hold the subscribed servers. Also adds all neighboring servers
@@ -996,6 +1029,7 @@ static void server_s2s_join_request(const char *packet, char *client_ip) {
     /* Get neighboring sender */
     if ((sender = get_server(client_ip)) == NULL)
 	return;
+
     /* If server is already subscribed, request dies here */
     if (hm_get(server_channels, join_packet->req_channel, (void **)&servers)) {
 	for (i = 0L; i < ll_size(servers); i++) {
@@ -1063,8 +1097,10 @@ static void server_s2s_leave_request(const char *packet, char *client_ip) {
  */
 static void server_s2s_say_request(const char *packet, char *client_ip) {
 
-    Server *sender;
+    Server *server, *sender;
     LinkedList *users, *servers;
+    int remove;
+    long i;
     struct request_s2s_leave leave_packet;
     struct request_s2s_say *say_packet = (struct request_s2s_say *) packet;
 
@@ -1079,11 +1115,6 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
     memset(&leave_packet, 0, sizeof(leave_packet));
     leave_packet.req_type = REQ_S2S_LEAVE;
     strncpy(leave_packet.req_channel, say_packet->req_channel, (CHANNEL_MAX - 1));
-
-    /* Broadcast the message to all local users on channel */
-    if (hm_get(channels, say_packet->req_channel, (void **)&users))
-	(void)broadcast_message(users,
-	    say_packet->req_username, say_packet->req_channel, say_packet->req_text);
 
     /* Log the received packet */
     fprintf(stdout, "%s %s recv S2S SAY %s %s \"%s\"\n", server_addr, client_ip,
@@ -1101,11 +1132,41 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
     }
     queue_id(say_packet->id);	/* Add the packet to the ID queue */
 
-    /* FIXME */
-    /* CHECK FOR LEAF & # OF LISTENERS, RESPOND W LEAVE */
-    /* FORWARD TO REST OF LISTENING SERVERS */
+    /* Broadcast the message to all local users on channel */
+    if (hm_get(channels, say_packet->req_channel, (void **)&users))
+	(void)broadcast_message(users,
+	    say_packet->req_username, say_packet->req_channel, say_packet->req_text);
 
-    
+    /* FIXME */
+    remove = 0;
+    if (hm_containsKey(channels, say_packet->req_channel)) {
+	if ((ll_size(servers) < 2L) && ll_isEmpty(users))
+	    remove = 1;
+    } else {
+	if (ll_size(servers) < 2L)
+	    remove = 1;
+    }
+
+    //fprintf(stdout, "%s SERVERS:[%ld], USERS:[%ld]", server_addr, ll_size(servers), ll_size());
+
+    if (remove) {
+	(void)hm_remove(server_channels, say_packet->req_channel, (void **)&servers);
+	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
+		(struct sockaddr *)sender->addr, sizeof(*sender->addr));
+	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
+		server_addr, sender->ip_addr, say_packet->req_channel);
+	return;
+    }
+
+    for (i = 0L; i < ll_size(servers); i++) {
+	(void)ll_get(servers, i, (void **)&server);
+	if (!strcmp(server->ip_addr, sender->ip_addr))
+	    continue;
+	sendto(socket_fd, say_packet, sizeof(*say_packet), 0,
+		(struct sockaddr *)server->addr, sizeof(*server->addr));
+	fprintf(stdout, "%s %s send S2S SAY %s\n",
+		server_addr, server->ip_addr, say_packet->req_channel);
+    }
 }
 
 /**
