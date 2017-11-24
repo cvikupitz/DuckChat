@@ -359,31 +359,38 @@ static void neighbor_flood_channel(char *channel, char *sender_ip) {
 }
 
 /**
- * FIXME
+ * Floods all neighboring servers with S2S Join requests for all of this server's
+ * subscribed channels. Done every interval specified by 'REFRESH_RATE' (in minutes)
+ * to guard against network errors.
  */
 UNUSED static void neighbor_flood_all(void) {
     
     char **chs;
     int i;
-    long j, len;
+    long j, len = 0L;
     struct request_s2s_join join_packet;
 
+    /* Get an array of the server's subscribed channels */
     if ((chs = hm_keyArray(channels, &len)) == NULL) {
-	if (!hm_isEmpty(channels))
+	if (!hm_isEmpty(channels))  /* malloc() failure, print error and return */
 	    fprintf(stdout, "%s Failed to flood all neighbors, malloc() error.\n",
 		    server_addr);
 	return;
     }
 
+    /* Initialize and set join request members */
     memset(&join_packet, 0, sizeof(join_packet));
     join_packet.req_type = REQ_S2S_JOIN;
 
+    /* Send the request to each neighbor, for each listening channel */
     for (j = 0L; j < len; j++) {
 	strncpy(join_packet.req_channel, chs[j], (CHANNEL_MAX - 1));
 	for (i = 0; i < server_n; i++) {
 	    if (neighbors[i] != NULL) {
+		/* Send the request to the neighbor */
 		sendto(socket_fd, &join_packet, sizeof(join_packet), 0,
 		    (struct sockaddr *)neighbors[i]->addr, sizeof(*neighbors[i]->addr));
+		/* Log the sent packet */
 		fprintf(stdout, "%s %s send S2S JOIN %s\n",
 		    server_addr, neighbors[i]->ip_addr, chs[j]);
 	    }
@@ -425,6 +432,27 @@ static int server_join_channel(char *channel) {
 
     return 1;	/* All addition(s) were successful */
 }
+
+/////FIXME
+UNUSED static void print(void) {
+    
+    LinkedList *ll;
+    Server *s;
+    long i, j, len;
+    char **chs = hm_keyArray(server_channels, &len);
+
+    for (i = 0L; i < len; i++) {
+	fprintf(stdout, "%s -> %s:", server_addr, chs[i]);
+	hm_get(server_channels, chs[i], (void **)&ll);
+
+	for (j = 0; j < ll_size(ll); j++) {
+	    ll_get(ll, j, (void **)&s);
+	    fprintf(stdout, " %s", s->ip_addr);
+	}
+	puts("");
+    }
+}
+//// FIXME
 
 /**
  * Sends a packet containing the error message 'msg' to the client with the specified
@@ -1030,6 +1058,10 @@ static void server_s2s_join_request(const char *packet, char *client_ip) {
     if ((sender = get_server(client_ip)) == NULL)
 	return;
 
+    /* Log the received packet */
+    fprintf(stdout, "%s %s recv S2S JOIN %s\n",
+	    server_addr, client_ip, join_packet->req_channel);
+
     /* If server is already subscribed, request dies here */
     if (hm_get(server_channels, join_packet->req_channel, (void **)&servers)) {
 	for (i = 0L; i < ll_size(servers); i++) {
@@ -1042,10 +1074,6 @@ static void server_s2s_join_request(const char *packet, char *client_ip) {
 	(void)ll_add(servers, sender);
 	return;
     }
-
-    /* Log the received packet */
-    fprintf(stdout, "%s %s recv S2S JOIN %s\n",
-	    server_addr, client_ip, join_packet->req_channel);
 
     /* Adds the channel, and all neighboring servers to subscription map */
     if (!server_join_channel(join_packet->req_channel)) {
@@ -1116,10 +1144,6 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
     leave_packet.req_type = REQ_S2S_LEAVE;
     strncpy(leave_packet.req_channel, say_packet->req_channel, (CHANNEL_MAX - 1));
 
-    /* Log the received packet */
-    fprintf(stdout, "%s %s recv S2S SAY %s %s \"%s\"\n", server_addr, client_ip,
-	    say_packet->req_username, say_packet->req_channel, say_packet->req_text);
-
     /* Check the packet ID for uniqueness */
     if (!id_unique(say_packet->id)) {
 	/* Reply to sender with S2S if duplicate, loop detected */
@@ -1132,12 +1156,17 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
     }
     queue_id(say_packet->id);	/* Add the packet to the ID queue */
 
+    /* Log the received packet */
+    fprintf(stdout, "%s %s recv S2S SAY %s %s \"%s\"\n", server_addr, client_ip,
+	    say_packet->req_username, say_packet->req_channel, say_packet->req_text);
+
     /* Broadcast the message to all local users on channel */
     if (hm_get(channels, say_packet->req_channel, (void **)&users))
 	(void)broadcast_message(users,
 	    say_packet->req_username, say_packet->req_channel, say_packet->req_text);
 
-    /* FIXME */
+    /* Check to see if the server can be removed from channel sub-tree */
+    /* Server must be a leaf in the tree and must have no listening clients */
     remove = 0;
     if (hm_containsKey(channels, say_packet->req_channel)) {
 	if ((ll_size(servers) < 2L) && ll_isEmpty(users))
@@ -1147,25 +1176,30 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 	    remove = 1;
     }
 
-    //fprintf(stdout, "%s SERVERS:[%ld], USERS:[%ld]", server_addr, ll_size(servers), ll_size());
-
+    /* Server is a leaf, remove it from sub-tree */
     if (remove) {
 	(void)hm_remove(server_channels, say_packet->req_channel, (void **)&servers);
+	/* Reply to sender with S2S leave request */
 	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
 		(struct sockaddr *)sender->addr, sizeof(*sender->addr));
+	/* Log the sent packet */
 	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
 		server_addr, sender->ip_addr, say_packet->req_channel);
 	return;
     }
 
+    /* If server not a leaf, forward S2S request to all subscribed neighbors */
     for (i = 0L; i < ll_size(servers); i++) {
 	(void)ll_get(servers, i, (void **)&server);
 	if (!strcmp(server->ip_addr, sender->ip_addr))
-	    continue;
+	    continue;	/* Skip the server that sent the request */
+	/* Forward the packet to the subscribed neighbor */
 	sendto(socket_fd, say_packet, sizeof(*say_packet), 0,
 		(struct sockaddr *)server->addr, sizeof(*server->addr));
-	fprintf(stdout, "%s %s send S2S SAY %s\n",
-		server_addr, server->ip_addr, say_packet->req_channel);
+	/* Log the sent packet */
+	fprintf(stdout, "%s %s send S2S SAY %s %s \"%s\"\n",
+		server_addr, server->ip_addr, say_packet->req_username,
+		say_packet->req_channel, say_packet->req_text);
     }
 }
 
@@ -1275,8 +1309,11 @@ int main(int argc, char *argv[]) {
 	print_error("Server socket must be in the range [0, 65535].");
 
     /* Obtain the address of the specified host */
-    if ((host_end = gethostbyname(argv[1])) == NULL)
-	print_error("Failed to locate the host.");
+    if ((host_end = gethostbyname(argv[1])) == NULL) {
+	sprintf(buffer, "Failed to locate the host at %s:%s",
+		argv[1], argv[2]);
+	print_error(buffer);
+    }
 
     /* Create server address struct, set internet family, address, & port number */
     memset((char *)&server, 0, sizeof(server));
@@ -1287,8 +1324,11 @@ int main(int argc, char *argv[]) {
     /* Create the UDP socket, bind name to socket */
     if ((socket_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	print_error("Failed to create a socket for the server.");
-    if (bind(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
-	print_error("Failed to assign the requested address.");
+    if (bind(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0) {
+	sprintf(buffer, "Failed to bind to the address %s:%s",
+		argv[1], argv[2]);
+	print_error(buffer);
+    }
 
     /* Create & initialize data structures for server to use */
     if ((users = hm_create(100L, 0.0f)) == NULL)
@@ -1332,7 +1372,8 @@ int main(int argc, char *argv[]) {
 
 	/* A minute passes, flood all servers with JOIN requests */
 	if (res == 0) {
-	    //FIXME neighbor_flood_all();
+	    //FIXME 
+	    //neighbor_flood_all();
 	    mode++;
 	    /* Checks for inactive users */
 	    if (mode >= REFRESH_RATE) {
