@@ -32,7 +32,7 @@
 
 /* Size of the server's array for caching IDs of received S2S packets */
 /* The server will cache this many IDs before replacing older ones */
-#define MSGQ_SIZE 45
+#define MSGQ_SIZE 40
 
 /* The name of the application's default channel */
 /* Upon login, every client will send a join request for this channel */

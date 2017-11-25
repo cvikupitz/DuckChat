@@ -23,11 +23,11 @@ server: server.o hashmap.o linkedlist.o
 	$(CC) $(CFLAGS) server.o hashmap.o linkedlist.o -o server
 
 tarfile:
-	mkdir DuckChat/
-	cp $(FILES) DuckChat/
-	tar -zcvf DuckChat_v2.tgz DuckChat/
+	mkdir DuckChat_v2/
+	cp $(FILES) DuckChat_v2/
+	tar -zcvf DuckChat_v2.tgz DuckChat_v2/
 	tar -ztvf DuckChat_v2.tgz
-	rm -fr DuckChat/
+	rm -fr DuckChat_v2/
 
 help:
 	@echo "Possible targets for make:"
