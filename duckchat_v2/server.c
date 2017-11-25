@@ -1,7 +1,7 @@
 /**
  * server.c (v2.0)
  * Author: Cole Vikupitz
- * Last Modified: 11/25/2017
+ * Last Modified: 11/26/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -232,8 +232,7 @@ static Server *get_server(char *ip) {
  * Creates an array of server structs for all the neighboring servers. Parses
  * the command line arguments given, and creates a server struct for each
  * neighboring server. Will also verify that the address(s) given exist, and
- * reports an error if not, but does not halt the program. Returns 1 if successful,
- * 0 if not (malloc() error(s)).
+ * reports an error if not. Returns 1 if successful, 0 if not (malloc() error(s)).
  */
 static int malloc_neighbors(char *args[], int n) {
     
@@ -250,14 +249,16 @@ static int malloc_neighbors(char *args[], int n) {
     server_n = (n / 2);
     if ((neighbors = (Server **)malloc(sizeof(Server *) * server_n)) == NULL)
 	return 0;
+    /* Initialize the pointers */
+    for (i = 0; i < server_n; i++)
+	neighbors[i] = NULL;
 
     for (i = 0; i < n; i += 2) {
-	/* Verify that the given address exists, report and skip over if not */
+	/* Verify that the given address exists, report error if not */
 	if ((host_end = gethostbyname(args[i])) == NULL) {
 	    fprintf(stderr, "[Server]: Failed to locate the server at %s:%s\n",
 		    args[i], args[i + 1]);
-	    neighbors[i / 2] = NULL;
-	    continue;
+	    exit(0);
 	}
 
 	/* Create server address struct, set internet family, address, & port number */
@@ -324,6 +325,26 @@ static int id_unique(long id) {
 }
 
 /**
+ * FIXME
+ */
+static int server_is_leaf(char *channel) {
+    
+    LinkedList *servers, *users;
+    int res = 0;
+
+    (void)hm_get(server_channels, channel, (void **)&servers);
+    if (hm_get(channels, channel, (void **)&users)) {
+	if (ll_size(servers) < 2L && ll_isEmpty(users))
+	    res = 1;
+    } else {
+	if (ll_size(servers) < 2L)
+	    res = 1;
+    }
+
+    return res;
+}    
+
+/**
  * Floods all the neighboring servers with an S2S JOIN request given the specified
  * channel name and the sender's IP address. The sender is skipped over; no packet
  * needs to be sent back to the sender.
@@ -356,7 +377,7 @@ static void neighbor_flood_channel(char *channel, char *sender_ip) {
  * subscribed channels. Done every interval specified by 'REFRESH_RATE' (in minutes)
  * to guard against network errors.
  */
-UNUSED static void neighbor_flood_all(void) {//FIXME
+static void neighbor_flood_all(void) {
     
     char **chs;
     int i;
@@ -364,8 +385,8 @@ UNUSED static void neighbor_flood_all(void) {//FIXME
     struct request_s2s_join join_packet;
 
     /* Get an array of the server's subscribed channels */
-    if ((chs = hm_keyArray(channels, &len)) == NULL) {
-	if (!hm_isEmpty(channels))  /* malloc() failure, print error and return */
+    if ((chs = hm_keyArray(server_channels, &len)) == NULL) {
+	if (!hm_isEmpty(server_channels))  /* malloc() failure, print error and return */
 	    fprintf(stdout, "%s Failed to flood all neighbors, malloc() error.\n",
 		    server_addr);
 	return;
@@ -611,11 +632,13 @@ static void server_join_request(const char *packet, char *client_ip) {
 static void server_leave_request(const char *packet, char *client_ip) {
 
     User *user, *tmp;
-    LinkedList *user_list;
+    Server *server;
+    LinkedList *user_list, *servers;
     int removed = 0;
     long i;
     char *ch;
     char channel[CHANNEL_MAX], buffer[256];
+    struct request_s2s_leave s2s_leave_packet;
     struct request_leave *leave_packet = (struct request_leave *) packet;
 
     /* Assert that the user requesting is currently logged in, do nothing if not */
@@ -1119,7 +1142,6 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 
     Server *server, *sender;
     LinkedList *users, *servers;
-    int remove;
     long i;
     struct request_s2s_leave leave_packet;
     struct request_s2s_say *say_packet = (struct request_s2s_say *) packet;
@@ -1157,19 +1179,8 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 	(void)broadcast_message(users,
 	    say_packet->req_username, say_packet->req_channel, say_packet->req_text);
 
-    /* Check to see if the server can be removed from channel sub-tree */
-    /* Server must be a leaf in the tree and must have no listening clients */
-    remove = 0;
-    if (hm_containsKey(channels, say_packet->req_channel)) {
-	if ((ll_size(servers) < 2L) && ll_isEmpty(users))
-	    remove = 1;
-    } else {
-	if (ll_size(servers) < 2L)
-	    remove = 1;
-    }
-
     /* Server is a leaf, remove it from sub-tree */
-    if (remove) {
+    if (server_is_leaf(say_packet->req_channel)) {
 	(void)hm_remove(server_channels, say_packet->req_channel, (void **)&servers);
 	/* Reply to sender with S2S leave request */
 	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
