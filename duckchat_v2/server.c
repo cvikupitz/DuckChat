@@ -82,6 +82,15 @@ typedef struct {
     short last_min;		/* Clock minute of last received S2S Join request */
 } Server;
 
+/**
+ * A structure to hold a server pointer and the clock minute of when the last
+ * S2S Join was received (used for soft state join tracking).
+ */
+typedef struct {
+    Server *server;
+    short last_min;
+} ServerS2S;
+
 /* Array of all the neighboring servers */
 static Server **neighbors = NULL;
 static int server_n = 0;
@@ -213,6 +222,49 @@ static void free_server(Server *server) {
 	free(server->ip_addr);
 	free(server);
     }
+}
+
+/**
+ * FIXME
+ */
+UNUSED static ServerS2S *malloc_server_s2s(Server *server) {
+    
+    struct tm *timestamp;
+    time_t timer;
+    ServerS2S *server_s2s;
+
+    if ((server_s2s = (ServerS2S *)malloc(sizeof(ServerS2S))) == NULL) {
+	server_s2s->server = server;
+	time(&timer);
+	timestamp = localtime(&timer);
+	server_s2s->last_min = timestamp->tm_min;
+    }
+
+    return server_s2s;
+}
+
+/**
+ * FIXME
+ */
+UNUSED static void update_server_s2s(ServerS2S *server_s2s) {
+    
+    struct tm *timestamp;
+    time_t timer;
+
+    if (server_s2s != NULL) {
+	time(&timer);
+	timestamp = localtime(&timer);
+	server_s2s->last_min = timestamp->tm_min;
+    }
+}
+
+/**
+ * FIXME
+ */
+UNUSED static void free_server_s2s(ServerS2S *server_s2s) {
+    
+    if (server_s2s != NULL)
+	free(server_s2s);
 }
 
 /**
@@ -382,7 +434,7 @@ static void neighbor_flood_channel(char *channel, char *sender_ip) {
  * is subscribe to to every one of its neighboring servers. Invoked every so often to
  * guard against network failures.
  */
-static void refresh_s2s_joins(void) {
+UNUSED static void refresh_s2s_joins(void) {
     
     char **chs;
     long i, j, len = 0L;
@@ -450,27 +502,6 @@ static int server_join_channel(char *channel) {
 
     return 1;	/* All addition(s) were successful */
 }
-
-/////FIXME
-UNUSED static void print(void) {
-    
-    LinkedList *ll;
-    Server *s;
-    long i, j, len;
-    char **chs = hm_keyArray(server_channels, &len);
-
-    for (i = 0L; i < len; i++) {
-	fprintf(stdout, "%s -> %s:", server_addr, chs[i]);
-	hm_get(server_channels, chs[i], (void **)&ll);
-
-	for (j = 0; j < ll_size(ll); j++) {
-	    ll_get(ll, j, (void **)&s);
-	    fprintf(stdout, " %s", s->ip_addr);
-	}
-	puts("");
-    }
-}
-//// FIXME
 
 /**
  * Sends a packet containing the error message 'msg' to the client with the specified
@@ -827,7 +858,7 @@ static void server_list_request(char *client_ip) {
     size = sizeof(struct text_list) + (sizeof(struct channel_info) * len);
     /* Allocate memory for the packet using calculated size */
     /* Send error back to user if failed (malloc() error), log the error */
-    if ((list_packet = malloc(size)) == NULL) {
+    if ((list_packet = (struct text_list *)malloc(size)) == NULL) {
 	server_send_error(user->addr, "Failed to list the channels");
 	free(ch_list);
 	return;
@@ -894,7 +925,7 @@ static void server_who_request(const char *packet, char *client_ip) {
     size = sizeof(struct text_who) + (sizeof(struct user_info) * len);
     /* Allocate memory for the packet using calculated size */
     /* Send error back to user if failed (malloc() error), log the error */
-    if ((send_packet = malloc(size)) == NULL) {
+    if ((send_packet = (struct text_who *)malloc(size)) == NULL) {
 	sprintf(buffer, "Failed to list users on %s", who_packet->req_channel);
 	server_send_error(user->addr, buffer);
 	free(user_list);
