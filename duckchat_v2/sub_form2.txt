@@ -35,4 +35,3 @@ Answer the questions by selecting one of the given options. You may add addition
 
 - Does the client have all the functionality from program #1? yes
  
-I also got the server-to-server list request working.

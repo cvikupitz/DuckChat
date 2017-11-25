@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 11/25/2017
+ * Last Modified: 11/29/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -171,6 +171,40 @@ static void server_send_error(struct sockaddr_in *addr, const char *msg) {
     sprintf(buffer, "*** Sent error message to %s:%d -> \"%s\"",
 		inet_ntoa(addr->sin_addr), ntohs(addr->sin_port), msg);
     print_log_message(buffer);
+}
+
+/**
+ * Server receives an authentication packet; the server responds to the client telling them
+ * if the username is currently occupied or not.
+ */
+static void server_authenticate_request(const char *packet, struct sockaddr_in *client) {
+
+    User *user;
+    char **user_ips;
+    int res = 1;
+    long i, len;
+    struct text_verify respond_packet;
+    struct request_verify *verify_packet = (struct request_verify *) packet;
+
+    if ((user_ips = hm_keyArray(users, &len)) == NULL)
+	return;
+    
+    for (i = 0L; i < len; i++) {
+	(void)hm_get(users, user_ips[i], (void **)&user);
+	if (!strcmp(verify_packet->req_username, user->username)) {
+	    res = 0;
+	    break;
+	}
+    }
+
+    /* Initialize and set packet members */
+    memset(&respond_packet, 0, sizeof(respond_packet));
+    respond_packet.txt_type = TXT_VERIFY;
+    respond_packet.valid = res;
+    /* Send packet back to client */
+    sendto(socket_fd, &respond_packet, sizeof(respond_packet), 0,
+		(struct sockaddr *)client, sizeof(*client));
+    free(user_ips);
 }
 
 /**
@@ -907,6 +941,10 @@ int main(int argc, char *argv[]) {
 
 	/* Examine the packet type received */
 	switch (packet_type->txt_type) {
+	    case REQ_VERIFY:
+		/* A connecting client requests a username authentication */
+		server_authenticate_request(buffer, &client);
+		break;
 	    case REQ_LOGIN:
 		/* A client requests to login to the server */
 		server_login_request(buffer, client_ip, &client);

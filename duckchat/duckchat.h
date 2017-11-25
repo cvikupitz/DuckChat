@@ -22,20 +22,22 @@ typedef int request_t;
 typedef int text_t;
 
 /* Define codes for request types.  These are the messages sent to the server. */
-#define REQ_LOGIN 0
-#define REQ_LOGOUT 1
-#define REQ_JOIN 2
-#define REQ_LEAVE 3
-#define REQ_SAY 4
-#define REQ_LIST 5
-#define REQ_WHO 6
-#define REQ_KEEP_ALIVE 7 /* Only needed by graduate students */
+#define REQ_VERIFY 0
+#define REQ_LOGIN 1
+#define REQ_LOGOUT 2
+#define REQ_JOIN 3
+#define REQ_LEAVE 4
+#define REQ_SAY 5
+#define REQ_LIST 6
+#define REQ_WHO 7
+#define REQ_KEEP_ALIVE 8 /* Only needed by graduate students */
 
 /* Define codes for text types.  These are the messages sent to the client. */
-#define TXT_SAY 0
-#define TXT_LIST 1
-#define TXT_WHO 2
-#define TXT_ERROR 3
+#define TXT_VERIFY 0
+#define TXT_SAY 1
+#define TXT_LIST 2
+#define TXT_WHO 3
+#define TXT_ERROR 4
 
 /* This structure is used for a generic request type, to the server. */
 struct request {
@@ -45,6 +47,11 @@ struct request {
 /* Once we've looked at req_type, we then cast the pointer to one of
  * the types below to look deeper into the structure.  Each of these
  * corresponds with one of the REQ_ codes above. */
+
+struct request_verify {
+	request_t req_type; /* = REQ_VERIFY */
+	char req_username[USERNAME_MAX];
+} packed;
 
 struct request_login {
         request_t req_type; /* = REQ_LOGIN */
@@ -92,6 +99,11 @@ struct text {
 /* Once we've looked at txt_type, we then cast the pointer to one of
  * the types below to look deeper into the structure.  Each of these
  * corresponds with one of the TXT_ codes above. */
+
+struct text_verify {
+	text_t txt_type;    /* = TXT_VERIFY */
+	int valid;
+} packed;
 
 struct text_say {
         text_t txt_type; /* = TXT_SAY */
