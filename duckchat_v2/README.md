@@ -10,13 +10,27 @@ You may also type 'make client' and 'make server' to compile the client and serv
 You can also type 'make help' for more options.
 
 ## Usage Instructions
-To use the application, first run the server, then run as many clients as you want.
+To use the application, first run the server(s), then run as many clients as you want.
 
 Usage to run the server is as follows:
 
-`$ ./server domain_name port_number`
+`$ ./server domain_name port_number [domain_name port_number]`
 
-where the arguments are the host address to bind to, and the port number.
+where the first two arguments are the host address to bind to, and the port number. The following argument
+pair(s) are optional, and are the host address and port numbers that the neighboring server(s) connect to.
+You may pass in as many pairs as you need.
+
+For example, to create a server topology like the one shown below:
+
+    4000 ----- 4001 ----- 4002
+
+You must run the following commands:
+
+`
+$ ./server localhost 4000 localhost 4001
+$ ./server localhost 4001 localhost 4000 localhost 4002
+$ ./server localhost 4002 localhost 4001
+`
 
 Usage to run the client is as follows:
 
@@ -26,8 +40,8 @@ where the arguments are the hostname the server is running on, the port number t
 on, and the client's username.
 
 ## Using the Server
-The server will run on its own and requires no user input.
-To end the server session, press CTRL+C or send a SIGINT to the running process.
+The server(s) will run on their own and requires no user input.
+To end a server session, press CTRL+C or send a SIGINT to the running process.
 
 ## Using the Client
 To send a message, simply type the message and press enter. The message you send will be sent to all other
