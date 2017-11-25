@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 11/29/2017
+ * Last Modified: 11/30/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -182,12 +182,13 @@ static void server_authenticate_request(const char *packet, struct sockaddr_in *
     User *user;
     char **user_ips;
     int res = 1;
-    long i, len;
+    long i, len = 0L;
     struct text_verify respond_packet;
     struct request_verify *verify_packet = (struct request_verify *) packet;
 
     if ((user_ips = hm_keyArray(users, &len)) == NULL)
-	return;
+	if (!hm_isEmpty(users))
+	    return;
     
     for (i = 0L; i < len; i++) {
 	(void)hm_get(users, user_ips[i], (void **)&user);

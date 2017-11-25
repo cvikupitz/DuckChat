@@ -30,7 +30,7 @@ typedef int text_t;
 #define REQ_SAY 5
 #define REQ_LIST 6
 #define REQ_WHO 7
-#define REQ_KEEP_ALIVE 8 /* Only needed by graduate students */
+#define REQ_KEEP_ALIVE 8
 
 /* Define codes for text types.  These are the messages sent to the client. */
 #define TXT_VERIFY 0

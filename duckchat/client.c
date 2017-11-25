@@ -1,7 +1,7 @@
 /**
  * client.c
  * Author: Cole Vikupitz
- * Last Modified: 11/29/2017
+ * Last Modified: 11/30/2017
  *
  * Client side of a chat application using the DuckChat protocol. The client sends
  * and receives packets from a server using this protocol and handles each of the
@@ -89,13 +89,6 @@ static void leave_channel(const char *channel) {
 	    return;
 	}
     }
-}
-
-/**
- * FIXME
- */
-static void authenticate_client() {
-    
 }
 
 /**
@@ -388,6 +381,52 @@ static void print_error(const char *msg) {
 }
 
 /**
+ * FIXME
+ */
+static void authenticate_client(void) {
+    
+    struct sockaddr from_addr;
+    struct timeval timeout;
+    socklen_t addr_len = sizeof(server);
+    fd_set receiver;
+    int res;
+    char in_buff[BUFF_SIZE];
+    struct request_verify verify_packet;
+
+    memset(&timeout, 0, sizeof(timeout));
+    timeout.tv_sec = TIMEOUT_RATE;
+
+    memset(&verify_packet, 0, sizeof(verify_packet));
+    verify_packet.req_type = REQ_VERIFY;
+    strncpy(verify_packet.req_username, username, (USERNAME_MAX - 1));
+    sendto(socket_fd, &verify_packet, sizeof(verify_packet), 0,
+	    (struct sockaddr *)&server, sizeof(server));
+
+    FD_ZERO(&receiver);
+    FD_SET(socket_fd, &receiver);
+    res = select((socket_fd + 1), &receiver, NULL, NULL, &timeout);
+
+    if (res == 0) {
+	print_error("Server timed out.");
+    } else if (res > 0) {
+	if (FD_ISSET(socket_fd, &receiver)) {
+	    memset(in_buff, 0, sizeof(in_buff));
+	    if (recvfrom(socket_fd, in_buff, sizeof(in_buff), 0,
+		    &from_addr, &addr_len) < 0)
+		print_error("Server failed to authenticate the user.");
+	    struct text *packet_type = (struct text *) in_buff;
+
+	    if (packet_type->txt_type != REQ_VERIFY)
+		print_error("Server failed to authenticate the user.");
+
+	    struct text_verify *server_reply = (struct text_verify *) in_buff;
+	    if (!server_reply->valid)
+		print_error("The specified username is already in use.");
+	}
+    }
+}
+
+/**
  * Prints the prompt message, prompting the user for input.
  */
 static void prompt(void) {
@@ -473,14 +512,15 @@ int main(int argc, char *argv[]) {
 	strcpy(subscribed[i], "");
 
     /* Authenticate the user, ensure the username is not currently taken */
-    if (!authenticate_client())
-	print_error("The specified username is already in use.");
+    authenticate_client();
+
     /* Send a packet to the server to log user in */
     memset(&login_packet, 0, sizeof(login_packet));
     login_packet.req_type = REQ_LOGIN;
     strncpy(login_packet.req_username, username, USERNAME_MAX);
     sendto(socket_fd, &login_packet, sizeof(login_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
+
     /* Send a packet to the server to join the default channel */
     memset(&join_packet, 0, sizeof(join_packet));
     join_packet.req_type = REQ_JOIN;

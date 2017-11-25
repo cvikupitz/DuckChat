@@ -19,6 +19,11 @@
 /* Maximum number of channels a client may be subscribed to at once */
 #define MAX_CHANNELS 10
 
+/* The timeout rate (in seconds) for the client to wait for verification from server */
+/* Clients will send a verification packet before login to server for username uniqueness */
+/* The client will wait this long for a server response, and exit if no response given */
+#define TIMEOUT_RATE 5
+
 /* The rate (in seconds) for the client to send a keep alive request */
 /* Clients will send a keep alive request to prevent server from logging them out */
 /* Should be kept at 45-60 seconds */
