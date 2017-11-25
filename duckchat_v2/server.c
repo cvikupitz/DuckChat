@@ -1,7 +1,7 @@
 /**
  * server.c (v2.0)
  * Author: Cole Vikupitz
- * Last Modified: 11/29/2017
+ * Last Modified: 11/30/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the

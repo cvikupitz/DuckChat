@@ -1,7 +1,7 @@
 /**
  * client.c
  * Author: Cole Vikupitz
- * Last Modified: 11/25/2017
+ * Last Modified: 11/30/2017
  *
  * Client side of a chat application using the DuckChat protocol. The client sends
  * and receives packets from a server using this protocol and handles each of the
