@@ -32,12 +32,10 @@ typedef int text_t;
 #define REQ_KEEP_ALIVE 7 /* Only needed by graduate students */
 
 /* Define codes for new server-to-server protocol(s) */
-/* S2S Join, S2S Leave, S2S Say, S2S Who, & S2S List */
+/* S2S Join, S2S Leave, S2S Say */
 #define REQ_S2S_JOIN 8
 #define REQ_S2S_LEAVE 9
 #define REQ_S2S_SAY 10
-#define REQ_S2S_WHO 11
-#define REQ_S2S_LIST 12
 
 /* Define codes for text types.  These are the messages sent to the client. */
 #define TXT_SAY 0
@@ -112,38 +110,6 @@ struct request_s2s_say {
 	char req_channel[CHANNEL_MAX];
 	char req_text[SAY_MAX];
 } packed;
-
-/* FIXME */
-struct channel_names {
-        char ch_channel[CHANNEL_MAX];
-} packed;
-
-struct ip_address {
-	char ip_addr[128];
-} packed;
-
-struct request_s2s_who {
-	request_t req_type; /* = REQ_S2S_WHO */
-	long id;
-	char sender_ip[128];
-	char client_ip[128];
-	int queue_len;
-	struct ip_address ips[0];
-	int nchannels;
-	struct channel_names channels[0];
-} packed;
-
-struct request_s2s_list {
-	request_t req_type; /* = REQ_S2S_LIST */
-	long id;
-	char sender_ip[128];
-	char client_ip[128];
-	int queue_len;
-	struct ip_address ips[0];
-	int nchannels;
-	struct channel_names channels[0];	
-} packed;
-///FIXME
 
 /* This structure is used for a generic text type, to the client. */
 struct text {

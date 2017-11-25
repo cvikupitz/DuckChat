@@ -1184,29 +1184,6 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 }
 
 /**
- * FIXME
- */
-static void server_s2s_who_request(UNUSED const char *packet, UNUSED char *client_ip) {
-    
-    //struct request_s2s_who *who_packet = (struct request_s2s_who *) packet;
-    
-    /*fprintf(stdout, "%s %s recv S2S WHO %s %s\n",
-	    server_addr, client_ip, who_packet->req_username, who_packet->req_channel);*/
-}
-
-/**
- * FIXME
- */
-static void server_s2s_list_request(UNUSED const char *packet, UNUSED char *client_ip) {
-    
-    //struct request_s2s_list *list_packet = (struct request_s2s_list *) packet;
-    
-    /*fprintf(stdout, "%s %s recv S2S LIST %s\n",
-	    server_addr, client_ip, list_packet->req_username);*/
-    
-}
-
-/**
  * Frees the reserved memory occupied by the specified LinkedList. Used by
  * the LinkedList destructor.
  */
@@ -1440,14 +1417,6 @@ int main(int argc, char *argv[]) {
 	    case REQ_S2S_SAY:
 		/* Server-to-server say request, forward to all subscribed servers */
 		server_s2s_say_request(buffer, client_ip);
-		break;
-	    case REQ_S2S_WHO:
-		/* Server-to-server who request, get bundle of users on a channel */
-		server_s2s_who_request(buffer, client_ip);
-		break;
-	    case REQ_S2S_LIST:
-		/* Server-to-server list request, get bundle of all existing channels */
-		server_s2s_list_request(buffer, client_ip);
 		break;
 	    default:
 		/* Do nothing, likey a bogus packet */
