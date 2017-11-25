@@ -410,12 +410,14 @@ static void authenticate_client(void) {
     memset(in_buff, 0, sizeof(in_buff));
     memset(&timeout, 0, sizeof(timeout));
     timeout.tv_sec = TIMEOUT_RATE;
+
     /* Initialize and set verify packet's members */
     memset(&verify_packet, 0, sizeof(verify_packet));
     verify_packet.req_type = REQ_VERIFY;
     strncpy(verify_packet.req_username, username, (USERNAME_MAX - 1));
     sendto(socket_fd, &verify_packet, sizeof(verify_packet), 0,
 	    (struct sockaddr *)&server, sizeof(server));
+
     /* Only watch the second socket stream for input */
     FD_ZERO(&receiver);
     FD_SET(socket_fd, &receiver);
@@ -551,7 +553,7 @@ int main(int argc, char *argv[]) {
     fprintf(stdout, "---------------  Duck Chat  ---------------\n");
     fprintf(stdout, "Connected to %s:%d\n", inet_ntoa(server.sin_addr), ntohs(server.sin_port));
     fprintf(stdout, "Logged in as %s\n", username);
-    fprintf(stdout, "Type '/help' for help, '/exit' to exit.\n");
+    fprintf(stdout, "Type '/help' for help, '/exit' to exit.\n\n");
     prompt();
     /* Set the timeout timer for select() */
     memset(&timeout, 0, sizeof(timeout));

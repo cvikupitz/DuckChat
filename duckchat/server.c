@@ -180,18 +180,20 @@ static void server_send_error(struct sockaddr_in *addr, const char *msg) {
 static void server_authenticate_request(const char *packet, struct sockaddr_in *client) {
 
     User *user;
-    char **user_ips;
+    char **ip_list;
     int res = 1;
     long i, len = 0L;
     struct text_verify respond_packet;
     struct request_verify *verify_packet = (struct request_verify *) packet;
 
-    if ((user_ips = hm_keyArray(users, &len)) == NULL)
+    /* Server failed to allocate memory, do nothing */
+    if ((ip_list = hm_keyArray(users, &len)) == NULL)
 	if (!hm_isEmpty(users))
 	    return;
     
     for (i = 0L; i < len; i++) {
-	(void)hm_get(users, user_ips[i], (void **)&user);
+	/* Check each user, see if the username is taken */
+	(void)hm_get(users, ip_list[i], (void **)&user);
 	if (!strcmp(verify_packet->req_username, user->username)) {
 	    res = 0;
 	    break;
@@ -205,7 +207,7 @@ static void server_authenticate_request(const char *packet, struct sockaddr_in *
     /* Send packet back to client */
     sendto(socket_fd, &respond_packet, sizeof(respond_packet), 0,
 		(struct sockaddr *)client, sizeof(*client));
-    free(user_ips);
+    free(ip_list);  /* Free allocated memory */
 }
 
 /**
@@ -479,6 +481,7 @@ static void server_say_request(const char *packet, char *client_ip) {
 
     /* Initialize the SAY packet to send; set the type, channel, and username */
     memset(&msg_packet, 0, sizeof(msg_packet));
+    msg_packet.txt_type = TXT_SAY;
     strncpy(msg_packet.txt_channel, say_packet->req_channel, (CHANNEL_MAX - 1));
     strncpy(msg_packet.txt_username, user->username, (USERNAME_MAX - 1));
     strncpy(msg_packet.txt_text, say_packet->req_text, (SAY_MAX - 1));

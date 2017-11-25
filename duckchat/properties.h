@@ -1,7 +1,7 @@
 /**
  * properties.h
  * Author: Cole Vikupitz
- * Last Modified: 11/25/2017
+ * Last Modified: 11/30/2017
  *
  * Properties to be used for the DuckChat client/server programs.
  */
