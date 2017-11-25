@@ -454,13 +454,8 @@ int main(int argc, char *argv[]) {
 	print_error("Failed to create a socket for client.");
 
     /* Initialize username string, do not copy more bytes than maximum allowed */
-    /* If the length is too long, notify user, but don't exit */
     /* Max length specified in duckchat.h */
     strncpy(username, argv[3], (USERNAME_MAX - 1));
-    if (strlen(argv[3]) > USERNAME_MAX) {
-	fprintf(stdout, "*** Username length exceeds the length allowed (%d).\n", USERNAME_MAX);
-	fprintf(stdout, "*** Your username will be: %s\n", username);
-    }
 
     /* Subscribe and join the default channel upon login */
     /* For this assignment, the default channel is named 'Common' */
@@ -486,6 +481,8 @@ int main(int argc, char *argv[]) {
     /* Displays the title and prompt */
     i = 0;
     fprintf(stdout, "---------------  Duck Chat  ---------------\n");
+    fprintf(stdout, "Connected to %s:%d\n", inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+    fprintf(stdout, "Logged in as %s\n", username);
     fprintf(stdout, "Type '/help' for help, '/exit' to exit.\n");
     prompt();
     /* Set the timeout timer for select() */

@@ -436,11 +436,10 @@ static void neighbor_flood_channel(char *channel, char *sender_ip) {
  * is subscribe to to every one of its neighboring servers. Invoked every so often to
  * guard against network failures.
  */
-UNUSED static void refresh_s2s_joins(void) {
+static void refresh_s2s_joins(void) {
     
     char **chs;
-    long i, j, len = 0L;
-    struct request_s2s_join join_packet;
+    long i, len = 0L;
 
     /* Get an array of the server's subscribed channels */
     if ((chs = hm_keyArray(server_channels, &len)) == NULL) {
@@ -450,24 +449,10 @@ UNUSED static void refresh_s2s_joins(void) {
 	return;
     }
 
-    /* Initialize and set join request members */
-    memset(&join_packet, 0, sizeof(join_packet));
-    join_packet.req_type = REQ_S2S_JOIN;
-
-    /* Send an S2S jin to all neighbors for each channel */
-    for (i = 0L; i < len; i++) {
-	strncpy(join_packet.req_channel, chs[i], (CHANNEL_MAX - 1));
-	for (j = 0; j < server_n; j++) {
-	    if (neighbors[j] != NULL) {
-		/* Send the S2S join to the neighbor */
-		sendto(socket_fd, &join_packet, sizeof(join_packet), 0,
-			(struct sockaddr *)neighbors[j]->addr, sizeof(*neighbors[j]->addr));
-		/* Log the sent packet */
-		fprintf(stdout, "%s %s send S2S JOIN %s\n",
-			server_addr, neighbors[j]->ip_addr, chs[i]);	
-	    }
-	}
-    }
+    /* Send an S2S join to all neighbors for each channel */
+    for (i = 0L; i < len; i++)
+	neighbor_flood_channel(chs[i], server_addr);
+    free(chs);
 }
 
 /**
@@ -1433,7 +1418,7 @@ int main(int argc, char *argv[]) {
 
 	/* A minute passes, flood all servers with JOIN requests */
 	if (res == 0) {
-	    //refresh_s2s_joins();//FIXME
+	    refresh_s2s_joins();//FIXME
 	    mode++;
 	    /* Checks for inactive users */
 	    if (mode >= REFRESH_RATE) {
