@@ -1,7 +1,7 @@
 /**
  * server.c (v2.0)
  * Author: Cole Vikupitz
- * Last Modified: 11/26/2017
+ * Last Modified: 11/28/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -61,8 +61,6 @@ static HashMap *channels = NULL;
 /* Maps the channel name to a linked list of pointers of listening servers */
 static HashMap *server_channels = NULL;
 
-///FIXME ADD SERVER_S2S
-
 /**
  * A structure to represent a user logged into the server.
  */
@@ -80,16 +78,8 @@ typedef struct {
 typedef struct {
     struct sockaddr_in *addr;	/* The address of the neighboring server */
     char *ip_addr;		/* Full IP address of server in string format */
+    short last_min;
 } Server;
-
-/**
- * A structure to hold a server pointer and the clock minute of when the last
- * S2S Join was received (used for soft state join tracking).
- */
-typedef struct {
-    Server *server;		/* Pointer to server to keep track of */
-    short last_min;		/* Clock minute of last received S2S join request */
-} ServerS2S;
 
 /* Array of all the neighboring servers */
 static Server **neighbors = NULL;
@@ -206,6 +196,23 @@ static Server *malloc_server(const char *ip, struct sockaddr_in *addr) {
 }
 
 /**
+ * Updates the time of the specified server's last received S2S request to now. Needed
+ * for soft-state server tracking to prevent network failures.
+ */
+UNUSED static void update_server_time(Server *server) {
+    
+    struct tm *timestamp;
+    time_t timer;
+
+    if (server != NULL) {
+	/* Retrieve current time, update server record */
+	time(&timer);
+	timestamp = localtime(&timer);
+	server->last_min = timestamp->tm_min;
+    }
+}
+
+/**
  * Destroys the server instance by freeing & returning all memory it reserved back
  * to the heap.
  */
@@ -217,56 +224,6 @@ static void free_server(Server *server) {
 	free(server->ip_addr);
 	free(server);
     }
-}
-
-/**
- * Creates a new instance of the server_s2s struct. Holds a pointer to the server
- * struct and the clock minute of the last received S2S join. Used for the S2S
- * soft state join(s) tracking feature. Returns a pointer to the new struct, or
- * NULL if allocation failed (malloc() errors).
- */
-UNUSED static ServerS2S *malloc_server_s2s(Server *server) {
-    
-    struct tm *timestamp;
-    time_t timer;
-    ServerS2S *server_s2s;
-
-    /* Allocate the memory, set the members */
-    if ((server_s2s = (ServerS2S *)malloc(sizeof(ServerS2S))) == NULL) {
-	server_s2s->server = server;
-	/* Set the clock minute to now */
-	time(&timer);
-	timestamp = localtime(&timer);
-	server_s2s->last_min = timestamp->tm_min;
-    }
-
-    return server_s2s;
-}
-
-/**
- * Updates the time of the specified server's last received S2S join to now. Should be
- * invoked every time an S2S request is received.
- */
-UNUSED static void update_server_s2s(ServerS2S *server_s2s) {
-    
-    struct tm *timestamp;
-    time_t timer;
-
-    if (server_s2s != NULL) {
-	/* Retrieve the current time */
-	time(&timer);
-	timestamp = localtime(&timer);
-	server_s2s->last_min = timestamp->tm_min;
-    }
-}
-
-/**
- * Destroys the server time log by freeing all its reserved memory back to the heap.
- */
-UNUSED static void free_server_s2s(ServerS2S *server_s2s) {
-    
-    if (server_s2s != NULL)
-	free(server_s2s);
 }
 
 /**
@@ -1418,9 +1375,9 @@ int main(int argc, char *argv[]) {
 
 	/* A minute passes, flood all servers with JOIN requests */
 	if (res == 0) {
-	    refresh_s2s_joins();//FIXME
+	    refresh_s2s_joins();
 	    mode++;
-	    /* Checks for inactive users */
+	    /* Checks for inactive users and servers */
 	    if (mode >= REFRESH_RATE) {
 		logout_inactive_users();
 		mode = 0;
