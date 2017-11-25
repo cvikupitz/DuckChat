@@ -113,16 +113,37 @@ struct request_s2s_say {
 	char req_text[SAY_MAX];
 } packed;
 
+/* FIXME */
+struct channel_names {
+        char ch_channel[CHANNEL_MAX];
+} packed;
+
+struct ip_address {
+	char ip_addr[128];
+} packed;
+
 struct request_s2s_who {
 	request_t req_type; /* = REQ_S2S_WHO */
+	long id;
+	char sender_ip[128];
+	char client_ip[128];
+	int queue_len;
+	struct ip_address ips[0];
+	int nchannels;
+	struct channel_names channels[0];
 } packed;
 
 struct request_s2s_list {
 	request_t req_type; /* = REQ_S2S_LIST */
 	long id;
-	char ip_origin[256];
-	
+	char sender_ip[128];
+	char client_ip[128];
+	int queue_len;
+	struct ip_address ips[0];
+	int nchannels;
+	struct channel_names channels[0];	
 } packed;
+///FIXME
 
 /* This structure is used for a generic text type, to the client. */
 struct text {

@@ -45,7 +45,7 @@
 
 
 /* String for displaying this server's full address */
-static char server_addr[256];
+static char server_addr[128];
 /* List of IDs from most recently received packets */
 static long msg_IDs[MSGQ_SIZE];
 static int curr_index = 0;
@@ -1198,23 +1198,24 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 /**
  * FIXME
  */
-static void server_s2s_list_request(UNUSED const char *packet, UNUSED char *client_ip) {
-    
-    //struct request_s2s_list *list_packet = (struct request_s2s_list *) packet;
-    
-    /*fprintf(stdout, "%s %s recv S2S LIST %s\n",
-	    server_addr, client_ip, list_packet->req_username);*/
-}
-
-/**
- * FIXME
- */
 static void server_s2s_who_request(UNUSED const char *packet, UNUSED char *client_ip) {
     
     //struct request_s2s_who *who_packet = (struct request_s2s_who *) packet;
     
     /*fprintf(stdout, "%s %s recv S2S WHO %s %s\n",
 	    server_addr, client_ip, who_packet->req_username, who_packet->req_channel);*/
+}
+
+/**
+ * FIXME
+ */
+static void server_s2s_list_request(UNUSED const char *packet, UNUSED char *client_ip) {
+    
+    //struct request_s2s_list *list_packet = (struct request_s2s_list *) packet;
+    
+    /*fprintf(stdout, "%s %s recv S2S LIST %s\n",
+	    server_addr, client_ip, list_packet->req_username);*/
+    
 }
 
 /**
@@ -1386,7 +1387,7 @@ int main(int argc, char *argv[]) {
 
 	/* A minute passes, flood all servers with JOIN requests */
 	if (res == 0) {
-	    //neighbor_flood_all();//FIXME
+	    neighbor_flood_all();//FIXME
 	    mode++;
 	    /* Checks for inactive users */
 	    if (mode >= REFRESH_RATE) {
