@@ -78,7 +78,7 @@ typedef struct {
 typedef struct {
     struct sockaddr_in *addr;	/* The address of the neighboring server */
     char *ip_addr;		/* Full IP address of server in string format */
-    short last_min;
+    short last_min;		/* Clock minute of last received S2S Join request */
 } Server;
 
 /* Array of all the neighboring servers */
@@ -399,12 +399,14 @@ static void refresh_s2s_joins(void) {
     long i, len = 0L;
 
     /* Get an array of the server's subscribed channels */
+    /* If server is not subscribed to any channels, don't bother with scan */
     if ((chs = hm_keyArray(server_channels, &len)) == NULL) {
 	if (!hm_isEmpty(server_channels))  /* malloc() failure, print error and return */
 	    fprintf(stdout, "%s Failed to refresh S2S join(s), memory allocation failed.\n",
 		    server_addr);
 	return;
     }
+    fprintf(stdout, "%s REFRESHING JOINS (%ld CHANNELS) ---\n", server_addr, len);///FIXME
 
     /* Send an S2S join to all neighbors for each channel */
     for (i = 0L; i < len; i++)
@@ -611,11 +613,13 @@ static void server_join_request(const char *packet, char *client_ip) {
 static void server_leave_request(const char *packet, char *client_ip) {
 
     User *user, *tmp;
+    Server *server;
     LinkedList *user_list;
     int removed = 0;
     long i;
     char *ch;
     char channel[CHANNEL_MAX], buffer[256];
+    struct request_s2s_leave s2s_leave;
     struct request_leave *leave_packet = (struct request_leave *) packet;
 
     /* Assert that the user requesting is currently logged in, do nothing if not */
@@ -673,6 +677,30 @@ static void server_leave_request(const char *packet, char *client_ip) {
 	fprintf(stdout, "%s Removed the empty channel %s\n", server_addr, channel);
 	(void)hm_remove(channels, channel, (void **)&user_list);
 	ll_destroy(user_list, NULL);
+    }
+
+    /* Now check this server to see if leaf *///FIXME
+    /* if this server is now a leaf, forward S2S leave to neighboring server */
+    if (server_is_leaf(leave_packet->req_channel)) {
+	(void)hm_remove(server_channels, leave_packet->req_channel, (void **)&user_list);
+	if (ll_isEmpty(user_list)) {  /* Destroy the stored LL */
+	    ll_destroy(user_list, NULL);
+	    return;
+	}
+	ll_removeFirst(user_list, (void **)&server);
+	ll_destroy(user_list, NULL);
+	
+	/* Initialize & set S2S leave request packet members */
+	memset(&s2s_leave, 0, sizeof(s2s_leave));
+	s2s_leave.req_type = REQ_S2S_LEAVE;
+	strncpy(s2s_leave.req_channel, leave_packet->req_channel, (CHANNEL_MAX - 1));
+	
+	/* Send S2S leave request to neighboring server */
+	sendto(socket_fd, &s2s_leave, sizeof(s2s_leave), 0,
+		(struct sockaddr *)server->addr, sizeof(*server->addr));
+	/* Log the sent packet */
+	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
+		server_addr, server->ip_addr, s2s_leave.req_channel);
     }
 }
 
@@ -1106,6 +1134,24 @@ static void server_s2s_leave_request(const char *packet, char *client_ip) {
 	    break;
 	}
     }
+
+    /* Now check this server to see if leaf */
+    /* if this server is now a leaf, forward S2S leave to neighboring server */
+    if (server_is_leaf(leave_packet->req_channel)) {
+	(void)hm_remove(server_channels, leave_packet->req_channel, (void **)&servers);
+	if (ll_isEmpty(servers)) {  /* Destroy the stored LL */
+	    ll_destroy(servers, NULL);
+	    return;
+	}
+	ll_removeFirst(servers, (void **)&server);
+	ll_destroy(servers, NULL);
+	/* Forward S2S leave request to neighboring server */
+	sendto(socket_fd, leave_packet, sizeof(*leave_packet), 0,
+		(struct sockaddr *)server->addr, sizeof(*server->addr));
+	/* Log the sent packet */
+	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
+		server_addr, server->ip_addr, leave_packet->req_channel);
+    }
 }
 
 /**
@@ -1159,6 +1205,7 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
     /* Server is a leaf, remove it from sub-tree */
     if (server_is_leaf(say_packet->req_channel)) {
 	(void)hm_remove(server_channels, say_packet->req_channel, (void **)&servers);
+	ll_destroy(servers, NULL);
 	/* Reply to sender with S2S leave request */
 	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
 		(struct sockaddr *)sender->addr, sizeof(*sender->addr));
