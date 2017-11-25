@@ -325,15 +325,20 @@ static int id_unique(long id) {
 }
 
 /**
- * FIXME
+ * Checks to see if this server is a leaf in the channel sub-tree, given the
+ * specified channel name. The server is a leaf if only one neighbor is
+ * subscribed, and no clients are currently listening. Returns 1 if is a leaf,
+ * or 0 if not.
  */
 static int server_is_leaf(char *channel) {
     
     LinkedList *servers, *users;
     int res = 0;
 
+    /* Retrieve the list of subscribed servers */
     (void)hm_get(server_channels, channel, (void **)&servers);
     if (hm_get(channels, channel, (void **)&users)) {
+	/* Server has no other servers or clients listening */
 	if (ll_size(servers) < 2L && ll_isEmpty(users))
 	    res = 1;
     } else {
@@ -373,21 +378,20 @@ static void neighbor_flood_channel(char *channel, char *sender_ip) {
 }
 
 /**
- * Floods all neighboring servers with S2S Join requests for all of this server's
- * subscribed channels. Done every interval specified by 'REFRESH_RATE' (in minutes)
- * to guard against network errors.
+ * Refreshes all S2S joins by sending S2S join requests for every channel the server
+ * is subscribe to to every one of its neighboring servers. Invoked every so often to
+ * guard against network failures.
  */
-static void neighbor_flood_all(void) {
+static void refresh_s2s_joins(void) {
     
     char **chs;
-    int i;
-    long j, len = 0L;
+    long i, j, len = 0L;
     struct request_s2s_join join_packet;
 
     /* Get an array of the server's subscribed channels */
     if ((chs = hm_keyArray(server_channels, &len)) == NULL) {
 	if (!hm_isEmpty(server_channels))  /* malloc() failure, print error and return */
-	    fprintf(stdout, "%s Failed to flood all neighbors, malloc() error.\n",
+	    fprintf(stdout, "%s Failed to refresh S2S join(s), memory allocation failed.\n",
 		    server_addr);
 	return;
     }
@@ -396,17 +400,17 @@ static void neighbor_flood_all(void) {
     memset(&join_packet, 0, sizeof(join_packet));
     join_packet.req_type = REQ_S2S_JOIN;
 
-    /* Send the request to each neighbor, for each listening channel */
-    for (j = 0L; j < len; j++) {
-	strncpy(join_packet.req_channel, chs[j], (CHANNEL_MAX - 1));
-	for (i = 0; i < server_n; i++) {
-	    if (neighbors[i] != NULL) {
-		/* Send the request to the neighbor */
+    /* Send an S2S jin to all neighbors for each channel */
+    for (i = 0L; i < len; i++) {
+	strncpy(join_packet.req_channel, chs[i], (CHANNEL_MAX - 1));
+	for (j = 0; j < server_n; j++) {
+	    if (neighbors[j] != NULL) {
+		/* Send the S2S join to the neighbor */
 		sendto(socket_fd, &join_packet, sizeof(join_packet), 0,
-		    (struct sockaddr *)neighbors[i]->addr, sizeof(*neighbors[i]->addr));
+			(struct sockaddr *)neighbors[j]->addr, sizeof(*neighbors[j]->addr));
 		/* Log the sent packet */
 		fprintf(stdout, "%s %s send S2S JOIN %s\n",
-		    server_addr, neighbors[i]->ip_addr, chs[j]);
+			server_addr, neighbors[j]->ip_addr, chs[i]);	
 	    }
 	}
     }
@@ -632,13 +636,11 @@ static void server_join_request(const char *packet, char *client_ip) {
 static void server_leave_request(const char *packet, char *client_ip) {
 
     User *user, *tmp;
-    Server *server;
-    LinkedList *user_list, *servers;
+    LinkedList *user_list;
     int removed = 0;
     long i;
     char *ch;
     char channel[CHANNEL_MAX], buffer[256];
-    struct request_s2s_leave s2s_leave_packet;
     struct request_leave *leave_packet = (struct request_leave *) packet;
 
     /* Assert that the user requesting is currently logged in, do nothing if not */
@@ -1398,7 +1400,7 @@ int main(int argc, char *argv[]) {
 
 	/* A minute passes, flood all servers with JOIN requests */
 	if (res == 0) {
-	    neighbor_flood_all();//FIXME
+	    //refresh_s2s_joins();//FIXME
 	    mode++;
 	    /* Checks for inactive users */
 	    if (mode >= REFRESH_RATE) {
