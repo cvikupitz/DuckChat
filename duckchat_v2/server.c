@@ -1,7 +1,7 @@
 /**
  * server.c (v2.0)
  * Author: Cole Vikupitz
- * Last Modified: 11/28/2017
+ * Last Modified: 11/29/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -42,8 +42,6 @@
 #include "hashmap.h"
 #include "linkedlist.h"
 #include "properties.h"
-
-///FIXME INACTIVE USERS, CHECK FOR LEAF NODE
 
 /* String for displaying this server's full address */
 static char server_addr[128];
@@ -342,10 +340,12 @@ static int id_unique(long id) {
  * subscribed, and no clients are currently listening. Returns 1 if is a leaf,
  * or 0 if not.
  */
-static int server_is_leaf(char *channel) {
+static int remove_server_leaf(char *channel) {
     
     LinkedList *servers, *users;
+    Server *server;
     int res = 0;
+    struct request_s2s_leave leave_packet;
 
     /* Retrieve the list of subscribed servers */
     (void)hm_get(server_channels, channel, (void **)&servers);
@@ -354,10 +354,33 @@ static int server_is_leaf(char *channel) {
 	if (ll_size(servers) < 2L && ll_isEmpty(users))
 	    res = 1;
     } else {
+	/* Server has no other servers listening */
 	if (ll_size(servers) < 2L)
 	    res = 1;
     }
 
+    if (!res) return res;
+    /* Remove channel from server subscription list */
+    (void)hm_remove(server_channels, channel, (void **)&users);
+    if (ll_isEmpty(users)) {  /* Destroy the stored LL */
+	ll_destroy(users, NULL);
+	return 1;
+    }
+    /* Extract the only neighboring subscribed server */
+    ll_removeFirst(users, (void **)&server);
+    ll_destroy(users, NULL);
+	
+    /* Initialize & set S2S leave request packet members */
+    memset(&leave_packet, 0, sizeof(leave_packet));
+    leave_packet.req_type = REQ_S2S_LEAVE;
+    strncpy(leave_packet.req_channel, channel, (CHANNEL_MAX - 1));
+	
+    /* Send S2S leave request to neighboring server */
+    sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
+	    (struct sockaddr *)server->addr, sizeof(*server->addr));
+    /* Log the sent packet */
+    fprintf(stdout, "%s %s send S2S LEAVE %s\n",
+	    server_addr, server->ip_addr, leave_packet.req_channel);
     return res;
 }    
 
@@ -613,13 +636,11 @@ static void server_join_request(const char *packet, char *client_ip) {
 static void server_leave_request(const char *packet, char *client_ip) {
 
     User *user, *tmp;
-    Server *server;
     LinkedList *user_list;
     int removed = 0;
     long i;
     char *ch;
     char channel[CHANNEL_MAX], buffer[256];
-    struct request_s2s_leave s2s_leave;
     struct request_leave *leave_packet = (struct request_leave *) packet;
 
     /* Assert that the user requesting is currently logged in, do nothing if not */
@@ -679,29 +700,8 @@ static void server_leave_request(const char *packet, char *client_ip) {
 	ll_destroy(user_list, NULL);
     }
 
-    /* Now check this server to see if leaf */
-    /* If this server is now a leaf, forward S2S leave to neighboring server */
-    if (server_is_leaf(leave_packet->req_channel)) {
-	(void)hm_remove(server_channels, leave_packet->req_channel, (void **)&user_list);
-	if (ll_isEmpty(user_list)) {  /* Destroy the stored LL */
-	    ll_destroy(user_list, NULL);
-	    return;
-	}
-	ll_removeFirst(user_list, (void **)&server);
-	ll_destroy(user_list, NULL);
-	
-	/* Initialize & set S2S leave request packet members */
-	memset(&s2s_leave, 0, sizeof(s2s_leave));
-	s2s_leave.req_type = REQ_S2S_LEAVE;
-	strncpy(s2s_leave.req_channel, leave_packet->req_channel, (CHANNEL_MAX - 1));
-	
-	/* Send S2S leave request to neighboring server */
-	sendto(socket_fd, &s2s_leave, sizeof(s2s_leave), 0,
-		(struct sockaddr *)server->addr, sizeof(*server->addr));
-	/* Log the sent packet */
-	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
-		server_addr, server->ip_addr, s2s_leave.req_channel);
-    }
+    /* Server removes itself from channel sub-tree if leaf */
+    (void)remove_server_leaf(channel);
 }
 
 /**
@@ -977,6 +977,8 @@ static void logout_user(User *user) {
 	    ll_destroy(user_list, NULL);
 	    fprintf(stdout, "%s Removed the empty channel %s\n", server_addr, ch);
 	}
+	/* Removes server from channel sub-tree if leaf */
+	(void)remove_server_leaf(ch);
 	/* Free allocated memory */
 	free(ch);
     }
@@ -1041,8 +1043,11 @@ static void logout_inactive_users(void) {
 
     /* Retrieve the list of all connected clients */
     /* Abort the scan if failed (malloc() error), log the error */
-    if ((user_list = hm_keyArray(users, &len)) == NULL)
+    if ((user_list = hm_keyArray(users, &len)) == NULL) {
+	fprintf(stdout, "%s Failed to scan for inactive users, memory allocation failed.\n",
+		server_addr);
 	return;
+    }
 
     for (i = 0L; i < len; i++) {
 	/* Assert the user exists in the map */
@@ -1063,10 +1068,47 @@ static void logout_inactive_users(void) {
 }
 
 /**
- * FIXME
+ * Performs a scan on all the currently subscribed channels and determines
+ * whether each of the neighboring servers are inactive or not. If inactive,
+ * the server is removed from the subscription list, or ignored if otherwise.
  */
-static void remove_inactive_servers(void) {
+ static void remove_inactive_servers(void) {
+    
+    LinkedList *servers;
+    Server *server;
+    char **chs;
+    long i, j, len = 0L;
+    
+    /* If server channel subscription list is empty, don't bother with scan */
+    if (hm_isEmpty(server_channels))
+	return;
 
+    /* Get the full list of server's subscribed channels, log error if malloc() fails */
+    if ((chs = hm_keyArray(server_channels, &len)) == NULL) {
+	fprintf(stdout, "%s Failed to scan for inactive servers, memory allocation failed.\n",
+		server_addr);
+	return;
+    }
+
+    for (i = 0L; i < len; i++) {
+	/* Assert that the channel exists */
+	if (!hm_get(server_channels, chs[i], (void **)&servers))
+	    continue;
+	for (j = 0L; j < ll_size(servers); j++) {
+	    /* Obtain the neighboring subscribed server */
+	    (void)ll_get(servers, j, (void **)&server);
+	    if (is_inactive(server->last_min)) {
+		/* Server deemed inactive, remove it from the subscription list */
+		(void)ll_remove(servers, j, (void **)&server);
+		fprintf(stdout, "%s Removed inactive server %s from channel %s\n",
+			server_addr, server->ip_addr, chs[i]);
+	    }
+	    /* Remove server from channel sub-tree if becomes a leaf */
+	    (void)remove_server_leaf(chs[i]);
+	}
+    }
+    /* Free the allocated memory */
+    free(chs);
 }
 
 /**
@@ -1142,24 +1184,8 @@ static void server_s2s_leave_request(const char *packet, char *client_ip) {
 	    break;
 	}
     }
-
-    /* Now check this server to see if leaf */
-    /* if this server is now a leaf, forward S2S leave to neighboring server */
-    if (server_is_leaf(leave_packet->req_channel)) {
-	(void)hm_remove(server_channels, leave_packet->req_channel, (void **)&servers);
-	if (ll_isEmpty(servers)) {  /* Destroy the stored LL */
-	    ll_destroy(servers, NULL);
-	    return;
-	}
-	ll_removeFirst(servers, (void **)&server);
-	ll_destroy(servers, NULL);
-	/* Forward S2S leave request to neighboring server */
-	sendto(socket_fd, leave_packet, sizeof(*leave_packet), 0,
-		(struct sockaddr *)server->addr, sizeof(*server->addr));
-	/* Log the sent packet */
-	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
-		server_addr, server->ip_addr, leave_packet->req_channel);
-    }
+    /* Server removes itself from channel sub-tree if leaf */
+    (void)remove_server_leaf(leave_packet->req_channel);
 }
 
 /**
@@ -1212,17 +1238,8 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 	    say_packet->req_username, say_packet->req_channel, say_packet->req_text);
 
     /* Server is a leaf, remove it from sub-tree */
-    if (server_is_leaf(say_packet->req_channel)) {
-	(void)hm_remove(server_channels, say_packet->req_channel, (void **)&servers);
-	ll_destroy(servers, NULL);
-	/* Reply to sender with S2S leave request */
-	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
-		(struct sockaddr *)sender->addr, sizeof(*sender->addr));
-	/* Log the sent packet */
-	fprintf(stdout, "%s %s send S2S LEAVE %s\n",
-		server_addr, sender->ip_addr, say_packet->req_channel);
+    if (remove_server_leaf(say_packet->req_channel))
 	return;
-    }
 
     /* If server not a leaf, forward S2S request to all subscribed neighbors */
     for (i = 0L; i < ll_size(servers); i++) {
@@ -1346,8 +1363,7 @@ int main(int argc, char *argv[]) {
 
     /* Obtain the address of the specified host */
     if ((host_end = gethostbyname(argv[1])) == NULL) {
-	sprintf(buffer, "Failed to locate the host at %s:%s",
-		argv[1], argv[2]);
+	sprintf(buffer, "Failed to locate the host.");
 	print_error(buffer);
     }
 
@@ -1361,8 +1377,7 @@ int main(int argc, char *argv[]) {
     if ((socket_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	print_error("Failed to create a socket for the server.");
     if (bind(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0) {
-	sprintf(buffer, "Failed to bind to the address %s:%s",
-		argv[1], argv[2]);
+	sprintf(buffer, "Failed to assign the requested address.");
 	print_error(buffer);
     }
 
