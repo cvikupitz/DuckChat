@@ -1,7 +1,7 @@
 /**
  * server.c (v2.0)
  * Author: Cole Vikupitz
- * Last Modified: 11/29/2017
+ * Last Modified: 11/30/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -473,6 +473,57 @@ static int server_join_channel(char *channel) {
 }
 
 /**
+ * FIXME
+ */
+UNUSED static struct sockaddr_in get_addr(char *ip_addr) {
+
+    char hostname[128];
+    int port_num;
+    struct hostent *host_end;
+    struct sockaddr_in addr;
+
+    sscanf(ip_addr, "%s:%d", hostname, &port_num);
+    host_end = gethostbyname(hostname);
+
+    memset((char *)&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    memcpy((char *)&addr.sin_addr, (char *)host_end->h_addr_list[0], host_end->h_length);
+    addr.sin_port = htons(port_num);
+
+    return addr;
+}
+
+/**
+ * FIXME
+ */
+UNUSED static void launch_s2s_list(char *client_ip) {
+    
+    char **chs;
+    int size;
+    long i, len;
+    struct request_s2s_list *list_packet;
+
+    size = sizeof(struct request_s2s_list) + (sizeof(struct list_channel) * len) + (sizeof(struct queue) * server_n);
+    list_packet = (struct request_s2s_list *)malloc(size);
+    chs = hm_keyArray(channels, &len);
+
+    memset(list_packet, 0, size);
+    list_packet->req_type = REQ_S2S_LIST;
+    list_packet->id = generate_id();
+    strcpy(list_packet->origin_ip, client_ip);
+
+    list_packet->queue_size = server_n;
+    for (i = 0; i < server_n; i++)
+	strcpy(list_packet->servers[i].ip_address, neighbors[i]->ip_addr);
+	//// ALL NEIGHBORS ADDED
+
+    list_packet->nchannels = (int)len;
+    for (i = 0L; i < len; i++)
+	strncpy(list_packet->channels[i].channel, chs[i], (CHANNEL_MAX - 1));
+
+}
+
+/**
  * Sends a packet containing the error message 'msg' to the client with the specified
  * address information. Also logs the packet sent to the address with the error
  * message.
@@ -816,6 +867,11 @@ static void server_list_request(char *client_ip) {
     update_user_time(user);
     fprintf(stdout, "%s %s recv Request LIST %s\n", server_addr,
 		user->ip_addr, user->username);
+    /* Perform S2S list request if server is not single */
+    if (server_n) {
+	launch_s2s_list(client_ip);
+	return;
+    }
 
     /* Retrieve the complete list of channel names */
     /* Send error message back to client if failed (malloc() error), log the error */
@@ -1256,6 +1312,14 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
     }
 }
 
+/** 
+ * FIXME
+ */
+static void server_s2s_list_request(UNUSED const char *buffer, UNUSED char *client_ip) {
+
+    
+}
+
 /**
  * Frees the reserved memory occupied by the specified LinkedList. Used by
  * the LinkedList destructor.
@@ -1489,6 +1553,10 @@ int main(int argc, char *argv[]) {
 	    case REQ_S2S_SAY:
 		/* Server-to-server say request, forward to all subscribed servers */
 		server_s2s_say_request(buffer, client_ip);
+		break;
+	    case REQ_S2S_LIST:
+		/* Server-to-server list request, traverse servers and gather channel names */
+		server_s2s_list_request(buffer, client_ip);
 		break;
 	    default:
 		/* Do nothing, likey a bogus packet */
