@@ -26,11 +26,9 @@ For example, to create a server topology like the one shown below:
 
 You must run the following commands:
 
-`
-$ ./server localhost 4000 localhost 4001
-$ ./server localhost 4001 localhost 4000 localhost 4002
-$ ./server localhost 4002 localhost 4001
-`
+`$ ./server localhost 4000 localhost 4001`
+`$ ./server localhost 4001 localhost 4000 localhost 4002`
+`$ ./server localhost 4002 localhost 4001`
 
 Usage to run the client is as follows:
 
