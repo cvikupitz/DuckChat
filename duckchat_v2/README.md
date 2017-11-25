@@ -22,7 +22,7 @@ You may pass in as many pairs as you need.
 
 For example, to create a server topology like the one shown below:
 
-    4000 ----- 4001 ----- 4002
+    4000 <-----> 4001 <-----> 4002
 
 You must run the following commands:
 

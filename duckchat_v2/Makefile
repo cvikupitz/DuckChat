@@ -6,7 +6,7 @@
 
 
 FILES=client.c duckchat.h hashmap.c hashmap.h linkedlist.c linkedlist.h \
-	Makefile properties.h raw.c raw.h README.md server.c
+	Makefile properties.h raw.c raw.h README.md server.c start_servers.sh
 
 CC=gcc
 CFLAGS=-Wall -W -g
