@@ -43,6 +43,7 @@
 #include "linkedlist.h"
 #include "properties.h"
 
+///FIXME INACTIVE USERS, CHECK FOR LEAF NODE
 
 /* String for displaying this server's full address */
 static char server_addr[128];
@@ -199,7 +200,7 @@ static Server *malloc_server(const char *ip, struct sockaddr_in *addr) {
  * Updates the time of the specified server's last received S2S request to now. Needed
  * for soft-state server tracking to prevent network failures.
  */
-UNUSED static void update_server_time(Server *server) {
+static void update_server_time(Server *server) {
     
     struct tm *timestamp;
     time_t timer;
@@ -406,7 +407,6 @@ static void refresh_s2s_joins(void) {
 		    server_addr);
 	return;
     }
-    fprintf(stdout, "%s REFRESHING JOINS (%ld CHANNELS) ---\n", server_addr, len);///FIXME
 
     /* Send an S2S join to all neighbors for each channel */
     for (i = 0L; i < len; i++)
@@ -679,8 +679,8 @@ static void server_leave_request(const char *packet, char *client_ip) {
 	ll_destroy(user_list, NULL);
     }
 
-    /* Now check this server to see if leaf *///FIXME
-    /* if this server is now a leaf, forward S2S leave to neighboring server */
+    /* Now check this server to see if leaf */
+    /* If this server is now a leaf, forward S2S leave to neighboring server */
     if (server_is_leaf(leave_packet->req_channel)) {
 	(void)hm_remove(server_channels, leave_packet->req_channel, (void **)&user_list);
 	if (ll_isEmpty(user_list)) {  /* Destroy the stored LL */
@@ -1063,6 +1063,13 @@ static void logout_inactive_users(void) {
 }
 
 /**
+ * FIXME
+ */
+static void remove_inactive_servers(void) {
+
+}
+
+/**
  * Server receives a S2S join packet. If the server is not subscribed to the contained
  * channel, it subscribes itself to the channel and forwards the packet to all of its
  * neighboring servers. Otherwise, does nothing.
@@ -1077,6 +1084,7 @@ static void server_s2s_join_request(const char *packet, char *client_ip) {
     /* Get neighboring sender */
     if ((sender = get_server(client_ip)) == NULL)
 	return;
+    update_server_time(sender);
 
     /* Log the received packet */
     fprintf(stdout, "%s %s recv S2S JOIN %s\n",
@@ -1172,6 +1180,7 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
     /* Get the sending server */
     if ((sender = get_server(client_ip)) == NULL)
 	return;
+    update_server_time(sender);
     /* Get list of listening servers */
     if (!hm_get(server_channels, say_packet->req_channel, (void **)&servers))
 	return;
@@ -1404,6 +1413,7 @@ int main(int argc, char *argv[]) {
 	    /* Checks for inactive users and servers */
 	    if (mode >= REFRESH_RATE) {
 		logout_inactive_users();
+		remove_inactive_servers();
 		mode = 0;
 	    }
 	    /* Reset timer and continue */
