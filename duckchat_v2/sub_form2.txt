@@ -1,0 +1,36 @@
+CIS 432 – Introduction to Computer Networks
+Programming Assignment 02
+
+
+Please fill this form and send it together with your program.
+Put all the source files, makefile and this text file into a folder by the lastname of one of the group members (all lowercase letters),
+compress it into a tarball, gz or zip and send using TurnIN Homework page.
+(https://systems.cs.uoregon.edu/apps/turnin.php)
+Please include any special instructions for compiling and running your program on ix.
+
+Student Names:
+Student IDs:
+
+Answer the questions by selecting one of the given options. You may add additional information if you wish to.
+
+- Does the server broadcast Joins correctly when a user requests a Join? yes/no
+ 
+- Does the server broadcast Joins correctly when receiving a Join from another server? yes/no 
+
+- Does the server generate unique identifiers correctly? yes/no 
+
+- Does the server renew Joins once per minute? yes/no
+  
+- Does the server remove Joins older than two minutes? yes/no
+ 
+- Does the server reply with a Leave message when it cannot forward a Say message? yes/no 
+
+- Does the server reply with a Leave message when it receives a duplicate Say message? yes/no 
+
+- Does the server avoid sending inappropriate Join, Leave, or Say messages? yes/no   
+
+- Does the server have all the functionality from program #1 when working in isolation? yes/no 
+
+- Does the client have all the functionality from program #1? yes/no 
+ 
+
