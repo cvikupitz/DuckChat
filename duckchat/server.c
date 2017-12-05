@@ -7,7 +7,7 @@
  * and sends packets to and from clients using this protocol and handles each of the
  * packets accordingly.
  *
- * Usage: ./server domain_name port_num
+ * Usage: ./server domain_name port_number
  *
  * Resources Used:
  * Lots of help about basic socket programming received from Beej's Guide to Socket Programming:
@@ -854,7 +854,7 @@ int main(int argc, char *argv[]) {
     /* Assert that the correct number of arguments were given */
     /* Print program usage otherwise */
     if (argc != 3) {
-	fprintf(stdout, "Usage: %s domain_name port_num\n", argv[0]);
+	fprintf(stdout, "Usage: %s domain_name port_number\n", argv[0]);
 	return 0;
     }
 

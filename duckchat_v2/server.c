@@ -10,7 +10,7 @@
  * This new version now supports server-to-server communication. Multiple servers can now
  * be run in parallel, reducing individual server load and improving response time(s).
  *
- * Usage: ./server domain_name port_num [domain_name port_num] ...
+ * Usage: ./server domain_name port_number [domain_name port_number] ...
  *
  * Resources Used:
  * Lots of help about basic socket programming received from Beej's Guide to Socket Programming:
@@ -1332,7 +1332,7 @@ int main(int argc, char *argv[]) {
     /* Assert that the correct number of arguments were given */
     /* Print program usage otherwise */
     if (argc < 3 || argc % 2 != 1) {
-	fprintf(stdout, "Usage: %s domain_name port_num [domain_name port_num] ...\n", argv[0]);
+	fprintf(stdout, "Usage: %s domain_name port_number [domain_name port_number] ...\n", argv[0]);
 	fprintf(stdout, "  The first two arguments are the IP address and port number this server binds to.\n");
 	fprintf(stdout, "  The following optional arguments are the IP address and port number of adjacent server(s) to connect to.\n");
 	return 0;
