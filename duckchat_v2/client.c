@@ -51,6 +51,7 @@ static int socket_fd = -1;
 static int join_channel(const char *channel) {
     
     int i;
+
     /* Search the subscription list to see if client is already subscribed */
     /* If client is already subscribed, switch it to active channel */
     for (i = 0; i < MAX_CHANNELS; i++) {
@@ -80,6 +81,7 @@ static int join_channel(const char *channel) {
 static void leave_channel(const char *channel) {
     
     int i;
+
     for (i = 0; i < MAX_CHANNELS; i++) {
 	if (strcmp(subscribed[i], channel) == 0) {
 	    strcpy(subscribed[i], "");
@@ -179,6 +181,7 @@ static void client_say_request(const char *request) {
 static void server_say_reply(const char *packet) {
     
     struct text_say *say_packet = (struct text_say *) packet;
+
     fprintf(stdout, "[%s][%s]: %s\n", say_packet->txt_channel,
 		    say_packet->txt_username, say_packet->txt_text);
 }
@@ -191,6 +194,7 @@ static void server_say_reply(const char *packet) {
 static void client_list_request(void) {
     
     struct request_list list_packet;
+
     memset(&list_packet, 0, sizeof(list_packet));
     list_packet.req_type = REQ_LIST;
     sendto(socket_fd, &list_packet, sizeof(list_packet), 0,
@@ -206,6 +210,7 @@ static void server_list_reply(const char *packet) {
     
     int i;
     struct text_list *list_packet = (struct text_list *) packet;
+
     fprintf(stdout, "Existing channels:\n");
     for (i = 0; i < list_packet->txt_nchannels; i++)
 	fprintf(stdout, "  %s\n", list_packet->txt_channels[i].ch_channel);
@@ -242,6 +247,7 @@ static void server_who_reply(const char *packet) {
     
     int i;
     struct text_who *who_packet = (struct text_who *) packet;
+
     fprintf(stdout, "Users on channel %s:\n", who_packet->txt_channel);
     for (i = 0; i < who_packet->txt_nusernames; i++)
 	fprintf(stdout, "  %s\n", who_packet->txt_users[i].us_username);
@@ -282,6 +288,7 @@ static void client_switch_request(const char *request) {
 static void client_subscribed_request(void) {
     
     int i;
+
     fprintf(stdout, "Subscribed channels:\n");
     for (i = 0; i < MAX_CHANNELS; i++) {
 	if (strcmp(subscribed[i], "") == 0)
@@ -318,6 +325,7 @@ static void client_help_request(void) {
 static void client_logout_request(void) {
     
     struct request_logout logout_packet;
+
     memset(&logout_packet, 0, sizeof(logout_packet));
     logout_packet.req_type = REQ_LOGOUT;
     sendto(socket_fd, &logout_packet, sizeof(logout_packet), 0,
@@ -332,6 +340,7 @@ static void client_logout_request(void) {
 static void client_keep_alive_request(void) {
    
     struct request_keep_alive keep_alive_packet;
+
     memset(&keep_alive_packet, 0, sizeof(keep_alive_packet));
     keep_alive_packet.req_type = REQ_KEEP_ALIVE;
     sendto(socket_fd, &keep_alive_packet, sizeof(keep_alive_packet), 0,
@@ -378,6 +387,63 @@ static void print_error(const char *msg) {
     
     fprintf(stderr, "[Client]: %s\n", msg);
     exit(0);
+}
+
+/**
+ * Authenticates the connecting client to the server before logging in. Does this
+ * by sending a packet with the proposed username to the server for verification;
+ * the server will reply with a verification status. If the username is already in
+ * use, the client prints an error message to the user; otherwise sends the login
+ * packet, meaning the client is successfully verified.
+ */
+UNUSED static void authenticate_client(void) {
+    
+    struct sockaddr from_addr;
+    struct timeval timeout;
+    socklen_t addr_len = sizeof(server);
+    fd_set receiver;
+    int res;
+    char in_buff[BUFF_SIZE];
+    struct request_verify verify_packet;
+
+    /* Initialize the timer's members & data array */
+    memset(in_buff, 0, sizeof(in_buff));
+    memset(&timeout, 0, sizeof(timeout));
+    timeout.tv_sec = TIMEOUT_RATE;
+
+    /* Initialize and set verify packet's members */
+    memset(&verify_packet, 0, sizeof(verify_packet));
+    verify_packet.req_type = REQ_VERIFY;
+    strncpy(verify_packet.req_username, username, (USERNAME_MAX - 1));
+    sendto(socket_fd, &verify_packet, sizeof(verify_packet), 0,
+	    (struct sockaddr *)&server, sizeof(server));
+
+    /* Only watch the second socket stream for input */
+    FD_ZERO(&receiver);
+    FD_SET(socket_fd, &receiver);
+    res = select((socket_fd + 1), &receiver, NULL, NULL, &timeout);
+
+    if (res == 0) {
+	/* Wait up to the time out rate, exit if no reply received by then */
+	print_error("Server timed out.");
+    } else if (res > 0) {
+	
+	if (FD_ISSET(socket_fd, &receiver)) {	/* Input received from server */
+	    if (recvfrom(socket_fd, in_buff, sizeof(in_buff), 0,
+		    &from_addr, &addr_len) < 0)
+		print_error("Server failed to authenticate the user.");
+	    
+	    /* Check the packet type, assert its for authenticating the client */
+	    struct text *packet_type = (struct text *) in_buff;
+	    if (packet_type->txt_type != REQ_VERIFY)
+		print_error("Server failed to authenticate the user.");
+	    
+	    /* Parse the packet, check to see if client's username is valid */
+	    struct text_verify *server_reply = (struct text_verify *) in_buff;
+	    if (!server_reply->valid)
+		print_error("The specified username is already in use.");
+	}
+    }
 }
 
 /**
@@ -454,13 +520,8 @@ int main(int argc, char *argv[]) {
 	print_error("Failed to create a socket for client.");
 
     /* Initialize username string, do not copy more bytes than maximum allowed */
-    /* If the length is too long, notify user, but don't exit */
     /* Max length specified in duckchat.h */
     strncpy(username, argv[3], (USERNAME_MAX - 1));
-    if (strlen(argv[3]) > USERNAME_MAX) {
-	fprintf(stdout, "*** Username length exceeds the length allowed (%d).\n", USERNAME_MAX);
-	fprintf(stdout, "*** Your username will be: %s\n", username);
-    }
 
     /* Subscribe and join the default channel upon login */
     /* For this assignment, the default channel is named 'Common' */
@@ -470,12 +531,16 @@ int main(int argc, char *argv[]) {
     for (i = 1; i < MAX_CHANNELS; i++)
 	strcpy(subscribed[i], "");
 
+    /* Authenticate the user, ensure the username is not currently taken */
+    //authenticate_client();
+
     /* Send a packet to the server to log user in */
     memset(&login_packet, 0, sizeof(login_packet));
     login_packet.req_type = REQ_LOGIN;
     strncpy(login_packet.req_username, username, USERNAME_MAX);
     sendto(socket_fd, &login_packet, sizeof(login_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
+
     /* Send a packet to the server to join the default channel */
     memset(&join_packet, 0, sizeof(join_packet));
     join_packet.req_type = REQ_JOIN;
@@ -486,7 +551,9 @@ int main(int argc, char *argv[]) {
     /* Displays the title and prompt */
     i = 0;
     fprintf(stdout, "---------------  Duck Chat  ---------------\n");
-    fprintf(stdout, "Type '/help' for help, '/exit' to exit.\n");
+    fprintf(stdout, "Connected to %s:%d\n", inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+    fprintf(stdout, "Logged in as %s\n", username);
+    fprintf(stdout, "Type '/help' for help, '/exit' to exit.\n\n");
     prompt();
     /* Set the timeout timer for select() */
     memset(&timeout, 0, sizeof(timeout));

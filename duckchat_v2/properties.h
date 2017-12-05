@@ -1,7 +1,7 @@
 /**
  * properties.h
  * Author: Cole Vikupitz
- * Last Modified: 11/25/2017
+ * Last Modified: 11/30/2017
  *
  * Properties to be used for the DuckChat client/server programs.
  */
@@ -19,6 +19,11 @@
 /* Maximum number of channels a client may be subscribed to at once */
 #define MAX_CHANNELS 10
 
+/* The timeout rate (in seconds) for the client to wait for verification from server */
+/* Clients will send a verification packet before login to server for username uniqueness */
+/* The client will wait this long for a server response, and exit if no response given */
+#define TIMEOUT_RATE 5
+
 /* The rate (in seconds) for the client to send a keep alive request */
 /* Clients will send a keep alive request to prevent server from logging them out */
 /* Should be kept at 45-60 seconds */
@@ -26,7 +31,6 @@
 
 /* Refresh rate (in minutes) of the server to refresh its internal data structures */
 /* The server will scan and remove users who have not sent a packet past the refresh rate */
-/* Server also removes neighboring servers that have not sent an S2S Join for a channel */
 /* Should be kept at 2-5 minutes */
 #define REFRESH_RATE 2
 
