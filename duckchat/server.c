@@ -491,7 +491,7 @@ static void server_say_request(const char *packet, char *client_ip) {
 	sendto(socket_fd, &msg_packet, sizeof(msg_packet), 0,
 		(struct sockaddr *)listeners[i]->addr, sizeof(*listeners[i]->addr));
     /* Log the message */
-    sprintf(buffer, "[%s][%s] -> \"%s\"", msg_packet.txt_channel,
+    sprintf(buffer, "[%s][%s]: \"%s\"", msg_packet.txt_channel,
 		user->username, msg_packet.txt_text);
     print_log_message(buffer);
     /* Free reserved memory */
