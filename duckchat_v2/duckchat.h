@@ -36,6 +36,8 @@ typedef int text_t;
 #define REQ_S2S_JOIN 9
 #define REQ_S2S_LEAVE 10
 #define REQ_S2S_SAY 11
+#define REQ_S2S_LIST 12
+#define REQ_S2S_WHO 13
 
 /* Define codes for text types.  These are the messages sent to the client. */
 #define TXT_VERIFY 0
@@ -56,6 +58,7 @@ struct request {
 struct request_verify {
 	request_t req_type; /* = REQ_VERIFY */
 	char req_username[USERNAME_MAX];
+	//FIXME
 } packed;
 
 struct request_login {
@@ -114,6 +117,16 @@ struct request_s2s_say {
 	char req_username[USERNAME_MAX];
 	char req_channel[CHANNEL_MAX];
 	char req_text[SAY_MAX];
+} packed;
+
+struct request_s2s_list {
+	request_t req_type;	/* = REQ_S2S_LIST */
+	///FIXME
+} packed;
+
+struct request_s2s_who {
+	request_t req_type;	/* = REQ_S2S_WHO */
+	///FIXME
 } packed;
 
 

@@ -532,7 +532,7 @@ int main(int argc, char *argv[]) {
 	strcpy(subscribed[i], "");
 
     /* Authenticate the user, ensure the username is not currently taken */
-    //authenticate_client();
+    //authenticate_client(); FIXME
 
     /* Send a packet to the server to log user in */
     memset(&login_packet, 0, sizeof(login_packet));

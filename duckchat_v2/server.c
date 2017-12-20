@@ -1,7 +1,7 @@
 /**
- * server.c (v2.0)
+ * server.c
  * Author: Cole Vikupitz
- * Last Modified: 11/30/2017
+ * Last Modified: 12/19/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -492,6 +492,13 @@ static void server_send_error(struct sockaddr_in *addr, const char *msg) {
     /* Log the error message */
     fprintf(stdout, "%s %s:%d send ERROR \"%s\"\n", server_addr,
 		inet_ntoa(addr->sin_addr), ntohs(addr->sin_port), msg);
+}
+
+/**
+ * FIXME
+ */
+static void server_verify_request(UNUSED const char *packet, UNUSED char *client_ip, UNUSED struct sockaddr_in *addr) {
+    ///FIXME
 }
 
 /**
@@ -1257,6 +1264,20 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 }
 
 /**
+ * FIXME
+ */
+static void server_s2s_list_request(UNUSED const char *packet, UNUSED char *client_ip) {
+    //FIXME
+}
+
+/**
+ * FIXME
+ */
+static void server_s2s_who_request(UNUSED const char *packet, UNUSED char *client_ip) {
+    //FIXME
+}
+
+/**
  * Frees the reserved memory occupied by the specified LinkedList. Used by
  * the LinkedList destructor.
  */
@@ -1446,6 +1467,10 @@ int main(int argc, char *argv[]) {
 
 	/* Examine the packet type received */
 	switch (packet_type->txt_type) {
+	    case REQ_VERIFY:
+		/* Check to see if the username is taken */
+		server_verify_request(buffer, client_ip, &client);
+		break;
 	    case REQ_LOGIN:
 		/* A client requests to login to the server */
 		server_login_request(buffer, client_ip, &client);
@@ -1489,6 +1514,14 @@ int main(int argc, char *argv[]) {
 	    case REQ_S2S_SAY:
 		/* Server-to-server say request, forward to all subscribed servers */
 		server_s2s_say_request(buffer, client_ip);
+		break;
+	    case REQ_S2S_LIST:
+		/* Servr-to-server list request, retrieve all channel names */
+		server_s2s_list_request(buffer, client_ip);
+		break;
+	    case REQ_S2S_WHO:
+		/* Server-to-server who request, get users active on specified channel */
+		server_s2s_who_request(buffer, client_ip);
 		break;
 	    default:
 		/* Do nothing, likey a bogus packet */
