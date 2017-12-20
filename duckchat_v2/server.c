@@ -1187,7 +1187,7 @@ static void server_s2s_leave_request(const char *packet, char *client_ip) {
 	(void)ll_get(servers, i, (void **)&server);
 	/* Server found, remove from subscription list */
 	if (!strcmp(server->ip_addr, client_ip)) {
-	    ll_remove(servers, i, (void **)&server);
+	    (void)ll_remove(servers, i, (void **)&server);
 	    break;
 	}
     }
