@@ -56,6 +56,9 @@ static HashMap *users = NULL;
 /* HashMap of all the channels currently available */
 /* Maps the channel name to a linked list of pointers of all users on the channel */
 static HashMap *channels = NULL;
+/* Hashmap of all the neighboring servers */
+/* Maps the server's IP address in a string to the server struct */
+static HashMap *neighbors = NULL;
 /* HashMap of all channels neighboring servers are subscribed to */
 /* Maps the channel name to a linked list of pointers of listening servers */
 static HashMap *server_channels = NULL;
@@ -79,10 +82,6 @@ typedef struct {
     char *ip_addr;		/* Full IP address of server in string format */
     short last_min;		/* Clock minute of last received S2S Join request */
 } Server;
-
-/* Array of all the neighboring servers */
-static Server **neighbors = NULL;
-static int server_n = 0;
 
 /**
  * Creates a new instance of a user logged in the server by allocating memory and returns
@@ -226,25 +225,11 @@ static void free_server(Server *server) {
 }
 
 /**
- * Returns the pointer to the neighboring server with the specified IP address, or
- * NULL if not found (generally should never happen).
+ * Locates all of the specified neighboring server(s), and checks to see if they exist.
+ * Then creates a server struct for each neighbor and adds it into the neighboring
+ * hashmap. Returns 1 if all malloc() and hashmap additions are successful, 0 if not.
  */
-static Server *get_server(char *ip) {
-
-    int i;
-    for (i = 0; i < server_n; i++)
-	if (neighbors[i] != NULL && !strcmp(neighbors[i]->ip_addr, ip))
-	    return neighbors[i];
-    return NULL;
-}
-
-/**
- * Creates an array of server structs for all the neighboring servers. Parses
- * the command line arguments given, and creates a server struct for each
- * neighboring server. Will also verify that the address(s) given exist, and
- * reports an error if not. Returns 1 if successful, 0 if not (malloc() error(s)).
- */
-static int malloc_neighbors(char *args[], int n) {
+static int add_neighbors(char *args[], int n) {
     
     struct hostent *host_end;
     struct sockaddr_in addr;
@@ -255,13 +240,6 @@ static int malloc_neighbors(char *args[], int n) {
     /* If no args given, do nothing */
     if (n == 0)
 	return 1;
-    /* Create the array of neighbors */
-    server_n = (n / 2);
-    if ((neighbors = (Server **)malloc(sizeof(Server *) * server_n)) == NULL)
-	return 0;
-    /* Initialize the pointers */
-    for (i = 0; i < server_n; i++)
-	neighbors[i] = NULL;
 
     for (i = 0; i < n; i += 2) {
 	/* Verify that the given address exists, report error if not */
@@ -277,13 +255,11 @@ static int malloc_neighbors(char *args[], int n) {
 	memcpy((char *)&addr.sin_addr, (char *)host_end->h_addr_list[0], host_end->h_length);
 	addr.sin_port = htons(atoi(args[i + 1]));
 	sprintf(buffer, "%s:%d", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
-	/* Create the server struct, add it into the array */
-	if ((server = malloc_server(buffer, &addr)) == NULL) {
-	    fprintf(stderr, "[Server]: Failed to allocate memory for server at %s:%s\n",
-		    args[i], args[i + 1]);
-	    continue;
-	}
-	neighbors[i / 2] = server;
+	/* Create the server struct, add it into the hashmap */
+	if ((server = malloc_server(buffer, &addr)) == NULL)
+	    return 0;
+	if (!hm_put(neighbors, buffer, server, NULL))
+	    return 0;
     }
     
     return 1;	/* Successful return */
@@ -359,7 +335,8 @@ static int remove_server_leaf(char *channel) {
 	    res = 1;
     }
 
-    if (!res) return res;
+    if (!res)
+	return res;
     /* Remove channel from server subscription list */
     (void)hm_remove(server_channels, channel, (void **)&users);
     if (ll_isEmpty(users)) {  /* Destroy the stored LL */
@@ -391,8 +368,17 @@ static int remove_server_leaf(char *channel) {
  */
 static void neighbor_flood_channel(char *channel, char *sender_ip) {
     
+    Server *server;
     struct request_s2s_join join_packet;
-    int i;
+    char **addrs;
+    long i, len;
+
+    /* Get the array of neighboring server IPs, return if malloc() fails */
+    if ((addrs = hm_keyArray(neighbors, &len)) == NULL) {
+	fprintf(stdout, "%s Failed to flood server(s), memory allocation failed\n",
+	    server_addr);
+	return;
+    }
 
     /* Initializes & sets the packet's contents */
     memset(&join_packet, 0, sizeof(join_packet));
@@ -401,15 +387,19 @@ static void neighbor_flood_channel(char *channel, char *sender_ip) {
 
     /* Send the packet to each of the connecting servers */
     /* Do not send it to the server that it received from */
-    for (i = 0; i < server_n; i++) {
-	if (neighbors[i] != NULL && strcmp(neighbors[i]->ip_addr, sender_ip)) {
+    for (i = 0L; i < len; i++) {
+	if (!hm_get(neighbors, addrs[i], (void **)&server))
+	    continue;
+	if (strcmp(server->ip_addr, sender_ip)) {
 	    sendto(socket_fd, &join_packet, sizeof(join_packet), 0,
-		    (struct sockaddr *)neighbors[i]->addr, sizeof(*neighbors[i]->addr));
+		    (struct sockaddr *)server->addr, sizeof(*server->addr));
 	    /* Log the sent packet */
 	    fprintf(stdout, "%s %s send S2S JOIN %s\n",
-		    server_addr, neighbors[i]->ip_addr, channel);
+		    server_addr, server->ip_addr, channel);
 	}
     }
+
+    free(addrs);
 }
 
 /**
@@ -426,7 +416,7 @@ static void refresh_s2s_joins(void) {
     /* If server is not subscribed to any channels, don't bother with scan */
     if ((chs = hm_keyArray(server_channels, &len)) == NULL) {
 	if (!hm_isEmpty(server_channels))  /* malloc() failure, print error and return */
-	    fprintf(stdout, "%s Failed to refresh S2S join(s), memory allocation failed.\n",
+	    fprintf(stdout, "%s Failed to refresh S2S join(s), memory allocation failed\n",
 		    server_addr);
 	return;
     }
@@ -446,19 +436,26 @@ static void refresh_s2s_joins(void) {
 static int server_join_channel(char *channel) {
 
     LinkedList *servers;
-    long i;
+    Server *server;
+    char **addrs;
+    long i, len;
 
     /* Create the list of listening servers */
     if ((servers = ll_create()) == NULL)
 	return 0;
+    if ((addrs = hm_keyArray(neighbors, &len)) == NULL) {
+	ll_destroy(servers, NULL);
+	return 0;
+    }
 
     /* Adds each connected server into the list */
-    for (i = 0L; i < server_n; i++) {
-	if (neighbors[i] == NULL)
+    for (i = 0L; i < len; i++) {
+	if (!hm_get(neighbors, addrs[i], (void **)&server))
 	    continue;
 	/* Checks for malloc() errors */
-	if (!ll_add(servers, neighbors[i])) {
+	if (!ll_add(servers, server)) {
 	    ll_destroy(servers, NULL);
+	    free(addrs);
 	    return 0;
 	}
     }
@@ -466,9 +463,11 @@ static int server_join_channel(char *channel) {
     /* Add the list of neighbors into the subscription hashmap */
     if (!hm_put(server_channels, channel, servers, NULL)) {
 	ll_destroy(servers, NULL);
+	free(addrs);
 	return 0;
     }
 
+    free(addrs);
     return 1;	/* All addition(s) were successful */
 }
 
@@ -518,7 +517,7 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
     /* Create a new instance of the user */
     /* Send error back to client if malloc() failed, log the error */
     if ((user = malloc_user(client_ip, name, addr)) == NULL) {
-	server_send_error(addr, "Failed to log into the server");
+	server_send_error(addr, "Failed to log into the server.");
 	return;
     }
 
@@ -562,7 +561,7 @@ static void server_join_request(const char *packet, char *client_ip) {
 				(CHANNEL_MAX - 1) : strlen(join_packet->req_channel));
     /* Allocate memory from heap for name, report and log error if failed */
     if ((joined = (char *)malloc(ch_len + 1)) == NULL) {
-	sprintf(buffer, "Failed to join %s", join_packet->req_channel);
+	sprintf(buffer, "Failed to join %s.", join_packet->req_channel);
 	server_send_error(user->addr, buffer);
 	return;
     }
@@ -574,7 +573,7 @@ static void server_join_request(const char *packet, char *client_ip) {
     /* Add this channel to the neighboring server's subscription list */
     if (!hm_containsKey(server_channels, joined)) {
 	if (!server_join_channel(joined)) {
-	    sprintf(buffer, "Failed to join %s", joined);
+	    sprintf(buffer, "Failed to join %s.", joined);
 	    server_send_error(user->addr, buffer);
 	    free(joined);
 	    return;
@@ -584,7 +583,7 @@ static void server_join_request(const char *packet, char *client_ip) {
 
     /* Add the channel to user's subscribed list, send error if failed, log error */
     if (!ll_add(user->channels, joined)) {
-	sprintf(buffer, "Failed to join %s", joined);
+	sprintf(buffer, "Failed to join %s.", joined);
 	server_send_error(user->addr, buffer);
 	free(joined);
 	return;
@@ -595,14 +594,14 @@ static void server_join_request(const char *packet, char *client_ip) {
 
 	/* Create the new channel list, send error back if failed, log the error */
 	if ((user_list = ll_create()) == NULL) {
-	    sprintf(buffer, "Failed to join %s", join_packet->req_channel);
+	    sprintf(buffer, "Failed to join %s.", join_packet->req_channel);
 	    server_send_error(user->addr, buffer);
 	    return;
 	}
 	/* Add the user to the list, send error back if failed, log the error */
 	if (!ll_add(user_list, user)) {
 	    ll_destroy(user_list, NULL);
-	    sprintf(buffer, "Failed to join %s", join_packet->req_channel);
+	    sprintf(buffer, "Failed to join %s.", join_packet->req_channel);
 	    server_send_error(user->addr, buffer);
 	    return;
 	}
@@ -610,7 +609,7 @@ static void server_join_request(const char *packet, char *client_ip) {
 	/* Send error back to client if failed, log the error */
 	if (!hm_put(channels, joined, user_list, NULL)) {
 	    ll_destroy(user_list, NULL);
-	    sprintf(buffer, "Failed to join %s", join_packet->req_channel);
+	    sprintf(buffer, "Failed to join %s.", join_packet->req_channel);
 	    server_send_error(user->addr, buffer);
 	    return;
 	}
@@ -628,7 +627,7 @@ static void server_join_request(const char *packet, char *client_ip) {
 	/* User was not found, so add them to subscription list */
 	/* If failed, send error back to client, log the error */
 	if (!ll_add(user_list, user)) {
-	    sprintf(buffer, "Failed to join %s", join_packet->req_channel);
+	    sprintf(buffer, "Failed to join %s.", join_packet->req_channel);
 	    server_send_error(user->addr, buffer);
 	    return;
 	}
@@ -661,7 +660,7 @@ static void server_leave_request(const char *packet, char *client_ip) {
     /* Assert that the channel currently exists */
     /* If not, report error back to user, log the error */
     if (!hm_get(channels, channel, (void **)&user_list)) {
-	sprintf(buffer, "No channel by the name %s", leave_packet->req_channel);
+	sprintf(buffer, "No channel by the name %s.", leave_packet->req_channel);
 	server_send_error(user->addr, buffer);
 	return;
     }
@@ -694,7 +693,7 @@ static void server_leave_request(const char *packet, char *client_ip) {
     if (!removed) {
 	/* User was not removed, wasn't subscribed to channel to begin with */
 	/* Send a message back to user notifying them, log the error */
-	sprintf(buffer, "You are not subscribed to %s", channel);
+	sprintf(buffer, "You are not subscribed to %s.", channel);
 	server_send_error(user->addr, buffer);
 	return;
     }
@@ -775,7 +774,7 @@ static void server_say_request(const char *packet, char *client_ip) {
 
     /* Respond to user with error message if malloc() failure, log the error */
     if (!broadcast_message(ch_users, user->username, say_packet->req_channel, say_packet->req_text)) {
-	sprintf(buffer, "Failed to send the message");
+	sprintf(buffer, "Failed to send the message.");
 	server_send_error(user->addr, buffer);
 	return;
     }
@@ -828,7 +827,7 @@ static void server_list_request(char *client_ip) {
     /* Send error message back to client if failed (malloc() error), log the error */
     if ((ch_list = hm_keyArray(channels, &len)) == NULL) {
 	if (!hm_isEmpty(channels)) {
-	    server_send_error(user->addr, "Failed to list the channels");
+	    server_send_error(user->addr, "Failed to list the channels.");
 	    return;
 	}
     }
@@ -838,7 +837,7 @@ static void server_list_request(char *client_ip) {
     /* Allocate memory for the packet using calculated size */
     /* Send error back to user if failed (malloc() error), log the error */
     if ((list_packet = (struct text_list *)malloc(size)) == NULL) {
-	server_send_error(user->addr, "Failed to list the channels");
+	server_send_error(user->addr, "Failed to list the channels.");
 	free(ch_list);
 	return;
     }
@@ -885,7 +884,7 @@ static void server_who_request(const char *packet, char *client_ip) {
 
     /* Assert that the channel requested exists, send error back if it doesn't, log the error */
     if (!hm_get(channels, who_packet->req_channel, (void **)&subscribers)) {
-	sprintf(buffer, "No channel by the name %s", who_packet->req_channel);
+	sprintf(buffer, "No channel by the name %s.", who_packet->req_channel);
 	server_send_error(user->addr, buffer);
 	return;
     }
@@ -894,7 +893,7 @@ static void server_who_request(const char *packet, char *client_ip) {
     /* Send error message back to client if failed (malloc() error), log the error */
     if ((user_list = (User **)ll_toArray(subscribers, &len)) == NULL) {
 	if (!ll_isEmpty(subscribers)) {
-	    sprintf(buffer, "Failed to list users on %s", who_packet->req_channel);
+	    sprintf(buffer, "Failed to list users on %s.", who_packet->req_channel);
 	    server_send_error(user->addr, buffer);
 	    return;
 	}
@@ -905,7 +904,7 @@ static void server_who_request(const char *packet, char *client_ip) {
     /* Allocate memory for the packet using calculated size */
     /* Send error back to user if failed (malloc() error), log the error */
     if ((send_packet = (struct text_who *)malloc(size)) == NULL) {
-	sprintf(buffer, "Failed to list users on %s", who_packet->req_channel);
+	sprintf(buffer, "Failed to list users on %s.", who_packet->req_channel);
 	server_send_error(user->addr, buffer);
 	free(user_list);
 	return;
@@ -1051,7 +1050,7 @@ static void logout_inactive_users(void) {
     /* Retrieve the list of all connected clients */
     /* Abort the scan if failed (malloc() error), log the error */
     if ((user_list = hm_keyArray(users, &len)) == NULL) {
-	fprintf(stdout, "%s Failed to scan for inactive users, memory allocation failed.\n",
+	fprintf(stdout, "%s Failed to scan for inactive users, memory allocation failed\n",
 		server_addr);
 	return;
     }
@@ -1092,7 +1091,7 @@ static void logout_inactive_users(void) {
 
     /* Get the full list of server's subscribed channels, log error if malloc() fails */
     if ((chs = hm_keyArray(server_channels, &len)) == NULL) {
-	fprintf(stdout, "%s Failed to scan for inactive servers, memory allocation failed.\n",
+	fprintf(stdout, "%s Failed to scan for inactive servers, memory allocation failed\n",
 		server_addr);
 	return;
     }
@@ -1131,7 +1130,7 @@ static void server_s2s_join_request(const char *packet, char *client_ip) {
     struct request_s2s_join *join_packet = (struct request_s2s_join *) packet;
 
     /* Get neighboring sender */
-    if ((sender = get_server(client_ip)) == NULL)
+    if (!hm_get(neighbors, client_ip, (void **)&sender))
 	return;
     update_server_time(sender);
 
@@ -1211,7 +1210,7 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
     struct request_s2s_say *say_packet = (struct request_s2s_say *) packet;
 
     /* Get the sending server */
-    if ((sender = get_server(client_ip)) == NULL)
+    if (!hm_get(neighbors, client_ip, (void **)&sender))
 	return;
     update_server_time(sender);
     /* Get list of listening servers */
@@ -1307,13 +1306,9 @@ static void cleanup(void) {
     /* Destroy the hashmap of channels neighboring servers are listening to */
     if (server_channels != NULL)
 	hm_destroy(server_channels, (void *)free_ll);
-    /* Destroy the array of neighboring servers */
-    int i;
-    if (neighbors != NULL) {
-	for (i = 0; i < server_n; i++)
-	    free_server(neighbors[i]);
-	free(neighbors);
-    }
+    /* Destroy the hashmap containing neighboring servers */
+    if (neighbors != NULL)
+	hm_destroy(neighbors, (void *)free_server);
 }
 
 /**
@@ -1412,11 +1407,13 @@ int main(int argc, char *argv[]) {
 	print_error("Failed to allocate a sufficient amount of memory.");
     if (!hm_put(channels, DEFAULT_CHANNEL, default_ll, NULL))
 	print_error("Failed to allocate a sufficient amount of memory.");
+    if ((neighbors = hm_create(20L, 0.0f)) == NULL)
+	print_error("Failed to allocate a sufficient amount of memory.");
     if ((server_channels = hm_create(100L, 0.0f)) == NULL)
 	print_error("Failed to allocate a sufficient amount of memory.");
     /* Allocate memory for neighboring servers */
     argc -= 3; argv += 3;   /* Skip to neighboring server arg(s) */
-    if (!malloc_neighbors(argv, argc))
+    if (!add_neighbors(argv, argc))
 	print_error("Failed to allocate a sufficient amount of memory.");
 
     /* Initialize message ID queue */
