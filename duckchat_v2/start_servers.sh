@@ -6,7 +6,7 @@ SERVER=./server
 SERVER_NAME=`echo $SERVER | sed 's#.*/\(.*\)#\1#g'`
 
 # Single server
-$SERVER localhost 4000 &
+#$SERVER localhost 4000 &
 
 # Generate a simple two-server topology
 #$SERVER localhost 4000 localhost 4001 &
@@ -18,10 +18,10 @@ $SERVER localhost 4000 &
 #$SERVER localhost 4002 localhost 4001 &
 
 # Generate a simple 4-server lined topology
-#$SERVER localhost 4000 localhost 4001 &
-#$SERVER localhost 4001 localhost 4000 localhost 4002 &
-#$SERVER localhost 4002 localhost 4001 localhost 4003 &
-#$SERVER localhost 4003 localhost 4002 &
+$SERVER localhost 4000 localhost 4001 &
+$SERVER localhost 4001 localhost 4000 localhost 4002 &
+$SERVER localhost 4002 localhost 4001 localhost 4003 &
+$SERVER localhost 4003 localhost 4002 &
 
 # Generate a simple 5-server lined topology
 #$SERVER localhost 4000 localhost 4001 &
