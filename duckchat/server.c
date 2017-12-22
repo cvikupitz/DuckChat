@@ -227,7 +227,7 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
     /* Create a new instance of the user */
     /* Send error back to client if malloc() failed, log the error */
     if ((user = malloc_user(client_ip, name, addr)) == NULL) {
-	server_send_error(addr, "Failed to log into the server");
+	server_send_error(addr, "Failed to log into the server.");
 	sprintf(buffer, "*** Failed to login %s, memory allocation failed",
 			client_ip);
 	print_log_message(buffer);
@@ -274,7 +274,7 @@ static void server_join_request(const char *packet, char *client_ip) {
 				(CHANNEL_MAX - 1) : strlen(join_packet->req_channel));
     /* Allocate memory from heap for name, report and log error if failed */
     if ((joined = (char *)malloc(ch_len + 1)) == NULL) {
-	sprintf(buffer, "Failed to join %s", join_packet->req_channel);
+	sprintf(buffer, "Failed to join %s.", join_packet->req_channel);
 	server_send_error(user->addr, buffer);
 	sprintf(buffer, "*** Failed to add %s to channel %s, memory allocation failed",
 		    user->username, join_packet->req_channel);
@@ -287,7 +287,7 @@ static void server_join_request(const char *packet, char *client_ip) {
     joined[ch_len] = '\0';
     /* Add the channel to user's subscribed list, send error if failed, log error */
     if (!ll_add(user->channels, joined)) {
-	sprintf(buffer, "Failed to join %s", joined);
+	sprintf(buffer, "Failed to join %s.", joined);
 	server_send_error(user->addr, buffer);
 	sprintf(buffer, "*** Failed to add %s to channel %s, memory allocation failed",
 		    user->username, joined);
@@ -301,7 +301,7 @@ static void server_join_request(const char *packet, char *client_ip) {
 
 	/* Create the new channel list, send error back if failed, log the error */
 	if ((user_list = ll_create()) == NULL) {
-	    sprintf(buffer, "Failed to join %s", join_packet->req_channel);
+	    sprintf(buffer, "Failed to join %s.", join_packet->req_channel);
 	    server_send_error(user->addr, buffer);
 	    sprintf(buffer, "*** Failed to add %s to channel %s, memory allocation failed",
 		    user->username, joined);
@@ -322,7 +322,7 @@ static void server_join_request(const char *packet, char *client_ip) {
 	/* Send error back to client if failed, log the error */
 	if (!hm_put(channels, joined, user_list, NULL)) {
 	    ll_destroy(user_list, NULL);
-	    sprintf(buffer, "Failed to join %s", join_packet->req_channel);
+	    sprintf(buffer, "Failed to join %s.", join_packet->req_channel);
 	    server_send_error(user->addr, buffer);
 	    sprintf(buffer, "*** Failed to add %s to channel %s, memory allocation failed",
 		    user->username, joined);
@@ -350,7 +350,7 @@ static void server_join_request(const char *packet, char *client_ip) {
 	/* User was not found, so add them to subscription list */
 	/* If failed, send error back to client, log the error */
 	if (!ll_add(user_list, user)) {
-	    sprintf(buffer, "Failed to join %s", join_packet->req_channel);
+	    sprintf(buffer, "Failed to join %s.", join_packet->req_channel);
 	    server_send_error(user->addr, buffer);
 	    sprintf(buffer, "*** Failed to add %s to channel %s, memory allocation failed",
 		    user->username, joined);
@@ -390,7 +390,7 @@ static void server_leave_request(const char *packet, char *client_ip) {
     /* Assert that the channel currently exists */
     /* If not, report error back to user, log the error */
     if (!hm_get(channels, channel, (void **)&user_list)) {
-	sprintf(buffer, "No channel by the name %s", leave_packet->req_channel);
+	sprintf(buffer, "No channel by the name %s.", leave_packet->req_channel);
 	server_send_error(user->addr, buffer);
 	sprintf(buffer, "%s attempted to leave non-existent channel %s", user->username, leave_packet->req_channel);
 	print_log_message(buffer);
@@ -427,7 +427,7 @@ static void server_leave_request(const char *packet, char *client_ip) {
     } else {
 	/* User was not removed, wasn't subscribed to channel to begin with */
 	/* Send a message back to user notifying them, log the error */
-	sprintf(buffer, "You are not subscribed to %s", channel);
+	sprintf(buffer, "You are not subscribed to %s.", channel);
 	server_send_error(user->addr, buffer);
 	sprintf(buffer, "%s attempted to leave a channel they are not subscribed to", user->username);
 	print_log_message(buffer);
@@ -471,7 +471,7 @@ static void server_say_request(const char *packet, char *client_ip) {
     /* Get the list of users listening to the channel */
     /* Respond to user with error message if malloc() failure, log the error */
     if ((listeners = (User **)ll_toArray(ch_users, &len)) == NULL) {
-	sprintf(buffer, "Failed to send the message");
+	sprintf(buffer, "Failed to send the message.");
 	server_send_error(user->addr, buffer);
 	sprintf(buffer, "*** Failed to send a message from %s to channel %s, memory allocation failed",
 		    user->username, say_packet->req_channel);
@@ -521,7 +521,7 @@ static void server_list_request(char *client_ip) {
     /* Send error message back to client if failed (malloc() error), log the error */
     if ((ch_list = hm_keyArray(channels, &len)) == NULL) {
 	if (!hm_isEmpty(channels)) {
-	    server_send_error(user->addr, "Failed to list the channels");
+	    server_send_error(user->addr, "Failed to list the channels.");
 	    sprintf(buffer, "*** Failed to list channels for user %s, memory allocation failed",
 			user->username);
 	    print_log_message(buffer);
@@ -534,7 +534,7 @@ static void server_list_request(char *client_ip) {
     /* Allocate memory for the packet using calculated size */
     /* Send error back to user if failed (malloc() error), log the error */
     if ((list_packet = malloc(size)) == NULL) {
-	server_send_error(user->addr, "Failed to list the channels");
+	server_send_error(user->addr, "Failed to list the channels.");
 	sprintf(buffer, "*** Failed to list channels for user %s, memory allocation failed",
 			user->username);
 	print_log_message(buffer);
@@ -583,7 +583,7 @@ static void server_who_request(const char *packet, char *client_ip) {
 
     /* Assert that the channel requested exists, send error back if it doesn't, log the error */
     if (!hm_get(channels, who_packet->req_channel, (void **)&subscribers)) {
-	sprintf(buffer, "No channel by the name %s", who_packet->req_channel);
+	sprintf(buffer, "No channel by the name %s.", who_packet->req_channel);
 	server_send_error(user->addr, buffer);
 	sprintf(buffer, "%s attempted to list users on non-existent channel %s",
 		    user->username, who_packet->req_channel);
@@ -595,7 +595,7 @@ static void server_who_request(const char *packet, char *client_ip) {
     /* Send error message back to client if failed (malloc() error), log the error */
     if ((user_list = (User **)ll_toArray(subscribers, &len)) == NULL) {
 	if (!ll_isEmpty(subscribers)) {
-	    sprintf(buffer, "Failed to list users on %s", who_packet->req_channel);
+	    sprintf(buffer, "Failed to list users on %s.", who_packet->req_channel);
 	    server_send_error(user->addr, buffer);
 	    sprintf(buffer, "*** Failed to list users on channel %s for user %s, memory allocation failed",
 			who_packet->req_channel, user->username);
@@ -609,7 +609,7 @@ static void server_who_request(const char *packet, char *client_ip) {
     /* Allocate memory for the packet using calculated size */
     /* Send error back to user if failed (malloc() error), log the error */
     if ((send_packet = malloc(size)) == NULL) {
-	sprintf(buffer, "Failed to list users on %s", who_packet->req_channel);
+	sprintf(buffer, "Failed to list users on %s.", who_packet->req_channel);
 	server_send_error(user->addr, buffer);
 	sprintf(buffer, "*** Failed to list users on channel %s for user %s",
 		    who_packet->req_channel, user->username);
@@ -909,10 +909,9 @@ int main(int argc, char *argv[]) {
 	print_error("Failed to allocate a sufficient amount of memory.");
 
     /* Display successful launch title, timestamp & address */
-    time(&timer);
-    fprintf(stdout, "------ Launched DuckChat server ~ %s", ctime(&timer)); 
     fprintf(stdout, "------ Server assigned to address %s:%d\n",
 		inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+    print_log_message("DuckChat server launched");
     /* Set the timeout timer for select() */
     memset(&timeout, 0, sizeof(timeout));
     timeout.tv_sec = (REFRESH_RATE * 60);

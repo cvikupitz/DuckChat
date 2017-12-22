@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 12/19/2017
+ * Last Modified: 12/21/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -80,7 +80,7 @@ typedef struct {
 typedef struct {
     struct sockaddr_in *addr;	/* The address of the neighboring server */
     char *ip_addr;		/* Full IP address of server in string format */
-    short last_min;		/* Clock minute of last received S2S Join request */
+    short last_min;		/* Clock minute of last received S2S request */
 } Server;
 
 /**
@@ -322,6 +322,10 @@ static int remove_server_leaf(char *channel) {
     Server *server;
     int res = 0;
     struct request_s2s_leave leave_packet;
+
+    /* No neighbors, do nothing */
+    if (hm_isEmpty(neighbors))
+	return 0;
 
     /* Retrieve the list of subscribed servers */
     (void)hm_get(server_channels, channel, (void **)&servers);
@@ -571,14 +575,16 @@ static void server_join_request(const char *packet, char *client_ip) {
     joined[ch_len] = '\0';
 
     /* Add this channel to the neighboring server's subscription list */
-    if (!hm_containsKey(server_channels, joined)) {
-	if (!server_join_channel(joined)) {
-	    sprintf(buffer, "Failed to join %s.", joined);
-	    server_send_error(user->addr, buffer);
-	    free(joined);
-	    return;
+    if (!hm_isEmpty(neighbors)) {
+	if (!hm_containsKey(server_channels, joined)) {
+	    if (!server_join_channel(joined)) {
+		sprintf(buffer, "Failed to join %s.", joined);
+		server_send_error(user->addr, buffer);
+		free(joined);
+		return;
+	    }
+	    neighbor_flood_channel(joined, server_addr);
 	}
-	neighbor_flood_channel(joined, server_addr);
     }
 
     /* Add the channel to user's subscribed list, send error if failed, log error */
