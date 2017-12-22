@@ -31,6 +31,7 @@
 
 /* Refresh rate (in minutes) of the server to refresh its internal data structures */
 /* The server will scan and remove users who have not sent a packet past the refresh rate */
+/* Inactive neighboring servers will also be removed from the routing table */
 /* Should be kept between 2-5 minutes */
 #define REFRESH_RATE 2
 

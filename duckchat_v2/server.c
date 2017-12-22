@@ -60,8 +60,8 @@ static HashMap *channels = NULL;
 /* Maps the server's IP address in a string to the server struct */
 static HashMap *neighbors = NULL;
 /* HashMap of all channels neighboring servers are subscribed to */
-/* Maps the channel name to a linked list of pointers of listening servers */
-static HashMap *server_channels = NULL;
+/* Acts as a routing table; maps a list of listening servers to each existing channel */
+static HashMap *r_table = NULL;
 
 /**
  * A structure to represent a user logged into the server.
@@ -328,7 +328,7 @@ static int remove_server_leaf(char *channel) {
 	return 0;
 
     /* Retrieve the list of subscribed servers */
-    (void)hm_get(server_channels, channel, (void **)&servers);
+    (void)hm_get(r_table, channel, (void **)&servers);
     if (hm_get(channels, channel, (void **)&users)) {
 	/* Server has no other servers or clients listening */
 	if (ll_size(servers) < 2L && ll_isEmpty(users))
@@ -342,7 +342,7 @@ static int remove_server_leaf(char *channel) {
     if (!res)
 	return res;
     /* Remove channel from server subscription list */
-    (void)hm_remove(server_channels, channel, (void **)&users);
+    (void)hm_remove(r_table, channel, (void **)&users);
     if (ll_isEmpty(users)) {  /* Destroy the stored LL */
 	ll_destroy(users, NULL);
 	return 1;
@@ -418,8 +418,8 @@ static void refresh_s2s_joins(void) {
 
     /* Get an array of the server's subscribed channels */
     /* If server is not subscribed to any channels, don't bother with scan */
-    if ((chs = hm_keyArray(server_channels, &len)) == NULL) {
-	if (!hm_isEmpty(server_channels))  /* malloc() failure, print error and return */
+    if ((chs = hm_keyArray(r_table, &len)) == NULL) {
+	if (!hm_isEmpty(r_table))  /* malloc() failure, print error and return */
 	    fprintf(stdout, "%s Failed to refresh S2S join(s), memory allocation failed\n",
 		    server_addr);
 	return;
@@ -465,7 +465,7 @@ static int server_join_channel(char *channel) {
     }
 
     /* Add the list of neighbors into the subscription hashmap */
-    if (!hm_put(server_channels, channel, servers, NULL)) {
+    if (!hm_put(r_table, channel, servers, NULL)) {
 	ll_destroy(servers, NULL);
 	free(addrs);
 	return 0;
@@ -576,7 +576,7 @@ static void server_join_request(const char *packet, char *client_ip) {
 
     /* Add this channel to the neighboring server's subscription list */
     if (!hm_isEmpty(neighbors)) {
-	if (!hm_containsKey(server_channels, joined)) {
+	if (!hm_containsKey(r_table, joined)) {
 	    if (!server_join_channel(joined)) {
 		sprintf(buffer, "Failed to join %s.", joined);
 		server_send_error(user->addr, buffer);
@@ -794,7 +794,7 @@ static void server_say_request(const char *packet, char *client_ip) {
     strncpy(s2s_say.req_text, say_packet->req_text, (SAY_MAX - 1));
 
     /* Get the list of listening neighboring servers */
-    if (!hm_get(server_channels, say_packet->req_channel, (void **)&ch_users))
+    if (!hm_get(r_table, say_packet->req_channel, (void **)&ch_users))
 	return;
     /* Send the S2S say packet to all connecting servers */
     for (i = 0L; i < ll_size(ch_users); i++) {
@@ -1092,19 +1092,19 @@ static void logout_inactive_users(void) {
     long i, j, len = 0L;
     
     /* If server channel subscription list is empty, don't bother with scan */
-    if (hm_isEmpty(server_channels))
+    if (hm_isEmpty(r_table))
 	return;
 
     /* Get the full list of server's subscribed channels, log error if malloc() fails */
-    if ((chs = hm_keyArray(server_channels, &len)) == NULL) {
-	fprintf(stdout, "%s Failed to scan for inactive servers, memory allocation failed\n",
+    if ((chs = hm_keyArray(r_table, &len)) == NULL) {
+	fprintf(stdout, "%s Failed to scan for crashed servers, memory allocation failed\n",
 		server_addr);
 	return;
     }
 
     for (i = 0L; i < len; i++) {
 	/* Assert that the channel exists */
-	if (!hm_get(server_channels, chs[i], (void **)&servers))
+	if (!hm_get(r_table, chs[i], (void **)&servers))
 	    continue;
 	for (j = 0L; j < ll_size(servers); j++) {
 	    /* Obtain the neighboring subscribed server */
@@ -1145,7 +1145,7 @@ static void server_s2s_join_request(const char *packet, char *client_ip) {
 	    server_addr, client_ip, join_packet->req_channel);
 
     /* If server is already subscribed, request dies here */
-    if (hm_get(server_channels, join_packet->req_channel, (void **)&servers)) {
+    if (hm_get(r_table, join_packet->req_channel, (void **)&servers)) {
 	for (i = 0L; i < ll_size(servers); i++) {
 	    (void)ll_get(servers, i, (void **)&server);
 	    /* Server already subscribed, return */
@@ -1184,7 +1184,7 @@ static void server_s2s_leave_request(const char *packet, char *client_ip) {
     fprintf(stdout, "%s %s recv S2S LEAVE %s\n",
 	    server_addr, client_ip, leave_packet->req_channel);
     /* Assert the channel is subscribed to, return if not */
-    if (!hm_get(server_channels, leave_packet->req_channel, (void **)&servers))
+    if (!hm_get(r_table, leave_packet->req_channel, (void **)&servers))
 	return;
 
     /* Check each subscribed server in the list */
@@ -1220,7 +1220,7 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 	return;
     update_server_time(sender);
     /* Get list of listening servers */
-    if (!hm_get(server_channels, say_packet->req_channel, (void **)&servers))
+    if (!hm_get(r_table, say_packet->req_channel, (void **)&servers))
 	return;
 
     /* Initialize and set leave packet members */
@@ -1310,8 +1310,8 @@ static void cleanup(void) {
     if (users != NULL)
 	hm_destroy(users, (void *)free_user);
     /* Destroy the hashmap of channels neighboring servers are listening to */
-    if (server_channels != NULL)
-	hm_destroy(server_channels, (void *)free_ll);
+    if (r_table != NULL)
+	hm_destroy(r_table, (void *)free_ll);
     /* Destroy the hashmap containing neighboring servers */
     if (neighbors != NULL)
 	hm_destroy(neighbors, (void *)free_server);
@@ -1415,7 +1415,7 @@ int main(int argc, char *argv[]) {
 	print_error("Failed to allocate a sufficient amount of memory.");
     if ((neighbors = hm_create(20L, 0.0f)) == NULL)
 	print_error("Failed to allocate a sufficient amount of memory.");
-    if ((server_channels = hm_create(100L, 0.0f)) == NULL)
+    if ((r_table = hm_create(100L, 0.0f)) == NULL)
 	print_error("Failed to allocate a sufficient amount of memory.");
     /* Allocate memory for neighboring servers */
     argc -= 3; argv += 3;   /* Skip to neighboring server arg(s) */
