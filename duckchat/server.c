@@ -834,7 +834,8 @@ static void print_error(const char *msg) {
  */
 static void server_exit(UNUSED int signo) {
     
-    fprintf(stdout, "\n\nShutting down server...\n\n");
+    fprintf(stdout, "\n");
+    print_log_message("Duckchat server terminated\n");
     exit(0);
 }
 
