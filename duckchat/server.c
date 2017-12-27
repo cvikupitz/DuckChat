@@ -834,7 +834,6 @@ static void print_error(const char *msg) {
  */
 static void server_exit(UNUSED int signo) {
     
-    fprintf(stdout, "\n");
     print_log_message("Duckchat server terminated\n");
     exit(0);
 }
@@ -910,9 +909,9 @@ int main(int argc, char *argv[]) {
 	print_error("Failed to allocate a sufficient amount of memory.");
 
     /* Display successful launch title, timestamp & address */
-    fprintf(stdout, "------ Server assigned to address %s:%d\n",
-		inet_ntoa(server.sin_addr), ntohs(server.sin_port));
-    print_log_message("DuckChat server launched");
+    sprintf(buffer, "Duckchat server launched addressed at %s:%d",
+	    inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+    print_log_message(buffer);
     /* Set the timeout timer for select() */
     memset(&timeout, 0, sizeof(timeout));
     timeout.tv_sec = (REFRESH_RATE * 60);
