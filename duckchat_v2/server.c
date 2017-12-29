@@ -1334,7 +1334,7 @@ static void print_error(const char *msg) {
  */
 static void server_exit(UNUSED int signo) {
     
-    fprintf(stdout, "\n\nShutting down server...\n\n");
+    fprintf(stdout, "%s Duckchat server terminated\n", server_addr);
     exit(0);
 }
 
@@ -1428,7 +1428,7 @@ int main(int argc, char *argv[]) {
 
     /* Display successful launch title & address */
     sprintf(server_addr, "%s:%d", inet_ntoa(server.sin_addr), ntohs(server.sin_port));
-    fprintf(stdout, "------ Launched server at %s\n", server_addr);
+    fprintf(stdout, "%s Duckchat server launched\n", server_addr);
     /* Set the timeout timer for select() */
     memset(&timeout, 0, sizeof(timeout));
     timeout.tv_sec = 60;
