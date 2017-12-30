@@ -266,26 +266,6 @@ static int add_neighbors(char *args[], int n) {
 }
 
 /**
- * FIXME
- */
-UNUSED static struct sockaddr_in get_addr(UNUSED char *ip_addr) {
-    
-    struct sockaddr_in addr;
-    struct hostent *host_end;
-    char ip[32], port[32];
-
-    sscanf(ip_addr, "%s:%s", ip, port);
-    host_end = gethostbyname(ip);
-
-    memset((char *)&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    memcpy((char *)&addr.sin_addr, (char *)host_end->h_addr_list[0], host_end->h_length);
-    addr.sin_port = htons(atoi(port));
-
-    return addr;
-}
-
-/**
  * Adds the specified ID into the message ID queue.
  */
 static void queue_id(long id) {
@@ -518,7 +498,8 @@ static void server_send_error(struct sockaddr_in *addr, const char *msg) {
 }
 
 /**
- * FIXME
+ * Server receives an authentication packet; the server responds to the client telling them
+ * if the username is currently occupied or not.
  */
 static void server_verify_request(const char *packet, struct sockaddr_in *client) {
 
@@ -1318,20 +1299,6 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 }
 
 /**
- * FIXME
- */
-static void server_s2s_list_request(UNUSED const char *packet, UNUSED char *client_ip) {
-    //FIXME
-}
-
-/**
- * FIXME
- */
-static void server_s2s_who_request(UNUSED const char *packet, UNUSED char *client_ip) {
-    //FIXME
-}
-
-/**
  * Frees the reserved memory occupied by the specified LinkedList. Used by
  * the LinkedList destructor.
  */
@@ -1566,14 +1533,6 @@ int main(int argc, char *argv[]) {
 	    case REQ_S2S_SAY:
 		/* Server-to-server say request, forward to all subscribed servers */
 		server_s2s_say_request(buffer, client_ip);
-		break;
-	    case REQ_S2S_LIST:
-		/* Servr-to-server list request, retrieve all channel names */
-		server_s2s_list_request(buffer, client_ip);
-		break;
-	    case REQ_S2S_WHO:
-		/* Server-to-server who request, get users active on specified channel */
-		server_s2s_who_request(buffer, client_ip);
 		break;
 	    default:
 		/* Do nothing, likey a bogus packet */
