@@ -33,11 +33,12 @@ typedef int text_t;
 #define REQ_KEEP_ALIVE 8
 
 /* Define codes for new server-to-server communication */
-#define REQ_S2S_JOIN 9
-#define REQ_S2S_LEAVE 10
-#define REQ_S2S_SAY 11
-#define REQ_S2S_LIST 12
-#define REQ_S2S_WHO 13
+#define REQ_S2S_VERIFY 9
+#define REQ_S2S_JOIN 10
+#define REQ_S2S_LEAVE 11
+#define REQ_S2S_SAY 12
+#define REQ_S2S_LIST 13
+#define REQ_S2S_WHO 14
 
 /* Define codes for text types.  These are the messages sent to the client. */
 #define TXT_VERIFY 0
@@ -100,6 +101,18 @@ struct request_keep_alive {
 
 
 /* Server-to-server protocols */
+struct ip_address {
+	char ip_addr[30];
+} packed;
+
+struct request_s2s_verify {
+	request_t req_type; /* = REQ_S2S_VERIFY */
+	long id;
+	struct ip_address client;
+	struct ip_address to_visit[0];
+	int n_to_visit;
+} packed;
+
 struct request_s2s_join {
 	request_t req_type; /* = REQ_S2S_JOIN */
 	char req_channel[CHANNEL_MAX];
@@ -141,10 +154,6 @@ struct text {
 struct text_verify {
 	text_t txt_type;    /* = TXT_VERIFY */
 	int valid;
-	char to_visit[32][0];
-	int ntovisit;
-	char visited[32][0];
-	int nvisited;
 } packed;
 
 struct text_say {

@@ -520,8 +520,37 @@ static void server_send_error(struct sockaddr_in *addr, const char *msg) {
 /**
  * FIXME
  */
-static void server_verify_request(UNUSED const char *packet, UNUSED char *client_ip, UNUSED struct sockaddr_in *addr) {
-    ///FIXME
+static void server_verify_request(const char *packet, struct sockaddr_in *client) {
+
+    User *user;
+    char **ip_list;
+    int res = 1;
+    long i, len = 0L;
+    struct text_verify respond_packet;
+    struct request_verify *verify_packet = (struct request_verify *) packet;
+
+    /* Server failed to allocate memory, do nothing */
+    if ((ip_list = hm_keyArray(users, &len)) == NULL)
+	if (!hm_isEmpty(users))
+	    return;
+    
+    for (i = 0L; i < len; i++) {
+	/* Check each user, see if the username is taken */
+	(void)hm_get(users, ip_list[i], (void **)&user);
+	if (!strcmp(verify_packet->req_username, user->username)) {
+	    res = 0;
+	    break;
+	}
+    }
+
+    /* Initialize and set packet members */
+    memset(&respond_packet, 0, sizeof(respond_packet));
+    respond_packet.txt_type = TXT_VERIFY;
+    respond_packet.valid = res;
+    /* Send packet back to client */
+    sendto(socket_fd, &respond_packet, sizeof(respond_packet), 0,
+		(struct sockaddr *)client, sizeof(*client));
+    free(ip_list);  /* Free allocated memory */
 }
 
 /**
@@ -1492,7 +1521,7 @@ int main(int argc, char *argv[]) {
 	switch (packet_type->txt_type) {
 	    case REQ_VERIFY:
 		/* Check to see if the username is taken */
-		server_verify_request(buffer, client_ip, &client);
+		server_verify_request(buffer, &client);
 		break;
 	    case REQ_LOGIN:
 		/* A client requests to login to the server */

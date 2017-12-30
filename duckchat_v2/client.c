@@ -1,7 +1,7 @@
 /**
  * client.c
  * Author: Cole Vikupitz
- * Last Modified: 11/30/2017
+ * Last Modified: 12/29/2017
  *
  * Client side of a chat application using the DuckChat protocol. The client sends
  * and receives packets from a server using this protocol and handles each of the
@@ -532,7 +532,7 @@ int main(int argc, char *argv[]) {
 	strcpy(subscribed[i], "");
 
     /* Authenticate the user, ensure the username is not currently taken */
-    //authenticate_client(); //FIXME
+    authenticate_client(); //FIXME
 
     /* Send a packet to the server to log user in */
     memset(&login_packet, 0, sizeof(login_packet));
