@@ -58,7 +58,6 @@ struct request {
 struct request_verify {
 	request_t req_type; /* = REQ_VERIFY */
 	char req_username[USERNAME_MAX];
-	//FIXME
 } packed;
 
 struct request_login {
@@ -142,6 +141,10 @@ struct text {
 struct text_verify {
 	text_t txt_type;    /* = TXT_VERIFY */
 	int valid;
+	char to_visit[32][0];
+	int ntovisit;
+	char visited[32][0];
+	int nvisited;
 } packed;
 
 struct text_say {

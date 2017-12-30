@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 12/21/2017
+ * Last Modified: 12/29/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -263,6 +263,26 @@ static int add_neighbors(char *args[], int n) {
     }
     
     return 1;	/* Successful return */
+}
+
+/**
+ * FIXME
+ */
+UNUSED static struct sockaddr_in get_addr(UNUSED char *ip_addr) {
+    
+    struct sockaddr_in addr;
+    struct hostent *host_end;
+    char ip[32], port[32];
+
+    sscanf(ip_addr, "%s:%s", ip, port);
+    host_end = gethostbyname(ip);
+
+    memset((char *)&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    memcpy((char *)&addr.sin_addr, (char *)host_end->h_addr_list[0], host_end->h_length);
+    addr.sin_port = htons(atoi(port));
+
+    return addr;
 }
 
 /**
