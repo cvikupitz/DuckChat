@@ -339,8 +339,13 @@ static int remove_server_leaf(char *channel) {
 	    res = 1;
     }
 
-    if (!res)
-	return res;
+    if (!res) return res;
+
+    /* Initialize & set S2S leave request packet members */
+    memset(&leave_packet, 0, sizeof(leave_packet));
+    leave_packet.req_type = REQ_S2S_LEAVE;
+    strncpy(leave_packet.req_channel, channel, (CHANNEL_MAX - 1));
+
     /* Remove channel from server subscription list */
     (void)hm_remove(r_table, channel, (void **)&users);
     if (ll_isEmpty(users)) {  /* Destroy the stored LL */
@@ -350,11 +355,6 @@ static int remove_server_leaf(char *channel) {
     /* Extract the only neighboring subscribed server */
     ll_removeFirst(users, (void **)&server);
     ll_destroy(users, NULL);
-	
-    /* Initialize & set S2S leave request packet members */
-    memset(&leave_packet, 0, sizeof(leave_packet));
-    leave_packet.req_type = REQ_S2S_LEAVE;
-    strncpy(leave_packet.req_channel, channel, (CHANNEL_MAX - 1));
 	
     /* Send S2S leave request to neighboring server */
     sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
@@ -1109,12 +1109,12 @@ static void logout_inactive_users(void) {
 	for (j = 0L; j < ll_size(servers); j++) {
 	    /* Obtain the neighboring subscribed server */
 	    (void)ll_get(servers, j, (void **)&server);
-	    if (is_inactive(server->last_min)) {
-		/* Server deemed inactive, remove it from the subscription list */
-		(void)ll_remove(servers, j, (void **)&server);
-		fprintf(stdout, "%s Removed inactive server %s from channel %s\n",
+	    if (!is_inactive(server->last_min))
+		continue;
+	    /* Server deemed inactive, remove it from the subscription list */
+	    (void)ll_remove(servers, j, (void **)&server);
+	    fprintf(stdout, "%s Removed inactive server %s from channel %s\n",
 			server_addr, server->ip_addr, chs[i]);
-	    }
 	    /* Remove server from channel sub-tree if becomes a leaf */
 	    (void)remove_server_leaf(chs[i]);
 	}
