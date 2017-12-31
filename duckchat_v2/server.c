@@ -311,6 +311,27 @@ static int id_unique(long id) {
 }
 
 /**
+ * FIXME
+ */
+static struct sockaddr_in get_addr(const char *ip_addr) {
+
+    struct sockaddr_in addr;
+    struct hostent *host_end;
+    char hostname[32], port[16];
+
+    /* Extract the hostname and port number */
+    sscanf(ip_addr, "%s:%s", hostname, port);
+    host_end = gethostbyname(hostname);
+
+    /* Initialize and set the address struct members, return the struct */
+    memset((char *)&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    memcpy((char *)&addr.sin_addr, (char *)host_end->h_addr_list[0], host_end->h_length);
+    addr.sin_port = htons(atoi(port));
+    return addr;
+}
+
+/**
  * Checks to see if this server is a leaf in the channel sub-tree, given the
  * specified channel name. The server is a leaf if only one neighbor is
  * subscribed, and no clients are currently listening. Returns 1 if is a leaf,
@@ -339,7 +360,8 @@ static int remove_server_leaf(char *channel) {
 	    res = 1;
     }
 
-    if (!res) return res;
+    if (!res)
+	return res;
 
     /* Initialize & set S2S leave request packet members */
     memset(&leave_packet, 0, sizeof(leave_packet));
@@ -501,13 +523,15 @@ static void server_send_error(struct sockaddr_in *addr, const char *msg) {
  * Server receives an authentication packet; the server responds to the client telling them
  * if the username is currently occupied or not.
  */
-static void server_verify_request(const char *packet, struct sockaddr_in *client) {
+static void server_verify_request(const char *packet, const char *client_ip, struct sockaddr_in *client) {
 
     User *user;
     char **ip_list;
     int res = 1;
     long i, len = 0L;
+    struct sockaddr_in forward;
     struct text_verify respond_packet;
+    struct request_s2s_verify *s2s_verify;
     struct request_verify *verify_packet = (struct request_verify *) packet;
 
     /* Server failed to allocate memory, do nothing */
@@ -523,15 +547,45 @@ static void server_verify_request(const char *packet, struct sockaddr_in *client
 	    break;
 	}
     }
+    free(ip_list);  /* Free allocated memory */
+
+    if (!hm_isEmpty(neighbors) && res) {
+	int size = (sizeof(struct request_s2s_verify) +
+		(sizeof(struct ip_address) * (hm_size(neighbors) - 1)));
+	if ((s2s_verify = (struct request_s2s_verify *)malloc(size)) == NULL)
+	    return;
+	if ((ip_list = hm_keyArray(neighbors, &len)) == NULL) {
+	    free(s2s_verify);
+	    return;
+	}
+
+	memset(s2s_verify, 0, size);
+	s2s_verify->req_type = REQ_S2S_VERIFY;
+	s2s_verify->id = generate_id();
+	strncpy(s2s_verify->req_username, verify_packet->req_username, (USERNAME_MAX - 1));
+	strcpy(s2s_verify->client.ip_addr, client_ip);
+	s2s_verify->n_to_visit = (int)(len - 1);
+	for (i = 0; i < len - 1; i++)
+	    strcpy(s2s_verify->to_visit[i].ip_addr, ip_list[i]);
+
+	//forward = get_addr(ip_list[0]);
+	//sendto(socket_fd, s2s_verify, size, 0, (struct sockaddr *)&forward, sizeof(forward));
+	//fprintf(stdout, "%s %s send S2S VERIFY %s\n", server_addr, ip_list[0], s2s_verify->req_username);
+	
+	free(ip_list);
+	free(s2s_verify);
+	return;
+    }
 
     /* Initialize and set packet members */
     memset(&respond_packet, 0, sizeof(respond_packet));
     respond_packet.txt_type = TXT_VERIFY;
     respond_packet.valid = res;
-    /* Send packet back to client */
+    /* Send packet back to client, log the request */
     sendto(socket_fd, &respond_packet, sizeof(respond_packet), 0,
 		(struct sockaddr *)client, sizeof(*client));
-    free(ip_list);  /* Free allocated memory */
+    fprintf(stdout, "%s %s recv Request VERIFY %s\n",
+	    server_addr, client_ip, verify_packet->req_username);
 }
 
 /**
@@ -1154,6 +1208,16 @@ static void logout_inactive_users(void) {
 }
 
 /**
+ * FIXME
+ */
+static void server_s2s_verify(const char *packet, char *client_ip) {
+
+    struct request_s2s_verify *s2s_verify = (struct request_s2s_verify *) packet;
+
+    fprintf(stdout, "%s %s recv S2S VERIFY %s\n", server_addr, client_ip, s2s_verify->req_username);
+}
+
+/**
  * Server receives a S2S join packet. If the server is not subscribed to the contained
  * channel, it subscribes itself to the channel and forwards the packet to all of its
  * neighboring servers. Otherwise, does nothing.
@@ -1488,7 +1552,7 @@ int main(int argc, char *argv[]) {
 	switch (packet_type->txt_type) {
 	    case REQ_VERIFY:
 		/* Check to see if the username is taken */
-		server_verify_request(buffer, &client);
+		server_verify_request(buffer, client_ip, &client);
 		break;
 	    case REQ_LOGIN:
 		/* A client requests to login to the server */
@@ -1521,6 +1585,10 @@ int main(int argc, char *argv[]) {
 	    case REQ_KEEP_ALIVE:
 		/* Received from an inactive user, keeps them logged in */
 		server_keep_alive_request(client_ip);
+		break;
+	    case REQ_S2S_VERIFY:
+		/* Server-to-server verify request, check for username verification */
+		server_s2s_verify(buffer, client_ip);
 		break;
 	    case REQ_S2S_JOIN:
 		/* Server-to-server join request, forward it to neighbors */

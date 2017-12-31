@@ -108,6 +108,7 @@ struct ip_address {
 struct request_s2s_verify {
 	request_t req_type; /* = REQ_S2S_VERIFY */
 	long id;
+	char req_username[USERNAME_MAX];
 	struct ip_address client;
 	struct ip_address to_visit[0];
 	int n_to_visit;
