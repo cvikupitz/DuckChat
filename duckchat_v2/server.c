@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 12/29/2017
+ * Last Modified: 12/30/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -313,21 +313,34 @@ static int id_unique(long id) {
 /**
  * FIXME
  */
-static struct sockaddr_in get_addr(const char *ip_addr) {
+static struct sockaddr_in *get_addr(char *ip_addr) {
 
-    struct sockaddr_in addr;
+    struct sockaddr_in *addr;
     struct hostent *host_end;
     char hostname[32], port[16];
+    char *res;
+    int i;
 
     /* Extract the hostname and port number */
-    sscanf(ip_addr, "%s:%s", hostname, port);
-    host_end = gethostbyname(hostname);
+    if ((res = strrchr(ip_addr, ':')) == NULL)
+	return NULL;
+    strcpy(port, res + 1);
+    i = res - ip_addr;
+    strncpy(hostname, ip_addr, i);
+    hostname[i] = '\0';
+
+    /* Locate the hostname, return NULL if not found */
+    if ((host_end = gethostbyname(hostname)) == NULL)
+	return NULL;
 
     /* Initialize and set the address struct members, return the struct */
-    memset((char *)&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    memcpy((char *)&addr.sin_addr, (char *)host_end->h_addr_list[0], host_end->h_length);
-    addr.sin_port = htons(atoi(port));
+    if ((addr = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in))) == NULL)
+	return NULL;
+    memset(addr, 0, sizeof(*addr));
+    addr->sin_family = AF_INET;
+    memcpy((char *)&(addr->sin_addr), (char *)host_end->h_addr_list[0], host_end->h_length);
+    addr->sin_port = htons(atoi(port));
+
     return addr;
 }
 
@@ -529,7 +542,7 @@ static void server_verify_request(const char *packet, const char *client_ip, str
     char **ip_list;
     int res = 1;
     long i, len = 0L;
-    struct sockaddr_in forward;
+    struct sockaddr_in *forward;
     struct text_verify respond_packet;
     struct request_s2s_verify *s2s_verify;
     struct request_verify *verify_packet = (struct request_verify *) packet;
@@ -548,6 +561,8 @@ static void server_verify_request(const char *packet, const char *client_ip, str
 	}
     }
     free(ip_list);  /* Free allocated memory */
+    fprintf(stdout, "%s %s recv Request VERIFY %s\n",
+	    server_addr, client_ip, verify_packet->req_username);
 
     if (!hm_isEmpty(neighbors) && res) {
 	int size = (sizeof(struct request_s2s_verify) +
@@ -568,10 +583,15 @@ static void server_verify_request(const char *packet, const char *client_ip, str
 	for (i = 0; i < len - 1; i++)
 	    strcpy(s2s_verify->to_visit[i].ip_addr, ip_list[i]);
 
-	//forward = get_addr(ip_list[0]);
-	//sendto(socket_fd, s2s_verify, size, 0, (struct sockaddr *)&forward, sizeof(forward));
-	//fprintf(stdout, "%s %s send S2S VERIFY %s\n", server_addr, ip_list[0], s2s_verify->req_username);
+	if ((forward = get_addr(ip_list[0])) == NULL) {
+	    free(s2s_verify);
+	    free(ip_list);
+	    return;
+	}
+	sendto(socket_fd, s2s_verify, size, 0, (struct sockaddr *)forward, sizeof(*forward));
+	fprintf(stdout, "%s %s send S2S VERIFY %s\n", server_addr, ip_list[0], s2s_verify->req_username);
 	
+	free(forward);
 	free(ip_list);
 	free(s2s_verify);
 	return;
@@ -584,8 +604,6 @@ static void server_verify_request(const char *packet, const char *client_ip, str
     /* Send packet back to client, log the request */
     sendto(socket_fd, &respond_packet, sizeof(respond_packet), 0,
 		(struct sockaddr *)client, sizeof(*client));
-    fprintf(stdout, "%s %s recv Request VERIFY %s\n",
-	    server_addr, client_ip, verify_packet->req_username);
 }
 
 /**
@@ -1212,7 +1230,7 @@ static void logout_inactive_users(void) {
  */
 static void server_s2s_verify(const char *packet, char *client_ip) {
 
-    struct request_s2s_verify *s2s_verify = (struct request_s2s_verify *) packet;
+    struct request_s2s_verify *s2s_verify = (struct request_s2s_verify *) packet;    
 
     fprintf(stdout, "%s %s recv S2S VERIFY %s\n", server_addr, client_ip, s2s_verify->req_username);
 }
@@ -1360,6 +1378,20 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
 		server_addr, server->ip_addr, say_packet->req_username,
 		say_packet->req_channel, say_packet->req_text);
     }
+}
+
+/**
+ * FIXME
+ */
+static void server_s2s_list_request(UNUSED const char *packet, char *client_ip) {
+    fprintf(stdout, "%s %s recv S2S LIST\n", server_addr, client_ip);
+}
+
+/**
+ * FIXME
+ */
+static void server_s2s_who_request(UNUSED const char *packet, char *client_ip) {
+    fprintf(stdout, "%s %s recv S2S WHO\n", server_addr, client_ip);
 }
 
 /**
@@ -1601,6 +1633,14 @@ int main(int argc, char *argv[]) {
 	    case REQ_S2S_SAY:
 		/* Server-to-server say request, forward to all subscribed servers */
 		server_s2s_say_request(buffer, client_ip);
+		break;
+	    case REQ_S2S_LIST:
+		/* Server-to-server list request, collect channel names and forward to neighbors */
+		server_s2s_list_request(buffer, client_ip);
+		break;
+	    case REQ_S2S_WHO:
+		/* Server-to-server who request, collect listening users and forward to neighbors */
+		server_s2s_who_request(buffer, client_ip);
 		break;
 	    default:
 		/* Do nothing, likey a bogus packet */
