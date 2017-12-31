@@ -1223,7 +1223,7 @@ static void server_s2s_verify(const char *packet, char *client_ip) {
     
     char **ip_list;
     long i, len = 0L;
-    int res = 1;
+    int unique, left, size, res = 1;
     User *user;
     struct sockaddr_in *client;
     struct text_verify verify_response;
@@ -1232,7 +1232,7 @@ static void server_s2s_verify(const char *packet, char *client_ip) {
 
     fprintf(stdout, "%s %s recv S2S VERIFY %s\n", server_addr, client_ip, s2s_verify->req_username);
 
-    if (id_unique(s2s_verify->id)) {
+    if ((unique = id_unique(s2s_verify->id))) {
 	queue_id(s2s_verify->id);
 	/* Check for verification */
 	/* Server failed to allocate memory, do nothing */
@@ -1252,7 +1252,7 @@ static void server_s2s_verify(const char *packet, char *client_ip) {
     }
     
     /* If to visit list is empty, send to client */
-    if (s2s_verify->n_to_visit <= 1 || !res) {
+    if (s2s_verify->n_to_visit <= 0 || !res) {
 	memset(&verify_response, 0, sizeof(verify_response));
 	verify_response.txt_type = TXT_VERIFY;
 	verify_response.valid = res;
@@ -1263,10 +1263,40 @@ static void server_s2s_verify(const char *packet, char *client_ip) {
 		(struct sockaddr *)client, sizeof(*client));
 	fprintf(stdout, "%s %s send VERIFY RESPONSE %s\n",
 		server_addr, s2s_verify->client.ip_addr, s2s_verify->req_username);
+	free(client);
 	return;
     }
 
     /* Otherwise, send to next ip in list, remove from list */
+    left = (s2s_verify->n_to_visit - 1);
+    if (unique)
+	left += (int)hm_size(neighbors);
+    if ((ip_list = hm_keyArray(neighbors, &len)) == NULL)
+	return;
+    for (i = 0L; i < len; i++)
+	if (strcmp(ip_list[i], client_ip))
+	    left--;
+    
+    size = (sizeof(struct request_s2s_verify) + (sizeof(struct ip_address) * left));
+    if ((forward = (struct request_s2s_verify *)malloc(size)) == NULL)
+	return;
+    if ((client = get_addr(s2s_verify->to_visit[0].ip_addr)) == NULL) {
+	free(forward);
+	return;
+    }
+    
+    memset(forward, 0, size);
+    forward->req_type = REQ_S2S_VERIFY;
+    forward->id = s2s_verify->id;
+    strcpy(forward->req_username, s2s_verify->req_username);
+    strcpy(forward->client.ip_addr, s2s_verify->client.ip_addr);
+    forward->n_to_visit = left;
+
+    /* FIXME
+     * Copy over IP addresses into list, from old packet and neighbors
+     */
+
+    free(ip_list);
 }
 
 /**
