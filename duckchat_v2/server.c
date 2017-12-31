@@ -612,7 +612,7 @@ static void server_verify_request(const char *packet, const char *client_ip, str
  */
 static void server_login_request(const char *packet, char *client_ip, struct sockaddr_in *addr) {
 
-    User *user;
+    User *user = NULL;
     char name[USERNAME_MAX];
     struct request_login *login_packet = (struct request_login *) packet;
 
@@ -622,22 +622,24 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
 
     /* Create a new instance of the user */
     /* Send error back to client if malloc() failed, log the error */
-    if ((user = malloc_user(client_ip, name, addr)) == NULL) {
-	server_send_error(addr, "Failed to log into the server.");
-	return;
-    }
+    if ((user = malloc_user(client_ip, name, addr)) == NULL)
+	goto error;
 
     /* Add the new user into the users hashmap */
     /* Send error back to client if failed, log the error */
-    if (!hm_put(users, client_ip, user, NULL)) {
-	server_send_error(addr, "Failed to log into the server.");
-	free(user);
-	return;
-    }
+    if (!hm_put(users, client_ip, user, NULL))
+	goto error;
 
     /* Log the user login information */
     fprintf(stdout, "%s %s recv Request LOGIN %s\n",
-		    server_addr, user->ip_addr, user->username);
+	    server_addr, user->ip_addr, user->username);
+    return;
+
+error:
+    /* Send error back to client */
+    server_send_error(addr, "Failed to log into the server.");
+    /* Free all allocated memory */
+    if (user != NULL) free_user(user);
 }
 
 /**
@@ -647,10 +649,10 @@ static void server_login_request(const char *packet, char *client_ip, struct soc
 static void server_join_request(const char *packet, char *client_ip) {
     
     User *user, *tmp;
-    LinkedList *user_list;
+    LinkedList *user_list = NULL;
     int ch_len;
     long i;
-    char *joined;
+    char *joined = NULL;
     char buffer[256];
     struct request_join *join_packet = (struct request_join *) packet;
 
@@ -666,11 +668,8 @@ static void server_join_request(const char *packet, char *client_ip) {
     ch_len = ((strlen(join_packet->req_channel) > (CHANNEL_MAX - 1)) ?
 				(CHANNEL_MAX - 1) : strlen(join_packet->req_channel));
     /* Allocate memory from heap for name, report and log error if failed */
-    if ((joined = (char *)malloc(ch_len + 1)) == NULL) {
-	sprintf(buffer, "Failed to join %s.", join_packet->req_channel);
-	server_send_error(user->addr, buffer);
-	return;
-    }
+    if ((joined = (char *)malloc(ch_len + 1)) == NULL)
+	goto error;
 
     /* Extract the channel name from packet */
     memcpy(joined, join_packet->req_channel, ch_len);
@@ -679,48 +678,31 @@ static void server_join_request(const char *packet, char *client_ip) {
     /* Add this channel to the neighboring server's subscription list */
     if (!hm_isEmpty(neighbors)) {
 	if (!hm_containsKey(r_table, joined)) {
-	    if (!server_join_channel(joined)) {
-		sprintf(buffer, "Failed to join %s.", joined);
-		server_send_error(user->addr, buffer);
-		free(joined);
-		return;
-	    }
+	    if (!server_join_channel(joined))
+		goto error;
 	    neighbor_flood_channel(joined, server_addr);
 	}
     }
 
     /* Add the channel to user's subscribed list, send error if failed, log error */
-    if (!ll_add(user->channels, joined)) {
-	sprintf(buffer, "Failed to join %s.", joined);
-	server_send_error(user->addr, buffer);
-	free(joined);
-	return;
-    }
+    if (!ll_add(user->channels, joined))
+	goto error;
 
     /* User has joined a channel that does not exist */
     if (!hm_get(channels, joined, (void **)&user_list)) {
 
 	/* Create the new channel list, send error back if failed, log the error */
-	if ((user_list = ll_create()) == NULL) {
-	    sprintf(buffer, "Failed to join %s.", join_packet->req_channel);
-	    server_send_error(user->addr, buffer);
-	    return;
-	}
+	if ((user_list = ll_create()) == NULL)
+	    goto error;
+
 	/* Add the user to the list, send error back if failed, log the error */
-	if (!ll_add(user_list, user)) {
-	    ll_destroy(user_list, NULL);
-	    sprintf(buffer, "Failed to join %s.", join_packet->req_channel);
-	    server_send_error(user->addr, buffer);
-	    return;
-	}
+	if (!ll_add(user_list, user))
+	    goto error;
+
 	/* Add the channel to the server's channel collection */
 	/* Send error back to client if failed, log the error */
-	if (!hm_put(channels, joined, user_list, NULL)) {
-	    ll_destroy(user_list, NULL);
-	    sprintf(buffer, "Failed to join %s.", join_packet->req_channel);
-	    server_send_error(user->addr, buffer);
-	    return;
-	}
+	if (!hm_put(channels, joined, user_list, NULL))
+	    goto error;
 
     /* User has joined a channel that already exists */
     } else {
@@ -734,12 +716,18 @@ static void server_join_request(const char *packet, char *client_ip) {
 
 	/* User was not found, so add them to subscription list */
 	/* If failed, send error back to client, log the error */
-	if (!ll_add(user_list, user)) {
-	    sprintf(buffer, "Failed to join %s.", join_packet->req_channel);
-	    server_send_error(user->addr, buffer);
-	    return;
-	}
+	if (!ll_add(user_list, user))
+	    goto error;
     }
+    return;
+
+error:
+    /* Send error back to client */
+    sprintf(buffer, "Failed to join %s.", join_packet->req_channel);
+    server_send_error(user->addr, buffer);
+    /* Free all allocated memory */
+    if (joined != NULL) free(joined);
+    if (user_list != NULL) ll_destroy(user_list, NULL);
 }
 
 /**
@@ -920,8 +908,8 @@ static void server_list_request(char *client_ip) {
     User *user;
     int size;
     long i, len = 0L;
-    char **ch_list;
-    struct text_list *list_packet;
+    char **ch_list = NULL;
+    struct text_list *list_packet = NULL;
 
     /* Assert that the user is logged in, do nothing if not */
     if (!hm_get(users, client_ip, (void **)&user))
@@ -933,22 +921,16 @@ static void server_list_request(char *client_ip) {
 
     /* Retrieve the complete list of channel names */
     /* Send error message back to client if failed (malloc() error), log the error */
-    if ((ch_list = hm_keyArray(channels, &len)) == NULL) {
-	if (!hm_isEmpty(channels)) {
-	    server_send_error(user->addr, "Failed to list the channels.");
-	    return;
-	}
-    }
+    if ((ch_list = hm_keyArray(channels, &len)) == NULL)
+	if (!hm_isEmpty(channels))
+	    goto error;
 
     /* Calculate the exact size of packet to send back */
     size = sizeof(struct text_list) + (sizeof(struct channel_info) * len);
     /* Allocate memory for the packet using calculated size */
     /* Send error back to user if failed (malloc() error), log the error */
-    if ((list_packet = (struct text_list *)malloc(size)) == NULL) {
-	server_send_error(user->addr, "Failed to list the channels.");
-	free(ch_list);
-	return;
-    }
+    if ((list_packet = (struct text_list *)malloc(size)) == NULL)
+	goto error;
 
     /* Initialize the packet; set the type and number of channels */
     memset(list_packet, 0, size);
@@ -965,6 +947,14 @@ static void server_list_request(char *client_ip) {
     /* Return all allocated memory back to heap */
     free(ch_list);
     free(list_packet);
+    return;
+
+error:
+    /* Send error back to client */
+    server_send_error(user->addr, "Failed to list the channels.");
+    /* Free all allocated memory */
+    if (ch_list != NULL) free(ch_list);
+    if (list_packet != NULL) free(list_packet);
 }
 
 /**
@@ -974,12 +964,12 @@ static void server_list_request(char *client_ip) {
  */
 static void server_who_request(const char *packet, char *client_ip) {
 
-    User *user, **user_list;
+    User *user, **user_list = NULL;
     LinkedList *subscribers;
     int size;
     long i, len = 0L;
     char buffer[256];
-    struct text_who *send_packet;
+    struct text_who *send_packet = NULL;
     struct request_who *who_packet = (struct request_who *) packet;
 
     /* Assert that the user is logged in, do nothing if not */
@@ -999,24 +989,16 @@ static void server_who_request(const char *packet, char *client_ip) {
 
     /* Retrieve the list of users subscribed to the requested channel */
     /* Send error message back to client if failed (malloc() error), log the error */
-    if ((user_list = (User **)ll_toArray(subscribers, &len)) == NULL) {
-	if (!ll_isEmpty(subscribers)) {
-	    sprintf(buffer, "Failed to list users on %s.", who_packet->req_channel);
-	    server_send_error(user->addr, buffer);
-	    return;
-	}
-    }
+    if ((user_list = (User **)ll_toArray(subscribers, &len)) == NULL)
+	if (!ll_isEmpty(subscribers))
+	    goto error;
 
     /* Calculate the exact size of packet to send back */
     size = sizeof(struct text_who) + (sizeof(struct user_info) * len);
     /* Allocate memory for the packet using calculated size */
     /* Send error back to user if failed (malloc() error), log the error */
-    if ((send_packet = (struct text_who *)malloc(size)) == NULL) {
-	sprintf(buffer, "Failed to list users on %s.", who_packet->req_channel);
-	server_send_error(user->addr, buffer);
-	free(user_list);
-	return;
-    }
+    if ((send_packet = (struct text_who *)malloc(size)) == NULL)
+	goto error;
 
     /* Initialize the packet; set the type, number of users, and channel */
     memset(send_packet, 0, size);
@@ -1033,6 +1015,15 @@ static void server_who_request(const char *packet, char *client_ip) {
     /* Return all allocated memory back to heap */
     free(user_list);
     free(send_packet);
+    return;
+
+error:
+    /* Send error back to client */
+    sprintf(buffer, "Failed to list users on %s.", who_packet->req_channel);
+    server_send_error(user->addr, buffer);
+    /* Free all allocated memory */
+    if (user_list != NULL) free(user_list);
+    if (send_packet != NULL) free(send_packet);
 }
 
 /**
@@ -1229,10 +1220,53 @@ static void logout_inactive_users(void) {
  * FIXME
  */
 static void server_s2s_verify(const char *packet, char *client_ip) {
-
+    
+    char **ip_list;
+    long i, len = 0L;
+    int res = 1;
+    User *user;
+    struct sockaddr_in *client;
+    struct text_verify verify_response;
+    struct request_s2s_verify *forward;
     struct request_s2s_verify *s2s_verify = (struct request_s2s_verify *) packet;    
 
     fprintf(stdout, "%s %s recv S2S VERIFY %s\n", server_addr, client_ip, s2s_verify->req_username);
+
+    if (id_unique(s2s_verify->id)) {
+	queue_id(s2s_verify->id);
+	/* Check for verification */
+	/* Server failed to allocate memory, do nothing */
+	if ((ip_list = hm_keyArray(users, &len)) == NULL)
+	    if (!hm_isEmpty(users))
+		return;
+    
+	for (i = 0L; i < len; i++) {
+	    /* Check each user, see if the username is taken */
+	    (void)hm_get(users, ip_list[i], (void **)&user);
+	    if (!strcmp(s2s_verify->req_username, user->username)) {
+		res = 0;
+		break;
+	    }
+	}
+	free(ip_list);  /* Free allocated memory */
+    }
+    
+    /* If to visit list is empty, send to client */
+    if (s2s_verify->n_to_visit <= 1 || !res) {
+	memset(&verify_response, 0, sizeof(verify_response));
+	verify_response.txt_type = TXT_VERIFY;
+	verify_response.valid = res;
+
+	if ((client = get_addr(s2s_verify->client.ip_addr)) == NULL)
+	    return;
+	sendto(socket_fd, &verify_response, sizeof(verify_response), 0,
+		(struct sockaddr *)client, sizeof(*client));
+	fprintf(stdout, "%s %s send VERIFY RESPONSE %s\n",
+		server_addr, s2s_verify->client.ip_addr, s2s_verify->req_username);
+	return;
+    }
+
+    /* Otherwise, send to next ip in list, remove from list */
 }
 
 /**
