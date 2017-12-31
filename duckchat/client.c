@@ -1,7 +1,7 @@
 /**
  * client.c
  * Author: Cole Vikupitz
- * Last Modified: 11/30/2017
+ * Last Modified: 12/31/2017
  *
  * Client side of a chat application using the DuckChat protocol. The client sends
  * and receives packets from a server using this protocol and handles each of the
@@ -101,9 +101,12 @@ static void leave_channel(const char *channel) {
  * channel is added and becomes the client's active channel.
  */
 static void client_join_request(const char *request) {
-    
+
+    char *channel;
+    struct request_join join_packet;
+
     /* Parse the request, return with error if failed */
-    char *channel = strchr(request, ' ');
+    channel = strchr(request, ' ');
     if (channel == NULL) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
@@ -117,7 +120,6 @@ static void client_join_request(const char *request) {
 	return;
     }
     /* Create & send the join channel packet to the server */
-    struct request_join join_packet;
     memset(&join_packet, 0, sizeof(join_packet));
     join_packet.req_type = REQ_JOIN;
     strncpy(join_packet.req_channel, channel, (CHANNEL_MAX - 1));
@@ -132,8 +134,11 @@ static void client_join_request(const char *request) {
  */
 static void client_leave_request(const char *request) {
     
+    char *channel;
+    struct request_leave leave_packet;
+
     /* Parse the request, return with error if failed */
-    char *channel = strchr(request, ' ');
+    channel = strchr(request, ' ');
     if (channel == NULL) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
@@ -142,7 +147,6 @@ static void client_leave_request(const char *request) {
     ++channel;	/* Skip leading whitespace character */
     leave_channel(channel);
     /* Create & send the leave packet to the server */
-    struct request_leave leave_packet;
     memset(&leave_packet, 0, sizeof(leave_packet));
     leave_packet.req_type = REQ_LEAVE;
     strncpy(leave_packet.req_channel, channel, (CHANNEL_MAX - 1));
@@ -159,12 +163,13 @@ static void client_leave_request(const char *request) {
  */
 static void client_say_request(const char *request) {
     
+    struct request_say say_packet;
+
     /* User is not active in a channel, do nothing */
     if (strcmp(active_channel, "") == 0)
 	return;
     /* Create & send the say packet to the server */
     /* Packet should contain the message and active channel */
-    struct request_say say_packet;
     memset(&say_packet, 0, sizeof(say_packet));
     say_packet.req_type = REQ_SAY;
     strncpy(say_packet.req_channel, active_channel, (CHANNEL_MAX - 1));
@@ -195,6 +200,7 @@ static void client_list_request(void) {
     
     struct request_list list_packet;
 
+    /* Send a list request packet to server */
     memset(&list_packet, 0, sizeof(list_packet));
     list_packet.req_type = REQ_LIST;
     sendto(socket_fd, &list_packet, sizeof(list_packet), 0,
@@ -211,6 +217,7 @@ static void server_list_reply(const char *packet) {
     int i;
     struct text_list *list_packet = (struct text_list *) packet;
 
+    /* Display list of available channels */
     fprintf(stdout, "Existing channels:\n");
     for (i = 0; i < list_packet->txt_nchannels; i++)
 	fprintf(stdout, "  %s\n", list_packet->txt_channels[i].ch_channel);
@@ -222,15 +229,17 @@ static void server_list_reply(const char *packet) {
  * special command '/who <name>'.
  */
 static void client_who_request(const char *request) {
-    
+
+    char *channel;
+    struct request_who who_packet;
+
     /* Parse the request, return with error if failed */
-    char *channel = strchr(request, ' ');
+    channel = strchr(request, ' ');
     if (channel == NULL) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
     }
     /* Create & send the who packet to the server */
-    struct request_who who_packet;
     memset(&who_packet, 0, sizeof(who_packet));
     who_packet.req_type = REQ_WHO;
     strncpy(who_packet.req_channel, ++channel, (CHANNEL_MAX - 1));
@@ -248,6 +257,7 @@ static void server_who_reply(const char *packet) {
     int i;
     struct text_who *who_packet = (struct text_who *) packet;
 
+    /* Display list of listening clients */
     fprintf(stdout, "Users on channel %s:\n", who_packet->txt_channel);
     for (i = 0; i < who_packet->txt_nusernames; i++)
 	fprintf(stdout, "  %s\n", who_packet->txt_users[i].us_username);
@@ -260,15 +270,17 @@ static void server_who_reply(const char *packet) {
  * just print an error message to the user.
  */
 static void client_switch_request(const char *request) {
-    
+
+    char *channel;
+    int i;
+
     /* Parse the request, return with error if failed */
-    char *channel = strchr(request, ' ');
+    channel = strchr(request, ' ');
     if (channel == NULL) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
     }
 
-    int i;
     ++channel;	/* Skip leading whitespace character */
     for (i = 0; i < MAX_CHANNELS; i++) {
 	if (strcmp(subscribed[i], channel) == 0) {
@@ -289,12 +301,13 @@ static void client_subscribed_request(void) {
     
     int i;
 
+    /* Display list of user's subscribed channels */
     fprintf(stdout, "Subscribed channels:\n");
     for (i = 0; i < MAX_CHANNELS; i++) {
 	if (strcmp(subscribed[i], "") == 0)
 	    continue;	    /* Skip over empty strings */
 	if (strcmp(subscribed[i], active_channel) == 0)
-	    fprintf(stdout, "* %s\n", subscribed[i]);
+	    fprintf(stdout, "* %s\n", subscribed[i]); /* Display '*' next to active channel */
 	else
 	    fprintf(stdout, "  %s\n", subscribed[i]);
     }
@@ -326,6 +339,7 @@ static void client_logout_request(void) {
     
     struct request_logout logout_packet;
 
+    /* Send a logout request packet to the server */
     memset(&logout_packet, 0, sizeof(logout_packet));
     logout_packet.req_type = REQ_LOGOUT;
     sendto(socket_fd, &logout_packet, sizeof(logout_packet), 0,
@@ -341,6 +355,7 @@ static void client_keep_alive_request(void) {
    
     struct request_keep_alive keep_alive_packet;
 
+    /* Send a keep-alive request packet to the server */
     memset(&keep_alive_packet, 0, sizeof(keep_alive_packet));
     keep_alive_packet.req_type = REQ_KEEP_ALIVE;
     sendto(socket_fd, &keep_alive_packet, sizeof(keep_alive_packet), 0,
