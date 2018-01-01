@@ -1,7 +1,7 @@
 /**
  * properties.h
  * Author: Cole Vikupitz
- * Last Modified: 11/30/2017
+ * Last Modified: 1/1/2018
  *
  * Properties to be used for the DuckChat client/server programs.
  */
@@ -14,7 +14,7 @@
 #define UNUSED __attribute__((unused))
 
 /* Maximum number of bytes for host to receive from another at a time */
-#define BUFF_SIZE 80000
+#define BUFF_SIZE 100000
 
 /* Maximum number of channels a client may be subscribed to at once */
 #define MAX_CHANNELS 10
@@ -22,7 +22,7 @@
 /* The timeout rate (in seconds) for the client to wait for verification from server */
 /* Clients will send a verification packet before login to server for username uniqueness */
 /* The client will wait this long for a server response, and exit if no response given */
-#define TIMEOUT_RATE 5
+#define TIMEOUT_RATE 6
 
 /* The rate (in seconds) for the client to send a keep alive request */
 /* Clients will send a keep alive request to prevent server from logging them out */
@@ -37,7 +37,7 @@
 
 /* Size of the server's array for caching IDs of received S2S packets */
 /* The server will cache this many IDs before replacing older ones */
-#define MSGQ_SIZE 36
+#define MSGQ_SIZE 48
 
 /* The name of the application's default channel */
 /* Upon login, every client will send a join request for this channel */
