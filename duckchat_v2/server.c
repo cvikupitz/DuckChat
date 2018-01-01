@@ -579,11 +579,11 @@ static void server_verify_request(const char *packet, const char *client_ip, str
 	memset(s2s_verify, 0, size);
 	s2s_verify->req_type = REQ_S2S_VERIFY;
 	s2s_verify->id = generate_id();
-	strncpy(s2s_verify->req_username, verify_packet->req_username, (USERNAME_MAX - 1));
+	strcpy(s2s_verify->req_username, verify_packet->req_username);
 	strcpy(s2s_verify->client.ip_addr, client_ip);
 	s2s_verify->n_to_visit = (int)(len - 1);
-	for (i = 0; i < len - 1; i++)
-	    strcpy(s2s_verify->to_visit[i].ip_addr, ip_list[i]);
+	for (i = 1; i < len; i++)
+	    strcpy(s2s_verify->to_visit[i - 1].ip_addr, ip_list[i]);
 
 	if ((forward = get_addr(ip_list[0])) == NULL) {
 	    free(s2s_verify);
@@ -1290,25 +1290,34 @@ static void server_s2s_verify(const char *packet, char *client_ip) {
 	return;
     }
     
-    //memset(forward, 0, size);
+    memset(forward, 0, sizeof(*forward));
     forward->req_type = REQ_S2S_VERIFY;
     forward->id = s2s_verify->id;
     strcpy(forward->req_username, s2s_verify->req_username);
     strcpy(forward->client.ip_addr, s2s_verify->client.ip_addr);
     forward->n_to_visit = left;
 
-    /*for (i = 1; i < s2s_verify->n_to_visit; i++)
+    printf("%s = ", server_addr);
+    for (i = 0;i<s2s_verify->n_to_visit;i++)
+	printf(" %s", s2s_verify->to_visit[i].ip_addr);
+    puts("");
+
+    /*
+    for (i = 1; i < s2s_verify->n_to_visit; i++)
 	strcpy(forward->to_visit[i-1].ip_addr, s2s_verify->to_visit[i].ip_addr);
+    puts("2");
     j = i + 1;
     for (i = 0L; i < len; i++)
 	if (strcmp(ip_list[i], client_ip))
-	    strcpy(forward->to_visit[j+i].ip_addr, ip_list[i]);
+	    strcpy(forward->to_visit[i].ip_addr, ip_list[i]);
 
-    //sendto(socket_fd, forward, size, 0, (struct sockaddr *)client, sizeof(*client));
+    sendto(socket_fd, forward, size, 0, (struct sockaddr *)client, sizeof(*client));
     fprintf(stdout, "%s %s send S2S VERIFY %s\n",
-	    server_addr, s2s_verify->to_visit[0].ip_addr, s2s_verify->req_username);
+	    server_addr, s2s_verify->to_visit[0].ip_addr, s2s_verify->req_username);*/
+
+    
     free(ip_list);
-    free(client);*/
+    free(client);
 }
 
 /**
