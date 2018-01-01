@@ -30,6 +30,13 @@ $SERVER localhost 4002 localhost 4001 &
 #$SERVER localhost 4003 localhost 4002 localhost 4004 &
 #$SERVER localhost 4004 localhost 4003 &
 
+# Generate a plus-shaped topology
+#$SERVER localhost 4000 localhost 4001 localhost 4002 localhost 4003 localhost 4004 &
+#$SERVER localhost 4001 localhost 4000 &
+#$SERVER localhost 4002 localhost 4000 &
+#$SERVER localhost 4003 localhost 4000 &
+#$SERVER localhost 4004 localhost 4000 &
+
 # Generate a triangular topology
 #$SERVER localhost 4000 localhost 4001 localhost 4002 &
 #$SERVER localhost 4001 localhost 4000 localhost 4002 &
