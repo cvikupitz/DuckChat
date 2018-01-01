@@ -16,6 +16,7 @@
 #define USERNAME_MAX 32
 #define CHANNEL_MAX 32
 #define SAY_MAX 64
+#define IP_MAX 30
 
 /* Define some types for designating request and text codes */
 typedef int request_t;
@@ -102,7 +103,7 @@ struct request_keep_alive {
 
 /* Server-to-server protocols */
 struct ip_address {
-	char ip_addr[30];
+	char ip_addr[IP_MAX];
 } packed;
 
 struct request_s2s_verify {
@@ -110,8 +111,8 @@ struct request_s2s_verify {
 	long id;
 	char req_username[USERNAME_MAX];
 	struct ip_address client;
+	int nto_visit;
 	struct ip_address to_visit[0];
-	int n_to_visit;
 } packed;
 
 struct request_s2s_join {

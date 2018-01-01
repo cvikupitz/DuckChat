@@ -580,16 +580,17 @@ static void server_verify_request(const char *packet, const char *client_ip, str
 	s2s_verify->req_type = REQ_S2S_VERIFY;
 	s2s_verify->id = generate_id();
 	strcpy(s2s_verify->req_username, verify_packet->req_username);
-	strcpy(s2s_verify->client.ip_addr, client_ip);
-	s2s_verify->n_to_visit = (int)(len - 1);
-	for (i = 1; i < len; i++)
-	    strcpy(s2s_verify->to_visit[i - 1].ip_addr, ip_list[i]);
+	strncpy(s2s_verify->client.ip_addr, client_ip, (IP_MAX - 1));
+	s2s_verify->nto_visit = ((int)len - 1);
+	for (i = 0; i < s2s_verify->nto_visit; i++)
+	    strncpy(s2s_verify->to_visit[i].ip_addr, ip_list[i + 1], (IP_MAX - 1));
 
 	if ((forward = get_addr(ip_list[0])) == NULL) {
 	    free(s2s_verify);
 	    free(ip_list);
 	    return;
 	}
+
 	sendto(socket_fd, s2s_verify, size, 0, (struct sockaddr *)forward, sizeof(*forward));
 	fprintf(stdout, "%s %s send S2S VERIFY %s\n", server_addr, ip_list[0], s2s_verify->req_username);
 	
@@ -1236,25 +1237,33 @@ static void server_s2s_verify(const char *packet, char *client_ip) {
 
     if ((unique = id_unique(s2s_verify->id))) {
 	queue_id(s2s_verify->id);
-	/* Check for verification */
-	/* Server failed to allocate memory, do nothing */
 	if ((ip_list = hm_keyArray(users, &len)) == NULL)
 	    if (!hm_isEmpty(users))
 		return;
     
 	for (i = 0L; i < len; i++) {
-	    /* Check each user, see if the username is taken */
 	    (void)hm_get(users, ip_list[i], (void **)&user);
 	    if (!strcmp(s2s_verify->req_username, user->username)) {
 		res = 0;
 		break;
 	    }
 	}
-	free(ip_list);  /* Free allocated memory */
+	free(ip_list);
+    }
+
+    left = s2s_verify->nto_visit-1;
+    if (unique)
+	left += (int)hm_size(neighbors);
+    if ((ip_list = hm_keyArray(neighbors, &len)) == NULL)
+	return;
+    for (i = 0L; i < len; i++) {
+	if (strcmp(ip_list[i], client_ip) == 0) {
+	    left--;
+	    break;
+	}
     }
     
-    /* If to visit list is empty, send to client */
-    if (s2s_verify->n_to_visit <= 0 || !res) {
+    if (left <= 0 || !res) {
 	memset(&verify_response, 0, sizeof(verify_response));
 	verify_response.txt_type = TXT_VERIFY;
 	verify_response.valid = res;
@@ -1267,19 +1276,6 @@ static void server_s2s_verify(const char *packet, char *client_ip) {
 		server_addr, s2s_verify->client.ip_addr, s2s_verify->req_username);
 	free(client);
 	return;
-    }
-
-    /* Otherwise, send to next ip in list, remove from list */
-    left = (s2s_verify->n_to_visit - 1);
-    if (unique)
-	left += (int)hm_size(neighbors);
-    if ((ip_list = hm_keyArray(neighbors, &len)) == NULL)
-	return;
-    for (i = 0L; i < len; i++) {
-	if (strcmp(ip_list[i], client_ip) == 0) {
-	    left--;
-	    break;
-	}
     }
     
     size = (sizeof(struct request_s2s_verify) + (sizeof(struct ip_address) * left));
@@ -1295,26 +1291,18 @@ static void server_s2s_verify(const char *packet, char *client_ip) {
     forward->id = s2s_verify->id;
     strcpy(forward->req_username, s2s_verify->req_username);
     strcpy(forward->client.ip_addr, s2s_verify->client.ip_addr);
-    forward->n_to_visit = left;
+    forward->nto_visit = left;
 
-    printf("%s = ", server_addr);
-    for (i = 0;i<s2s_verify->n_to_visit;i++)
-	printf(" %s", s2s_verify->to_visit[i].ip_addr);
-    puts("");
-
-    /*
-    for (i = 1; i < s2s_verify->n_to_visit; i++)
-	strcpy(forward->to_visit[i-1].ip_addr, s2s_verify->to_visit[i].ip_addr);
-    puts("2");
+    for (i = 0; i < s2s_verify->nto_visit - 1; i++)
+	strcpy(forward->to_visit[i].ip_addr, s2s_verify->to_visit[i + 1].ip_addr);
     j = i + 1;
     for (i = 0L; i < len; i++)
 	if (strcmp(ip_list[i], client_ip))
-	    strcpy(forward->to_visit[i].ip_addr, ip_list[i]);
+	    strcpy(forward->to_visit[j + i].ip_addr, ip_list[i]);
 
     sendto(socket_fd, forward, size, 0, (struct sockaddr *)client, sizeof(*client));
     fprintf(stdout, "%s %s send S2S VERIFY %s\n",
-	    server_addr, s2s_verify->to_visit[0].ip_addr, s2s_verify->req_username);*/
-
+	    server_addr, s2s_verify->to_visit[0].ip_addr, s2s_verify->req_username);
     
     free(ip_list);
     free(client);
