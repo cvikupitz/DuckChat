@@ -112,7 +112,7 @@ struct request_s2s_verify {
 	char req_username[USERNAME_MAX];
 	struct ip_address client;
 	int nto_visit;
-	struct ip_address to_visit[0];
+	struct ip_address to_visit[0]; // May actually be more than 0
 } packed;
 
 struct request_s2s_join {
@@ -133,14 +133,33 @@ struct request_s2s_say {
 	char req_text[SAY_MAX];
 } packed;
 
+struct s2s_channel {
+	char channel[CHANNEL_MAX];
+} packed;
+
 struct request_s2s_list {
 	request_t req_type;	/* = REQ_S2S_LIST */
-	///FIXME
+	long id;
+	struct ip_address client;
+	int nchannels;
+	struct s2s_channel req_channels[0]; // May actually be more than 0
+	int nto_visit;
+	struct ip_address to_visit[0]; // May actually be more than 0
+} packed;
+
+struct s2s_username {
+	char username[USERNAME_MAX];
 } packed;
 
 struct request_s2s_who {
 	request_t req_type;	/* = REQ_S2S_WHO */
-	///FIXME
+	long id;
+	struct ip_address client;
+	char channel[CHANNEL_MAX];
+	int nusers;
+	struct s2s_username req_users[0]; // May actually be more than 0
+	int nto_visit;
+	struct ip_address to_visit[0]; // May actually be more than 0
 } packed;
 
 
