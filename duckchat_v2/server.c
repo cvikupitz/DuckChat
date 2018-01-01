@@ -311,7 +311,9 @@ static int id_unique(long id) {
 }
 
 /**
- * FIXME
+ * Allocates and returns a socket address struct of the given ip address to
+ * send packets to. The IP address string is expected to be in the format
+ * '127.0.0.1:8080'. The user is responsible for freeing the pointer.
  */
 static struct sockaddr_in *get_addr(char *ip_addr) {
 
@@ -1222,7 +1224,7 @@ static void logout_inactive_users(void) {
 static void server_s2s_verify(const char *packet, char *client_ip) {
     
     char **ip_list;
-    long i, len = 0L;
+    long i, j, len = 0L;
     int unique, left, size, res = 1;
     User *user;
     struct sockaddr_in *client;
@@ -1261,7 +1263,7 @@ static void server_s2s_verify(const char *packet, char *client_ip) {
 	    return;
 	sendto(socket_fd, &verify_response, sizeof(verify_response), 0,
 		(struct sockaddr *)client, sizeof(*client));
-	fprintf(stdout, "%s %s send VERIFY RESPONSE %s\n",
+	fprintf(stdout, "%s %s send VERIFICATION %s\n",
 		server_addr, s2s_verify->client.ip_addr, s2s_verify->req_username);
 	free(client);
 	return;
@@ -1273,9 +1275,12 @@ static void server_s2s_verify(const char *packet, char *client_ip) {
 	left += (int)hm_size(neighbors);
     if ((ip_list = hm_keyArray(neighbors, &len)) == NULL)
 	return;
-    for (i = 0L; i < len; i++)
-	if (strcmp(ip_list[i], client_ip))
+    for (i = 0L; i < len; i++) {
+	if (strcmp(ip_list[i], client_ip) == 0) {
 	    left--;
+	    break;
+	}
+    }
     
     size = (sizeof(struct request_s2s_verify) + (sizeof(struct ip_address) * left));
     if ((forward = (struct request_s2s_verify *)malloc(size)) == NULL)
@@ -1285,18 +1290,25 @@ static void server_s2s_verify(const char *packet, char *client_ip) {
 	return;
     }
     
-    memset(forward, 0, size);
+    //memset(forward, 0, size);
     forward->req_type = REQ_S2S_VERIFY;
     forward->id = s2s_verify->id;
     strcpy(forward->req_username, s2s_verify->req_username);
     strcpy(forward->client.ip_addr, s2s_verify->client.ip_addr);
     forward->n_to_visit = left;
 
-    /* FIXME
-     * Copy over IP addresses into list, from old packet and neighbors
-     */
+    /*for (i = 1; i < s2s_verify->n_to_visit; i++)
+	strcpy(forward->to_visit[i-1].ip_addr, s2s_verify->to_visit[i].ip_addr);
+    j = i + 1;
+    for (i = 0L; i < len; i++)
+	if (strcmp(ip_list[i], client_ip))
+	    strcpy(forward->to_visit[j+i].ip_addr, ip_list[i]);
 
+    //sendto(socket_fd, forward, size, 0, (struct sockaddr *)client, sizeof(*client));
+    fprintf(stdout, "%s %s send S2S VERIFY %s\n",
+	    server_addr, s2s_verify->to_visit[0].ip_addr, s2s_verify->req_username);
     free(ip_list);
+    free(client);*/
 }
 
 /**
