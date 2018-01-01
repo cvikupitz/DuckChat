@@ -549,13 +549,14 @@ static void server_verify_request(const char *packet, const char *client_ip, str
     struct request_s2s_verify *s2s_verify;
     struct request_verify *verify_packet = (struct request_verify *) packet;
 
-    /* Server failed to allocate memory, do nothing */
+    fprintf(stdout, "%s %s recv Request VERIFY %s\n",
+	    server_addr, client_ip, verify_packet->req_username);
+
     if ((ip_list = hm_keyArray(users, &len)) == NULL)
 	if (!hm_isEmpty(users))
 	    return;
     
     for (i = 0L; i < len; i++) {
-	/* Check each user, see if the username is taken */
 	(void)hm_get(users, ip_list[i], (void **)&user);
 	if (!strcmp(verify_packet->req_username, user->username)) {
 	    res = 0;
@@ -563,8 +564,6 @@ static void server_verify_request(const char *packet, const char *client_ip, str
 	}
     }
     free(ip_list);  /* Free allocated memory */
-    fprintf(stdout, "%s %s recv Request VERIFY %s\n",
-	    server_addr, client_ip, verify_packet->req_username);
 
     if (!hm_isEmpty(neighbors) && res) {
 	int size = (sizeof(struct request_s2s_verify) +
@@ -1223,12 +1222,12 @@ static void logout_inactive_users(void) {
  * FIXME
  */
 static void server_s2s_verify(const char *packet, char *client_ip) {
-    
-    char **ip_list;
-    char *next = NULL;
-    long i, j, len = 0L;
-    int unique, left, size, res = 1;
+
+    HashMap *ip_set;
     User *user;
+    char **ip_list;
+    long i, len = 0L;
+    int unique, size, res = 1;
     struct sockaddr_in *client;
     struct text_verify verify_response;
     struct request_s2s_verify *forward;
@@ -1236,10 +1235,9 @@ static void server_s2s_verify(const char *packet, char *client_ip) {
 
     fprintf(stdout, "%s %s recv S2S VERIFY %s\n", server_addr, client_ip, s2s_verify->req_username);
 
-    left = s2s_verify->nto_visit;
-    if ((unique = id_unique(s2s_verify->id))) {
+    if ((unique = id_unique(s2s_verify->id)) != 0) {
 	queue_id(s2s_verify->id);
-	left += (int)hm_size(neighbors);
+	
 	if ((ip_list = hm_keyArray(users, &len)) == NULL)
 	    if (!hm_isEmpty(users))
 		return;
@@ -1252,18 +1250,9 @@ static void server_s2s_verify(const char *packet, char *client_ip) {
 	    }
 	}
 	free(ip_list);
-
-	if ((ip_list = hm_keyArray(neighbors, &len)) == NULL)
-	    return;
-	for (i = 0L; i < len; i++) {
-	    if (strcmp(ip_list[i], client_ip) == 0) {
-		left--;
-		break;
-	    }
-	}
     }
 
-    if (left <= 0 || !res) {
+    if (s2s_verify->nto_visit <= 0 || !res) {
 	memset(&verify_response, 0, sizeof(verify_response));
 	verify_response.txt_type = TXT_VERIFY;
 	verify_response.valid = res;
@@ -1278,43 +1267,54 @@ static void server_s2s_verify(const char *packet, char *client_ip) {
 	return;
     }
 
-    size = (sizeof(struct request_s2s_verify) + (sizeof(struct ip_address) * left));
+    if ((ip_list = hm_keyArray(neighbors, &len)) == NULL)
+	return;
+    if ((ip_set = hm_create(0L, 0.0f)) == NULL) {
+	free(ip_list);
+	return;
+    }
+    if (unique) {
+	for (i = 0L; i < len; i++)
+	    if (strcmp(ip_list[i], client_ip))
+		(void)hm_put(ip_set, ip_list[i], NULL, NULL);
+    }
+    for (i = 0; i < s2s_verify->nto_visit; i++)
+	(void)hm_put(ip_set, s2s_verify->to_visit[i].ip_addr, NULL, NULL);
+
+    size = (sizeof(struct request_s2s_verify) + (sizeof(struct ip_address) * ((int)hm_size(ip_set) - 1)));
     if ((forward = (struct request_s2s_verify *)malloc(size)) == NULL)
 	return;
+    if ((ip_list = hm_keyArray(ip_set, &len)) == NULL) {
+	free(forward);
+	hm_destroy(ip_set, NULL);
+	return;
+    }
     
-    memset(forward, 0, size);
+    memset(forward, 0, sizeof(*forward));
     forward->req_type = REQ_S2S_VERIFY;
     forward->id = s2s_verify->id;
     strcpy(forward->req_username, s2s_verify->req_username);
     strcpy(forward->client.ip_addr, s2s_verify->client.ip_addr);
-    forward->nto_visit = left;
+    forward->nto_visit = (int)len - 1;
 
-    if (s2s_verify->nto_visit != 0)
-	next = s2s_verify->to_visit[0].ip_addr;
+    for (i = 1L; i < len; i++)
+	strcpy(forward->to_visit[i - 1].ip_addr, ip_list[i]);
 
-    for (i = 0; i < s2s_verify->nto_visit - 1; i++)
-	strcpy(forward->to_visit[i].ip_addr, s2s_verify->to_visit[i + 1].ip_addr);
-    j = i + 1;
-    for (i = 0L; i < len; i++) {
-	if (strcmp(ip_list[i], client_ip)) {
-	    if (next == NULL)
-		next = ip_list[i];
-	    else
-		strcpy(forward->to_visit[j + i].ip_addr, ip_list[i]);
-	}
-    }
-
-    if ((client = get_addr(next)) == NULL) {
+    if ((client = get_addr(ip_list[0])) == NULL) {
 	free(forward);
+	free(ip_list);
+	hm_destroy(ip_set, NULL);
 	return;
     }
 
     sendto(socket_fd, forward, size, 0, (struct sockaddr *)client, sizeof(*client));
     fprintf(stdout, "%s %s send S2S VERIFY %s\n",
-	    server_addr, next, s2s_verify->req_username);
+	    server_addr, ip_list[0], s2s_verify->req_username);
     
     free(ip_list);
+    hm_destroy(ip_set, NULL);
     free(client);
+    free(forward);
 }
 
 /**
