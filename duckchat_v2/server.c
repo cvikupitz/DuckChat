@@ -1568,7 +1568,6 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 	
 	for (i = 0L; i < len; i++)
 	    (void)hm_put(ch_set, array[i], NULL, NULL);
-	//printf("%s %ld\n", server_addr, hm_size(ch_set));//FIXME
 	free(array);
     }
 
