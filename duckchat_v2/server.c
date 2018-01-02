@@ -955,10 +955,8 @@ static void server_list_request(char *client_ip) {
 	strncpy(s2s_list->client.ip_addr, client_ip, (IP_MAX - 1));
 	s2s_list->nchannels = (int)len;
 	
-	for (i = 0L; i < len; i++){
+	for (i = 0L; i < len; i++)
 	    strncpy(s2s_list->req_channels[i].channel, array[i], (CHANNEL_MAX - 1));
-	    fprintf(stdout, "%s, ", s2s_list->req_channels[i].channel);
-	}
 	free(array);
 
 	if ((array = hm_keyArray(neighbors, &len)) == NULL) {
@@ -969,6 +967,9 @@ static void server_list_request(char *client_ip) {
 	s2s_list->nto_visit = ((int)len - 1);
 	for (i = 0; i < s2s_list->nto_visit; i++)
 	    strncpy(s2s_list->to_visit[i].ip_addr, array[i + 1], (IP_MAX - 1));
+	
+	//for (i=0;i<s2s_list->nchannels;i++)//FIXME
+	//    printf("%s, ", s2s_list->req_channels[i].channel);
 
 	if ((forward = get_addr(array[0])) == NULL) {
 	    free(s2s_list);
@@ -977,7 +978,7 @@ static void server_list_request(char *client_ip) {
 	}
 
 	/////////////////////
-	/*fprintf(stdout, "%s Sending: ", server_addr);
+	/*fprintf(stdout, "%s After: ", server_addr);
 	for (i = 0; i < s2s_list->nchannels; i++)
 	    printf("%s, ", s2s_list->req_channels[i].channel);
 	puts("");*/

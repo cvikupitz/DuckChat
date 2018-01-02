@@ -142,8 +142,8 @@ struct request_s2s_list {
 	long id;
 	struct ip_address client;
 	int nchannels;
-	struct s2s_channel req_channels[0]; // May actually be more than 0
 	int nto_visit;
+	struct s2s_channel req_channels[0]; // May actually be more than 0
 	struct ip_address to_visit[0]; // May actually be more than 0
 } packed;
 
