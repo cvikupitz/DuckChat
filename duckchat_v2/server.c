@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 1/1/2018
+ * Last Modified: 1/2/2018
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -949,12 +949,12 @@ static void server_list_request(char *client_ip) {
 	if ((s2s_list = (struct request_s2s_list *)malloc(size)) == NULL)
 	    return;
 
-	memset(s2s_list, 0, sizeof(*s2s_list));
+	memset(s2s_list, '\0', sizeof(*s2s_list));
 	s2s_list->req_type = REQ_S2S_LIST;
 	s2s_list->id = generate_id();
 	strncpy(s2s_list->client.ip_addr, client_ip, (IP_MAX - 1));
 	s2s_list->nchannels = (int)len;
-	
+
 	for (i = 0L; i < len; i++)
 	    strncpy(s2s_list->req_channels[i].channel, array[i], (CHANNEL_MAX - 1));
 	free(array);
@@ -964,7 +964,15 @@ static void server_list_request(char *client_ip) {
 	    return;
 	}
 
-	s2s_list->nto_visit = ((int)len - 1);
+	////////////////////////////////////////////////
+	/*printf("%s %s SENDING: ", server_addr, array[0]);
+	for (i=0;i<s2s_list->nchannels;i++)
+	    printf("%s ", s2s_list->req_channels[i].channel);printf("| ");
+	for (i=0;i<s2s_list->nto_visit;i++)
+	    printf("%s ", s2s_list->to_visit[i].ip_addr);printf("\n");*/
+	///////////////////////////////////////////////
+
+	s2s_list->nto_visit = ((int)len - 1);///FIXME THIS SECTION IS CAUSING THE ERROR
 	for (i = 0; i < s2s_list->nto_visit; i++)
 	    strncpy(s2s_list->to_visit[i].ip_addr, array[i + 1], (IP_MAX - 1));
 	
@@ -975,8 +983,8 @@ static void server_list_request(char *client_ip) {
 	}
 
 	sendto(socket_fd, s2s_list, size, 0, (struct sockaddr *)forward, sizeof(*forward));
-	fprintf(stdout, "%s %s send S2S LIST\n", server_addr, array[0]);
-
+	fprintf(stdout, "%s %s send S2S LIST\n", server_addr, array[0]);///FIXME
+	
 	free(forward);
 	free(array);
 	free(s2s_list);
@@ -1553,9 +1561,15 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
     struct request_s2s_list *s2s_list = (struct request_s2s_list *) packet;    
 
     fprintf(stdout, "%s %s recv S2S LIST\n", server_addr, client_ip);
-    for (i=0;i<s2s_list->nchannels;i++)
-    printf("%s, ", s2s_list->req_channels[i].channel);//FIXME
 
+    ////////////////////////////////////////
+    /*printf("%s %s RECEIVING: ", server_addr, client_ip);
+	for (i=0;i<s2s_list->nchannels;i++)
+	    printf("%s ", s2s_list->req_channels[i].channel);printf("| ");
+	for (i=0;i<s2s_list->nto_visit;i++)
+	    printf("%s ", s2s_list->to_visit[i].ip_addr);printf("\n");*/
+    /////////////////////////////////
+    
     if ((ch_set = hm_create(0L, 0.0f)) == NULL)
 	return;
     for (i = 0; i < s2s_list->nchannels; i++)
@@ -1571,6 +1585,7 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 	for (i = 0L; i < len; i++)
 	    if (!hm_containsKey(ch_set, array[i]))
 		(void)hm_put(ch_set, array[i], NULL, NULL);
+
 	free(array);
     }
 
@@ -1627,26 +1642,33 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
     memset(forward, 0, sizeof(*forward));
     forward->req_type = REQ_S2S_LIST;
     forward->id = s2s_list->id;
-    strcpy(forward->client.ip_addr, s2s_list->client.ip_addr);
-//fprintf(stdout, "%s %ld\n", server_addr, hm_size(ch_set));
+    strncpy(forward->client.ip_addr, s2s_list->client.ip_addr, (IP_MAX - 1));
     if ((array = hm_keyArray(ch_set, &len)) == NULL)
 	return;
     forward->nchannels = (int)len;
     for (i = 0L; i < len; i++)
-	strcpy(forward->req_channels[i].channel, array[i]);
+	strncpy(forward->req_channels[i].channel, array[i], (CHANNEL_MAX - 1));
     free(array);
     
     if ((array = hm_keyArray(ip_set, &len)) == NULL)
 	return;
     forward->nto_visit = (int)len - 1;
     for (i = 1L; i < len; i++)
-	strcpy(forward->to_visit[i - 1].ip_addr, array[i]);
+	strncpy(forward->to_visit[i - 1].ip_addr, array[i], (IP_MAX-1));
 
     if ((client = get_addr(array[0])) == NULL)
 	return;
-
+    
     sendto(socket_fd, forward, size, 0, (struct sockaddr *)client, sizeof(*client));
     fprintf(stdout, "%s %s send S2S LIST\n", server_addr, array[0]);
+    
+    //////////////////////////////
+    /*printf("%s %s SENDING: ", server_addr, array[0]);
+	for (i=0;i<forward->nchannels;i++)
+	    printf("%s ", forward->req_channels[i].channel);printf("| ");
+	for (i=0;i<forward->nto_visit;i++)
+	    printf("%s ", forward->to_visit[i].ip_addr);printf("\n");*/
+    ////////////////////////////////
 
     free(array);
     hm_destroy(ip_set, NULL);

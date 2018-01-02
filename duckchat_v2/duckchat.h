@@ -140,9 +140,9 @@ struct s2s_channel {
 struct request_s2s_list {
 	request_t req_type;	/* = REQ_S2S_LIST */
 	long id;
-	struct ip_address client;
 	int nchannels;
 	int nto_visit;
+	struct ip_address client;
 	struct s2s_channel req_channels[0]; // May actually be more than 0
 	struct ip_address to_visit[0]; // May actually be more than 0
 } packed;
