@@ -32,8 +32,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "iterator.h"
-
 /*
  * interface definition for generic hashset implementation
  *
