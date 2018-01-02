@@ -19,7 +19,7 @@
  * Help on random number generation with /dev/urandom consulted from:
  * http://www.cs.yale.edu/homes/aspnes/pinewiki/C(2f)Randomization.html
  * 
- * Implementations for the LinkedList and HashMap ADTs that this server uses were borrowed from
+ * Implementations for the LinkedList and HashMap/Set ADTs that this server uses were borrowed from
  * professor Joe Sventek's ADT library on github (https://github.com/jsventek/ADTs).
  * These implementations are not my own.
  */
@@ -40,6 +40,7 @@
 #include <netdb.h>
 #include "duckchat.h"
 #include "hashmap.h"
+#include "hashset.h"
 #include "linkedlist.h"
 #include "properties.h"
 
@@ -1543,7 +1544,7 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
  */
 static void server_s2s_list_request(const char *packet, char *client_ip) {
 
-    HashMap *ch_set, *ip_set;
+    HashSet *ch_set, *ip_set;
     char **array;
     int unique, size;
     long i, len = 0L;
