@@ -949,14 +949,16 @@ static void server_list_request(char *client_ip) {
 	if ((s2s_list = (struct request_s2s_list *)malloc(size)) == NULL)
 	    return;
 
-	memset(s2s_list, 0, size);
+	memset(s2s_list, 0, sizeof(*s2s_list));
 	s2s_list->req_type = REQ_S2S_LIST;
 	s2s_list->id = generate_id();
 	strncpy(s2s_list->client.ip_addr, client_ip, (IP_MAX - 1));
-	s2s_list->nchannels = 0;//(int)len;
+	s2s_list->nchannels = (int)len;
 	
-	for (i = 0L; i < len; i++)
+	for (i = 0L; i < len; i++){
 	    strncpy(s2s_list->req_channels[i].channel, array[i], (CHANNEL_MAX - 1));
+	    fprintf(stdout, "%s, ", s2s_list->req_channels[i].channel);
+	}
 	free(array);
 
 	if ((array = hm_keyArray(neighbors, &len)) == NULL) {
@@ -975,10 +977,10 @@ static void server_list_request(char *client_ip) {
 	}
 
 	/////////////////////
-	fprintf(stdout, "%s Sending: ", server_addr);
+	/*fprintf(stdout, "%s Sending: ", server_addr);
 	for (i = 0; i < s2s_list->nchannels; i++)
 	    printf("%s, ", s2s_list->req_channels[i].channel);
-	puts("");
+	puts("");*/
 	/////////////////////
 	
 	sendto(socket_fd, s2s_list, size, 0, (struct sockaddr *)forward, sizeof(*forward));
@@ -1605,7 +1607,7 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 
 	memset(list_packet, 0, sizeof(*list_packet));
 	list_packet->txt_type = TXT_LIST;
-	list_packet->txt_nchannels = 0;//(int)len;
+	list_packet->txt_nchannels = (int)len;
 	for (i = 0L; i < len; i++)
 	    strncpy(list_packet->txt_channels[i].ch_channel, array[i], (CHANNEL_MAX - 1));
 
