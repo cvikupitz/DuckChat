@@ -19,7 +19,7 @@
  * Help on random number generation with /dev/urandom consulted from:
  * http://www.cs.yale.edu/homes/aspnes/pinewiki/C(2f)Randomization.html
  * 
- * Implementations for the LinkedList and HashMap/Set ADTs that this server uses were borrowed from
+ * Implementations for the LinkedList and HashMap ADTs that this server uses were borrowed from
  * professor Joe Sventek's ADT library on github (https://github.com/jsventek/ADTs).
  * These implementations are not my own.
  */
@@ -40,7 +40,6 @@
 #include <netdb.h>
 #include "duckchat.h"
 #include "hashmap.h"
-#include "hashset.h"
 #include "linkedlist.h"
 #include "properties.h"
 
@@ -1544,7 +1543,7 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
  */
 static void server_s2s_list_request(const char *packet, char *client_ip) {
 
-    HashSet *ch_set, *ip_set;
+    HashMap *ch_set, *ip_set;
     char **array;
     int unique, size;
     long i, len = 0L;
@@ -1558,7 +1557,8 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
     if ((ch_set = hm_create(0L, 0.0f)) == NULL)
 	return;
     for (i = 0; i < s2s_list->nchannels; i++)
-	(void)hm_put(ch_set, s2s_list->req_channels[i].channel, NULL, NULL);
+	if (!hm_containsKey(ch_set, s2s_list->req_channels[i].channel))
+	    (void)hm_put(ch_set, s2s_list->req_channels[i].channel, NULL, NULL);
     
 
     if ((unique = id_unique(s2s_list->id)) != 0) {
@@ -1568,7 +1568,8 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 		return;
 	
 	for (i = 0L; i < len; i++)
-	    (void)hm_put(ch_set, array[i], NULL, NULL);
+	    if (!hm_containsKey(ch_set, array[i]))
+		(void)hm_put(ch_set, array[i], NULL, NULL);
 	free(array);
     }
 
