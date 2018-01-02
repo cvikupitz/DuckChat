@@ -968,22 +968,12 @@ static void server_list_request(char *client_ip) {
 	for (i = 0; i < s2s_list->nto_visit; i++)
 	    strncpy(s2s_list->to_visit[i].ip_addr, array[i + 1], (IP_MAX - 1));
 	
-	//for (i=0;i<s2s_list->nchannels;i++)//FIXME
-	//    printf("%s, ", s2s_list->req_channels[i].channel);
-
 	if ((forward = get_addr(array[0])) == NULL) {
 	    free(s2s_list);
 	    free(array);
 	    return;
 	}
 
-	/////////////////////
-	/*fprintf(stdout, "%s After: ", server_addr);
-	for (i = 0; i < s2s_list->nchannels; i++)
-	    printf("%s, ", s2s_list->req_channels[i].channel);
-	puts("");*/
-	/////////////////////
-	
 	sendto(socket_fd, s2s_list, size, 0, (struct sockaddr *)forward, sizeof(*forward));
 	fprintf(stdout, "%s %s send S2S LIST\n", server_addr, array[0]);
 
@@ -1568,6 +1558,7 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 	return;
     for (i = 0; i < s2s_list->nchannels; i++)
 	(void)hm_put(ch_set, s2s_list->req_channels[i].channel, NULL, NULL);
+    
 
     if ((unique = id_unique(s2s_list->id)) != 0) {
 	queue_id(s2s_list->id);
@@ -1577,6 +1568,7 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 	
 	for (i = 0L; i < len; i++)
 	    (void)hm_put(ch_set, array[i], NULL, NULL);
+	//printf("%s %ld\n", server_addr, hm_size(ch_set));//FIXME
 	free(array);
     }
 
