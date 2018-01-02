@@ -1032,9 +1032,12 @@ static void server_who_request(const char *packet, char *client_ip) {
 
     User *user, **user_list = NULL;
     LinkedList *subscribers;
+    char **array= NULL;
     int size;
     long i, len = 0L;
     char buffer[256];
+    struct sockaddr_in *forward;
+    struct request_s2s_who *s2s_who;
     struct text_who *send_packet = NULL;
     struct request_who *who_packet = (struct request_who *) packet;
 
@@ -1058,6 +1061,57 @@ static void server_who_request(const char *packet, char *client_ip) {
     if ((user_list = (User **)ll_toArray(subscribers, &len)) == NULL)
 	if (!ll_isEmpty(subscribers))
 	    goto error;
+    
+    if (!hm_isEmpty(neighbors)) {
+	
+	size = (sizeof(struct request_s2s_who) +
+		(sizeof(struct s2s_username) * len) +
+		(sizeof(struct ip_address) * (hm_size(neighbors) - 1)));
+	if ((s2s_who = (struct request_s2s_who *)malloc(size)) == NULL)
+	    return;
+
+	memset(s2s_who, 0, sizeof(*s2s_who));
+	s2s_who->req_type = REQ_S2S_WHO;
+	s2s_who->id = generate_id();
+	strncpy(s2s_who->client.ip_addr, client_ip, (IP_MAX - 1));
+	strncpy(s2s_who->channel, who_packet->req_channel, (CHANNEL_MAX - 1));
+	
+	s2s_who->nusers = (int)len;
+	for (i = 0L; i < len; i++)
+	    strncpy(s2s_who->req_users[i].username, user_list[i]->username, (USERNAME_MAX - 1));
+	free(user_list);
+
+	if ((array = hm_keyArray(neighbors, &len)) == NULL) {
+	    free(s2s_who);
+	    return;
+	}
+
+	////////////////////////////////////////////////
+	printf("%s %s SENDING: ", server_addr, array[0]);
+	for (i=0;i<s2s_who->nusers;i++)
+	    printf("%s ", s2s_who->req_users[i].username);printf("| ");
+	for (i=0;i<s2s_who->nto_visit;i++)
+	    printf("%s ", s2s_who->to_visit[i].ip_addr);printf("\n");
+	///////////////////////////////////////////////
+
+	s2s_who->nto_visit = ((int)len - 1);///FIXME THIS SECTION IS CAUSING THE ERROR
+	for (i = 0; i < s2s_who->nto_visit; i++)
+	    strncpy(s2s_who->to_visit[i].ip_addr, array[i + 1], (IP_MAX - 1));
+	
+	if ((forward = get_addr(array[0])) == NULL) {
+	    free(s2s_who);
+	    free(array);
+	    return;
+	}
+
+	sendto(socket_fd, s2s_who, size, 0, (struct sockaddr *)forward, sizeof(*forward));
+	fprintf(stdout, "%s %s send S2S WHO %s\n", server_addr, array[0], who_packet->req_channel);///FIXME
+	
+	free(forward);
+	free(array);
+	free(s2s_who);
+	return;
+    }
 
     /* Calculate the exact size of packet to send back */
     size = sizeof(struct text_who) + (sizeof(struct user_info) * len);
@@ -1679,9 +1733,135 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 /**
  * FIXME
  */
-static void server_s2s_who_request(UNUSED const char *packet, char *client_ip) {
+static void server_s2s_who_request(const char *packet, char *client_ip) {
     
-    fprintf(stdout, "%s %s recv S2S WHO\n", server_addr, client_ip);
+    LinkedList *user_list, *temp;
+    HashMap *ip_set;
+    User **t_array;
+    char **array;
+    int unique, size;
+    long i, len = 0L;
+    struct sockaddr_in *client;
+    struct text_who *who_packet;
+    struct request_s2s_who *forward;
+    struct request_s2s_who *s2s_who = (struct request_s2s_who *) packet;
+
+    fprintf(stdout, "%s %s recv S2S WHO %s\n", server_addr, client_ip, s2s_who->channel);
+
+    ////////////////////////////////////////
+    /*printf("%s %s RECEIVING: ", server_addr, client_ip);
+	for (i=0;i<s2s_list->nchannels;i++)
+	    printf("%s ", s2s_list->req_channels[i].channel);printf("| ");
+	for (i=0;i<s2s_list->nto_visit;i++)
+	    printf("%s ", s2s_list->to_visit[i].ip_addr);printf("\n");*/
+    /////////////////////////////////
+    
+    if ((user_list = ll_create()) == NULL)
+	return;
+    for (i = 0; i < s2s_who->nusers; i++)
+	(void)ll_add(user_list, strdup(s2s_who->req_users[i].username));
+
+    if ((unique = id_unique(s2s_who->id)) != 0) {
+	queue_id(s2s_who->id);
+	if (hm_containsKey(channels, s2s_who->channel))
+	    hm_get(channels, s2s_who->channel, (void **)&temp);
+	if ((t_array = (User **)ll_toArray(temp, &len)) == NULL)
+	    return;
+	
+	for (i = 0L; i < len; i++)
+	    (void)ll_add(user_list, strdup(t_array[i]->username));
+	free(t_array);
+    }
+
+    if ((array = hm_keyArray(neighbors, &len)) == NULL)
+	return;
+    if ((ip_set = hm_create(0L, 0.0f)) == NULL) {
+	free(array);
+	return;
+    }
+    
+    if (unique) {
+	for (i = 0L; i < len; i++)
+	    if (strcmp(array[i], client_ip))
+		(void)hm_put(ip_set, array[i], NULL, NULL);
+    }
+    for (i = 0; i < s2s_who->nto_visit; i++)
+	(void)hm_put(ip_set, s2s_who->to_visit[i].ip_addr, NULL, NULL);
+    free(array);
+
+    if (hm_isEmpty(ip_set)) {
+
+	if ((client = get_addr(s2s_who->client.ip_addr)) == NULL)
+	    return;
+	if ((array = (char **)ll_toArray(user_list, &len)) == NULL)
+	    return;
+	size = (sizeof(struct text_who) + (sizeof(struct user_info) * len));
+	if ((who_packet = (struct text_who *)malloc(size)) == NULL)
+	    return;
+
+	memset(who_packet, 0, sizeof(*who_packet));
+	who_packet->txt_type = TXT_WHO;
+	who_packet->txt_nusernames = (int)len;
+	strncpy(who_packet->txt_channel, s2s_who->channel, (CHANNEL_MAX - 1));
+	
+	for (i = 0L; i < len; i++)
+	    strncpy(who_packet->txt_users[i].us_username, array[i], (USERNAME_MAX - 1));
+
+	sendto(socket_fd, who_packet, size, 0, (struct sockaddr *)client, sizeof(*client));
+	fprintf(stdout, "%s %s send WHO REPLY %s\n",
+		server_addr, s2s_who->client.ip_addr, who_packet->txt_channel);
+
+	free(client);
+	free(array);
+	free(who_packet);
+	ll_destroy(user_list, free);
+	return;	
+    }
+
+    size = (sizeof(struct request_s2s_who) +
+	    (sizeof(struct s2s_username) * (int)ll_size(user_list)) +
+	    (sizeof(struct ip_address) * ((int)hm_size(ip_set) - 1)));
+    if ((forward = (struct request_s2s_who *)malloc(size)) == NULL)
+	return;
+    
+    memset(forward, 0, sizeof(*forward));
+    forward->req_type = REQ_S2S_WHO;
+    forward->id = s2s_who->id;
+    strncpy(forward->client.ip_addr, s2s_who->client.ip_addr, (IP_MAX - 1));
+    strncpy(forward->channel, s2s_who->channel, (CHANNEL_MAX - 1));
+
+    if ((array = (char **)ll_toArray(user_list, &len)) == NULL)
+	return;
+    forward->nusers = (int)len;
+    for (i = 0L; i < len; i++)
+	strncpy(forward->req_users[i].username, array[i], (USERNAME_MAX - 1));
+    free(array);
+    
+    if ((array = hm_keyArray(ip_set, &len)) == NULL)
+	return;
+    forward->nto_visit = (int)len - 1;
+    for (i = 1L; i < len; i++)
+	strncpy(forward->to_visit[i - 1].ip_addr, array[i], (IP_MAX-1));
+
+    if ((client = get_addr(array[0])) == NULL)
+	return;
+    
+    sendto(socket_fd, forward, size, 0, (struct sockaddr *)client, sizeof(*client));
+    fprintf(stdout, "%s %s send S2S WHO %s\n", server_addr, array[0], forward->channel);
+    
+    //////////////////////////////
+    /*printf("%s %s SENDING: ", server_addr, array[0]);
+	for (i=0;i<forward->nchannels;i++)
+	    printf("%s ", forward->req_channels[i].channel);printf("| ");
+	for (i=0;i<forward->nto_visit;i++)
+	    printf("%s ", forward->to_visit[i].ip_addr);printf("\n");*/
+    ////////////////////////////////
+
+    free(array);
+    hm_destroy(ip_set, NULL);
+    ll_destroy(user_list, free);
+    free(client);
+    free(forward);
 }
 
 /**
