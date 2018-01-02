@@ -157,8 +157,8 @@ struct request_s2s_who {
 	struct ip_address client;
 	char channel[CHANNEL_MAX];
 	int nusers;
-	struct s2s_username req_users[0]; // May actually be more than 0
 	int nto_visit;
+	struct s2s_username req_users[0]; // May actually be more than 0
 	struct ip_address to_visit[0]; // May actually be more than 0
 } packed;
 

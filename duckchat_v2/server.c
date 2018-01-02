@@ -1553,13 +1553,14 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
     struct request_s2s_list *s2s_list = (struct request_s2s_list *) packet;    
 
     fprintf(stdout, "%s %s recv S2S LIST\n", server_addr, client_ip);
+    for (i=0;i<s2s_list->nchannels;i++)
+    printf("%s, ", s2s_list->req_channels[i].channel);//FIXME
 
     if ((ch_set = hm_create(0L, 0.0f)) == NULL)
 	return;
     for (i = 0; i < s2s_list->nchannels; i++)
 	if (!hm_containsKey(ch_set, s2s_list->req_channels[i].channel))
 	    (void)hm_put(ch_set, s2s_list->req_channels[i].channel, NULL, NULL);
-    
 
     if ((unique = id_unique(s2s_list->id)) != 0) {
 	queue_id(s2s_list->id);
@@ -1602,6 +1603,7 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 	memset(list_packet, 0, sizeof(*list_packet));
 	list_packet->txt_type = TXT_LIST;
 	list_packet->txt_nchannels = (int)len;
+	
 	for (i = 0L; i < len; i++)
 	    strncpy(list_packet->txt_channels[i].ch_channel, array[i], (CHANNEL_MAX - 1));
 
@@ -1626,7 +1628,7 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
     forward->req_type = REQ_S2S_LIST;
     forward->id = s2s_list->id;
     strcpy(forward->client.ip_addr, s2s_list->client.ip_addr);
-
+//fprintf(stdout, "%s %ld\n", server_addr, hm_size(ch_set));
     if ((array = hm_keyArray(ch_set, &len)) == NULL)
 	return;
     forward->nchannels = (int)len;
