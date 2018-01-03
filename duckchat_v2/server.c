@@ -953,7 +953,7 @@ static void server_list_request(char *client_ip) {
 	    goto error;
 
 	/* Initialize and set the packet members */
-	memset(s2s_list, 0, sizeof(*s2s_list));
+	memset(s2s_list, 0, size);
 	s2s_list->req_type = REQ_S2S_LIST;
 	s2s_list->id = generate_id();
 	strncpy(s2s_list->client.ip_addr, client_ip, (IP_MAX - 1));
@@ -1062,7 +1062,7 @@ static void server_who_request(const char *packet, char *client_ip) {
 	    goto error;
 
 	/* Initialize and set the packet members */
-	memset(s2s_who, 0, sizeof(*s2s_who));
+	memset(s2s_who, 0, size);
 	s2s_who->req_type = REQ_S2S_WHO;
 	s2s_who->id = generate_id();
 	strncpy(s2s_who->channel, who_packet->req_channel, (CHANNEL_MAX - 1));
@@ -1672,7 +1672,7 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 	    goto free;
 
 	/* Initialize and set packet members */
-	memset(list_packet, 0, sizeof(*list_packet));
+	memset(list_packet, 0, size);
 	list_packet->txt_type = TXT_LIST;
 	list_packet->txt_nchannels = (int)len;
 	/* Copy all channels into the packet */
@@ -1692,7 +1692,7 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
     if ((forward = (struct request_s2s_list *)malloc(size)) == NULL)
 	goto free;
     /* Initialize and set packet members */
-    memset(forward, 0, sizeof(*forward));
+    memset(forward, 0, size);
     forward->req_type = REQ_S2S_LIST;
     forward->id = s2s_list->id;
     strncpy(forward->client.ip_addr, s2s_list->client.ip_addr, (IP_MAX - 1));
@@ -1772,6 +1772,7 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
 		for (i = 0L; i < len; i++)
 		    (void)ll_add(unames, strdup(u_list[i]->username));
 		free(u_list);
+		u_list = NULL;
 	    }
 	}
     }
@@ -1822,7 +1823,7 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
 	    goto free;
 
 	/* Initialize and set packet members */
-	memset(who_packet, 0, sizeof(*who_packet));
+	memset(who_packet, 0, size);
 	who_packet->txt_type = TXT_WHO;
 	who_packet->txt_nusernames = (int)len;
 	strncpy(who_packet->txt_channel, s2s_who->channel, (USERNAME_MAX - 1));
@@ -1844,7 +1845,7 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
     if ((forward = (struct request_s2s_who *)malloc(size)) == NULL)
 	goto free;
     /* Initialize and set packet members */
-    memset(forward, 0, sizeof(*forward));
+    memset(forward, 0, size);
     forward->req_type = REQ_S2S_WHO;
     forward->id = s2s_who->id;
     strncpy(forward->client.ip_addr, s2s_who->client.ip_addr, (IP_MAX - 1));
@@ -1858,7 +1859,10 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
     forward->nusers = (int)len;
     for (i = 0L; i < len; i++)
 	strncpy(forward->payload[i].item, array[i], (USERNAME_MAX - 1));
-    if (array != NULL) free(array);
+    if (array != NULL) {
+	free(array);
+	array = NULL;
+    }
 
     /* Get array of IPs left to visit, copy contents into packet */
     if ((array = hm_keyArray(ip_set, &len)) == NULL)
@@ -1878,8 +1882,13 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
     goto free;
 
 free:
+    if (u_list != NULL) free(u_list);
+    if (array != NULL) free(array);
     if (unames != NULL) ll_destroy(unames, free);
-    ////FIXME
+    if (ip_set != NULL) hm_destroy(ip_set, NULL);
+    if (client != NULL) free(client);
+    if (who_packet != NULL) free(who_packet);
+    if (forward != NULL) free(forward);
     return;
 }
 
