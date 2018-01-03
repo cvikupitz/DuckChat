@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 1/2/2018
+ * Last Modified: 1/3/2018
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -319,7 +319,7 @@ static struct sockaddr_in *get_addr(char *ip_addr) {
 
     struct sockaddr_in *addr;
     struct hostent *host_end;
-    char hostname[32], port[16];
+    char hostname[128], port[32];
     char *res;
     int i;
 
@@ -1739,142 +1739,10 @@ free:
  * the S2S request to the next server, otherwise it sends a reply back to the client.
  */
 static void server_s2s_who_request(const char *packet, char *client_ip) {
-    
-    LinkedList *temp, *user_list = NULL;
-    HashMap *ip_set = NULL;
-    User **t_array = NULL;
-    char **array = NULL;
-    int unique, size;
-    long i, j, len = 0L;
-    struct sockaddr_in *client = NULL;
-    struct text_who *who_packet = NULL;
-    struct request_s2s_who *forward = NULL;
+
     struct request_s2s_who *s2s_who = (struct request_s2s_who *) packet;
 
-    /* Log the received packet */
     fprintf(stdout, "%s %s recv S2S WHO %s\n", server_addr, client_ip, s2s_who->channel);
-
-    /* Create new list to store usernames */
-    if ((user_list = ll_create()) == NULL)
-	goto free;
-    /* Copy usernames from packet into list */
-    for (i = 0; i < s2s_who->nusers; i++)
-	(void)ll_add(user_list, strdup(s2s_who->payload[i].item));
-
-    /* Only add usernames if not visited; this is to prevent loops */
-    if ((unique = id_unique(s2s_who->id)) != 0) {
-	queue_id(s2s_who->id);
-	/* Get the array of usernames, only if channel exists */
-	if (hm_get(channels, s2s_who->channel, (void **)&temp)) {
-	    if (!ll_isEmpty(temp)) {
-		if ((t_array = (User **)ll_toArray(temp, &len)) == NULL)
-		    goto free;
-		/* Copy array contents into new list */
-		for (i = 0L; i < len; i++)
-		    (void)ll_add(user_list, strdup(t_array[i]->username));
-		free(t_array);///FIXME INVALID FREE??
-		t_array=NULL;//FIXME
-	    }
-	}
-    }
-
-    /* Retrieve list of neighboring IPs to visit */
-    if ((array = hm_keyArray(neighbors, &len)) == NULL)
-	goto free;
-    /* Create new hashmap to hold these IPs */
-    if ((ip_set = hm_create(0L, 0.0f)) == NULL)
-	goto free;
-    /* Only add the neighboring IPs if not already visited */
-    if (unique) {
-	for (i = 0L; i < len; i++)
-	    if (strcmp(array[i], client_ip))
-		(void)hm_put(ip_set, array[i], NULL, NULL);
-    }
-
-    /* Copy the IP visitation list into the map */
-    j = i;
-    for (i = 0; i < s2s_who->nto_visit; i++)
-	(void)hm_put(ip_set, s2s_who->payload[j + i].item, NULL, NULL);
-    free(array);
-
-    /* If there are IPs left, there are still servers to visit */
-    if (hm_isEmpty(ip_set)) {
-	
-	/* Get address of client to send response to */
-	if ((client = get_addr(s2s_who->client.ip_addr)) == NULL)
-	    goto free;
-	/* Get array of usernames to copy */
-	if ((array = (char **)ll_toArray(user_list, &len)) == NULL)
-	    goto free;
-	/* Calculate the packet size, allocate the memory */
-	size = (sizeof(struct text_who) + (sizeof(struct user_info) * len));
-	if ((who_packet = (struct text_who *)malloc(size)) == NULL)
-	    goto free;
-
-	/* Initialize and set packet members */
-	memset(who_packet, 0, sizeof(*who_packet));
-	who_packet->txt_type = TXT_WHO;
-	who_packet->txt_nusernames = (int)len;
-	strncpy(who_packet->txt_channel, s2s_who->channel, (CHANNEL_MAX - 1));
-	/* Copy usernames into response packet */
-	for (i = 0L; i < len; i++)
-	    strncpy(who_packet->txt_users[i].us_username, array[i], (USERNAME_MAX - 1));
-
-	/* Send the packet to client, log the sent packet */
-	sendto(socket_fd, who_packet, size, 0, (struct sockaddr *)client, sizeof(*client));
-	fprintf(stdout, "%s %s send WHO REPLY %s\n", server_addr, s2s_who->client.ip_addr,
-		who_packet->txt_channel);
-	goto free;
-    }
-
-    /* Here, there are still servers left to visit */
-    /* Calculate the packet size, allocate the memory */
-    size = (sizeof(struct request_s2s_who) + ((sizeof(struct s2s_who_container) * 
-	    ll_size(user_list) + (hm_size(ip_set) - 1))));
-    if ((forward = (struct request_s2s_who *)malloc(size)) == NULL)
-	goto free;
-    
-    /* Initialize and set packet members */
-    memset(forward, 0, sizeof(*forward));
-    forward->req_type = REQ_S2S_WHO;
-    forward->id = s2s_who->id;
-    strncpy(forward->client.ip_addr, s2s_who->client.ip_addr, (IP_MAX - 1));
-    strncpy(forward->channel, s2s_who->channel, (CHANNEL_MAX - 1));
-
-    /* Get array of usernames, copy contents into packet */
-    if ((array = (char **)ll_toArray(user_list, &len)) == NULL)
-	goto free;
-    forward->nusers = (int)len;
-    for (i = 0L; i < len; i++)
-	strncpy(forward->payload[i].item, array[i], (USERNAME_MAX - 1));
-    free(array);
-    
-    /* Get array of IPs to visit, copy contents into packet */
-    if ((array = hm_keyArray(ip_set, &len)) == NULL)
-	goto free;
-    forward->nto_visit = (int)len - 1;
-    j = i;
-    for (i = 0L; i < len - 1; i++)
-	strncpy(forward->payload[j + i].item, array[i + 1], (USERNAME_MAX - 1));
-
-    /* Get address of next server to send to */
-    if ((client = get_addr(array[0])) == NULL)	////FIXME THIS IS WHERE THE BUG IS
-	goto free;
-    /* Send the packet, log the sent packet */
-    sendto(socket_fd, forward, size, 0, (struct sockaddr *)client, sizeof(*client));
-    fprintf(stdout, "%s %s send S2S WHO %s\n", server_addr, array[0], forward->channel);
-    goto free;
-   
-free:
-    /* Free all allocated memory */
-    if (t_array != NULL) free(t_array);//FIXME INVALID FREE??
-    if (array != NULL) free(array);
-    if (user_list != NULL) ll_destroy(user_list, free);
-    if (ip_set != NULL) hm_destroy(ip_set, NULL);
-    if (client != NULL) free(client);
-    if (forward != NULL) free(forward);
-    if (who_packet != NULL) free(who_packet);
-    return;
 }
 
 /**
@@ -1993,10 +1861,8 @@ int main(int argc, char *argv[]) {
     /* Create the UDP socket, bind name to socket */
     if ((socket_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	print_error("Failed to create a socket for the server.");
-    if (bind(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0) {
-	sprintf(buffer, "Failed to assign the requested address.");
-	print_error(buffer);
-    }
+    if (bind(socket_fd, (struct sockaddr *)&server, sizeof(server)) < 0)
+	print_error("Failed to assign the requested address.");
 
     /* Create & initialize data structures for server to use */
     if ((users = hm_create(100L, 0.0f)) == NULL)
