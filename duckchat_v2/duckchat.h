@@ -134,7 +134,7 @@ struct request_s2s_say {
 } packed;
 
 struct s2s_list_container {
-	char element[CHANNEL_MAX];
+	char item[CHANNEL_MAX];
 } packed;
 
 struct request_s2s_list {
@@ -147,7 +147,7 @@ struct request_s2s_list {
 } packed;
 
 struct s2s_who_container {
-	char element[USERNAME_MAX];
+	char item[USERNAME_MAX];
 } packed;
 
 struct request_s2s_who {

@@ -961,7 +961,7 @@ static void server_list_request(char *client_ip) {
 	
 	/* Copy all channels into the packet */
 	for (i = 0L; i < len; i++)
-	    strncpy(s2s_list->payload[i].element, array[i], (CHANNEL_MAX - 1));
+	    strncpy(s2s_list->payload[i].item, array[i], (CHANNEL_MAX - 1));
 	free(array);
 	
 	/* Get array of neighboring IP addresses */
@@ -971,7 +971,7 @@ static void server_list_request(char *client_ip) {
 	j = i;
 	s2s_list->nto_visit = ((int)len - 1);
 	for (i = 0; i < s2s_list->nto_visit; i++)
-	    strncpy(s2s_list->payload[j + i].element, array[i + 1], (CHANNEL_MAX - 1));
+	    strncpy(s2s_list->payload[j + i].item, array[i + 1], (CHANNEL_MAX - 1));
 	
 	/* Get the address of the server to send request to */
 	if ((forward = get_addr(array[0])) == NULL)
@@ -979,18 +979,7 @@ static void server_list_request(char *client_ip) {
 
 	/* Send the packet, log the sent packet */
 	sendto(socket_fd, s2s_list, size, 0, (struct sockaddr *)forward, sizeof(*forward));
-	//fprintf(stdout, "%s %s send S2S LIST\n", server_addr, array[0]);//FIXME
-
-	/////////////////////////////////////////////FIXME
-	printf("%s %s Sending: ", server_addr, array[0]);
-	for (i = 0; i < s2s_list->nchannels; i++)
-	    printf("%s ", s2s_list->payload[i].element);
-	printf("** ");
-	j = i;
-	for (i = 0; i < s2s_list->nchannels; i++)
-	    printf("%s ", s2s_list->payload[j + i].element);
-	puts("");
-	/////////////////////////////////////////////
+	fprintf(stdout, "%s %s send S2S LIST\n", server_addr, array[0]);
 
 	/* Free all allocated memory */
 	free(array);
@@ -1089,7 +1078,7 @@ static void server_who_request(const char *packet, char *client_ip) {
 	/* Copy the usernames into the packet */
 	s2s_who->nusers = (int)len;
 	for (i = 0L; i < len; i++)
-	    strncpy(s2s_who->payload[i].element, user_list[i]->username, (USERNAME_MAX - 1));
+	    strncpy(s2s_who->payload[i].item, user_list[i]->username, (USERNAME_MAX - 1));
 	free(user_list);
 
 	/* Get array of neighboring IP addresses to visit */
@@ -1099,7 +1088,7 @@ static void server_who_request(const char *packet, char *client_ip) {
 	j = i;
 	s2s_who->nto_visit = ((int)len - 1);
 	for (i = 0; i < s2s_who->nto_visit; i++)
-	    strncpy(s2s_who->payload[j + i].element, array[i + 1], (USERNAME_MAX - 1));
+	    strncpy(s2s_who->payload[j + i].item, array[i + 1], (USERNAME_MAX - 1));
 	
 	/* Get the address of the server to send packet to */
 	if ((forward = get_addr(array[0])) == NULL)
@@ -1622,21 +1611,25 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
     struct request_s2s_list *s2s_list = (struct request_s2s_list *) packet;    
 
     /* Log the received packet */
-    //fprintf(stdout, "%s %s recv S2S LIST\n", server_addr, client_ip);//FIXME
+    fprintf(stdout, "%s %s recv S2S LIST\n", server_addr, client_ip);//FIXME
 
     /////////////////////////////////////////////FIXME
-	printf("%s %s Received: ", server_addr, client_ip);
-	for (i = 0; i < s2s_list->nchannels+s2s_list->nto_visit; i++)
-	    printf("%s, ", s2s_list->payload[i].element);
-	puts("");
+	/*printf("%s %s Received: ", server_addr, client_ip);
+	for (i = 0; i < s2s_list->nchannels; i++)
+	    printf("[%s] ", s2s_list->payload[i].item);
+	printf("| ");
+	for (j = 0; j < s2s_list->nto_visit; j++)
+	    printf("[%s] ", s2s_list->payload[i+j].item);
+	    puts("");*/
 	/////////////////////////////////////////////
     
     /* Create hashmap to hold list, transfer from packet into map */
     if ((ch_set = hm_create(0L, 0.0f)) == NULL)
 	goto free;
+
     for (i = 0; i < s2s_list->nchannels; i++)
-	if (!hm_containsKey(ch_set, s2s_list->payload[i].element))
-	    (void)hm_put(ch_set, s2s_list->payload[i].element, NULL, NULL);
+	if (!hm_containsKey(ch_set, s2s_list->payload[i].item))
+	    (void)hm_put(ch_set, s2s_list->payload[i].item, NULL, NULL);
 
     /* Only add the channels if ID not in cache; this is to prevent loops */
     if ((unique = id_unique(s2s_list->id)) != 0) {
@@ -1665,12 +1658,13 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 		if (!hm_containsKey(ip_set, array[i]))
 		    (void)hm_put(ip_set, array[i], NULL, NULL);
     }
-    /* Transfer the rest of IPs from packet into map */
-    j = i;
-    for (i = 0; i < s2s_list->nto_visit; i++)
-	if (!hm_containsKey(ip_set, s2s_list->payload[j + i].element))
-	    (void)hm_put(ip_set, s2s_list->payload[j + i].element, NULL, NULL);
     free(array);
+    
+    /* Transfer the rest of IPs from packet into map */
+    j = (int)hm_size(ch_set);printf("%s\n",server_addr);
+    for (i = 0; i < s2s_list->nto_visit; i++) {printf("%ld, %s\n",i,s2s_list->payload[j+i].item);
+	if (!hm_containsKey(ip_set, s2s_list->payload[j + i].item))
+	    (void)hm_put(ip_set, s2s_list->payload[j + i].item, NULL, NULL);}
 
     /* If there are no more servers to visit, we can send response back to client */
     if (hm_isEmpty(ip_set)) {
@@ -1696,13 +1690,7 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 
 	/* Send the packet to client, log the sent packet */
 	sendto(socket_fd, list_packet, size, 0, (struct sockaddr *)client, sizeof(*client));
-	fprintf(stdout, "%s %s send LIST REPLY\n", server_addr, s2s_list->client.ip_addr);//FIXME
-	/////////////////////////////////////////////
-	/*printf("%s %s Sending: ", server_addr, s2s_list->client.ip_addr);
-	for (i = 0; i < list_packet->txt_nchannels; i++)
-	    printf("%s ", list_packet->txt_channels[i].ch_channel);
-	puts("");*/
-	/////////////////////////////////////////////
+	fprintf(stdout, "%s %s send LIST REPLY\n", server_addr, s2s_list->client.ip_addr);
 
 	goto free;
     }
@@ -1724,20 +1712,20 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 	goto free;
     forward->nchannels = (int)len;
     for (i = 0L; i < len; i++)
-	strncpy(forward->payload[i].element, array[i], (CHANNEL_MAX - 1));
+	strncpy(forward->payload[i].item, array[i], (CHANNEL_MAX - 1));
     free(array);
     
     /* Get array of IPs left to visit, copy contents into packet */
     if ((array = hm_keyArray(ip_set, &len)) == NULL)
 	goto free;
     forward->nto_visit = (int)len - 1;
-    //printf("############## %s\n", array[0]);
 
     j = i;
     for (i = 0L; i < len - 1; i++)
-	strncpy(forward->payload[j + i].element, array[i + 1], (CHANNEL_MAX - 1));
+	strncpy(forward->payload[j + i].item, array[i + 1], (CHANNEL_MAX - 1));
 
     /* Get the address of next server to send to */
+    printf("%s <%s>\n",server_addr, array[0]);
     if ((client = get_addr(array[0])) == NULL)	////FIXME THIS IS WHAT CAUSES THE BUG
 	goto free;
     /* Send the packet, log the sent packet */
@@ -1747,11 +1735,11 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
     /////////////////////////////////////////////FIXME
 	/*printf("%s %s Sending: ", server_addr, forward->client.ip_addr);
 	for (i = 0; i < forward->nchannels; i++)
-	    printf("%s ", forward->payload[i].element);
+	    printf("%s ", forward->payload[i].item);
 	printf(" ** ");
 	j = i;
 	for (i = 0; i < forward->nto_visit; i++)
-	    printf("%s ", forward->payload[j + i].element);
+	    printf("%s ", forward->payload[j + i].item);
 	puts("");*/
 	/////////////////////////////////////////////
 
@@ -1795,7 +1783,7 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
 	goto free;
     /* Copy usernames from packet into list */
     for (i = 0; i < s2s_who->nusers; i++)
-	(void)ll_add(user_list, strdup(s2s_who->payload[i].element));
+	(void)ll_add(user_list, strdup(s2s_who->payload[i].item));
 
     /* Only add usernames if not visited; this is to prevent loops */
     if ((unique = id_unique(s2s_who->id)) != 0) {
@@ -1827,7 +1815,7 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
     /* Copy the IP visitation list into the map */
     j = i;
     for (i = 0; i < s2s_who->nto_visit; i++)
-	(void)hm_put(ip_set, s2s_who->payload[j + i].element, NULL, NULL);
+	(void)hm_put(ip_set, s2s_who->payload[j + i].item, NULL, NULL);
     free(array);
 
     /* If there are IPs left, there are still servers to visit */
@@ -1879,7 +1867,7 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
 	goto free;
     forward->nusers = (int)len;
     for (i = 0L; i < len; i++)
-	strncpy(forward->payload[i].element, array[i], (USERNAME_MAX - 1));
+	strncpy(forward->payload[i].item, array[i], (USERNAME_MAX - 1));
     free(array);
     
     /* Get array of IPs to visit, copy contents into packet */
@@ -1888,7 +1876,7 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
     forward->nto_visit = (int)len - 1;
     j = i;
     for (i = 0L; i < len - 1; i++)
-	strncpy(forward->payload[j + i].element, array[i + 1], (USERNAME_MAX - 1));
+	strncpy(forward->payload[j + i].item, array[i + 1], (USERNAME_MAX - 1));
 
     /* Get address of next server to send to */
     if ((client = get_addr(array[0])) == NULL)
