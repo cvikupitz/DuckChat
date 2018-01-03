@@ -1765,14 +1765,17 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
     if ((unique = id_unique(s2s_who->id)) != 0) {
 	queue_id(s2s_who->id);
 	/* Get the array of usernames, only if channel exists */
-	if (hm_containsKey(channels, s2s_who->channel))
-	    hm_get(channels, s2s_who->channel, (void **)&temp);
-	if ((t_array = (User **)ll_toArray(temp, &len)) == NULL)
-	    goto free;
-	/* Copy array contents into new list */
-	for (i = 0L; i < len; i++)
-	    (void)ll_add(user_list, strdup(t_array[i]->username));
-	free(t_array);
+	if (hm_get(channels, s2s_who->channel, (void **)&temp)) {
+	    if (!ll_isEmpty(temp)) {
+		if ((t_array = (User **)ll_toArray(temp, &len)) == NULL)
+		    goto free;
+		/* Copy array contents into new list */
+		for (i = 0L; i < len; i++)
+		    (void)ll_add(user_list, strdup(t_array[i]->username));
+		free(t_array);///FIXME INVALID FREE??
+		t_array=NULL;//FIXME
+	    }
+	}
     }
 
     /* Retrieve list of neighboring IPs to visit */
@@ -1855,7 +1858,7 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
 	strncpy(forward->payload[j + i].item, array[i + 1], (USERNAME_MAX - 1));
 
     /* Get address of next server to send to */
-    if ((client = get_addr(array[0])) == NULL)
+    if ((client = get_addr(array[0])) == NULL)	////FIXME THIS IS WHERE THE BUG IS
 	goto free;
     /* Send the packet, log the sent packet */
     sendto(socket_fd, forward, size, 0, (struct sockaddr *)client, sizeof(*client));
@@ -1864,7 +1867,7 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
    
 free:
     /* Free all allocated memory */
-    if (t_array != NULL) free(t_array);
+    if (t_array != NULL) free(t_array);//FIXME INVALID FREE??
     if (array != NULL) free(array);
     if (user_list != NULL) ll_destroy(user_list, free);
     if (ip_set != NULL) hm_destroy(ip_set, NULL);
