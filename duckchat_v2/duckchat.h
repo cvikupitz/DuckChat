@@ -109,9 +109,9 @@ struct ip_address {
 struct request_s2s_verify {
 	request_t req_type; /* = REQ_S2S_VERIFY */
 	long id;
+	int nto_visit;
 	char req_username[USERNAME_MAX];
 	struct ip_address client;
-	int nto_visit;
 	struct ip_address to_visit[0]; // May actually be more than 0
 } packed;
 
@@ -153,10 +153,10 @@ struct s2s_who_container {
 struct request_s2s_who {
 	request_t req_type;	/* = REQ_S2S_WHO */
 	long id;
-	struct ip_address client;
-	char channel[CHANNEL_MAX];
 	int nusers;
 	int nto_visit;
+	char channel[CHANNEL_MAX];
+	struct ip_address client;
 	struct s2s_who_container payload[0]; // May actually be more than 0
 } packed;
 

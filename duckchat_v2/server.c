@@ -948,8 +948,8 @@ static void server_list_request(char *client_ip) {
 	
 	/* Calculate the size of the packet, allocate the memory */
 	size = (sizeof(struct request_s2s_list) +
-		(sizeof(struct s2s_channel) * (hm_size(channels))) +
-		(sizeof(struct ip_address) * (hm_size(neighbors) - 1)));
+		(sizeof(struct s2s_list_container) *
+		(hm_size(channels) + (hm_size(neighbors) - 1)));
 	if ((s2s_list = (struct request_s2s_list *)malloc(size)) == NULL)
 	    goto error;
 
@@ -1619,7 +1619,7 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 	goto free;
     for (i = 0; i < s2s_list->nchannels; i++)
 	if (!hm_containsKey(ch_set, s2s_list->req_channels[i].channel))
-	    (void)hm_put(ch_set, s2s_list->req_channels[i].channel, NULL, NULL);
+	    (void)hm_put(ch_set, s2s_list->req_channels[i]., NULL, NULL);
 
     /* Only add the channels if ID not in cache; this is to prevent loops */
     if ((unique = id_unique(s2s_list->id)) != 0) {
