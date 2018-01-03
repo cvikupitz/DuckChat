@@ -1611,18 +1611,8 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
     struct request_s2s_list *s2s_list = (struct request_s2s_list *) packet;    
 
     /* Log the received packet */
-    fprintf(stdout, "%s %s recv S2S LIST\n", server_addr, client_ip);//FIXME
+    fprintf(stdout, "%s %s recv S2S LIST\n", server_addr, client_ip);
 
-    /////////////////////////////////////////////FIXME
-	/*printf("%s %s Received: ", server_addr, client_ip);
-	for (i = 0; i < s2s_list->nchannels; i++)
-	    printf("[%s] ", s2s_list->payload[i].item);
-	printf("| ");
-	for (j = 0; j < s2s_list->nto_visit; j++)
-	    printf("[%s] ", s2s_list->payload[i+j].item);
-	    puts("");*/
-	/////////////////////////////////////////////
-    
     /* Create hashmap to hold list, transfer from packet into map */
     if ((ch_set = hm_create(0L, 0.0f)) == NULL)
 	goto free;
@@ -1661,10 +1651,10 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
     free(array);
     
     /* Transfer the rest of IPs from packet into map */
-    j = (int)hm_size(ch_set);printf("%s\n",server_addr);
-    for (i = 0; i < s2s_list->nto_visit; i++) {printf("%ld, %s\n",i,s2s_list->payload[j+i].item);
+    j = s2s_list->nchannels;
+    for (i = 0; i < s2s_list->nto_visit; i++)
 	if (!hm_containsKey(ip_set, s2s_list->payload[j + i].item))
-	    (void)hm_put(ip_set, s2s_list->payload[j + i].item, NULL, NULL);}
+	    (void)hm_put(ip_set, s2s_list->payload[j + i].item, NULL, NULL);
 
     /* If there are no more servers to visit, we can send response back to client */
     if (hm_isEmpty(ip_set)) {
@@ -1691,7 +1681,6 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 	/* Send the packet to client, log the sent packet */
 	sendto(socket_fd, list_packet, size, 0, (struct sockaddr *)client, sizeof(*client));
 	fprintf(stdout, "%s %s send LIST REPLY\n", server_addr, s2s_list->client.ip_addr);
-
 	goto free;
     }
 
@@ -1725,24 +1714,11 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 	strncpy(forward->payload[j + i].item, array[i + 1], (CHANNEL_MAX - 1));
 
     /* Get the address of next server to send to */
-    printf("%s <%s>\n",server_addr, array[0]);
-    if ((client = get_addr(array[0])) == NULL)	////FIXME THIS IS WHAT CAUSES THE BUG
+    if ((client = get_addr(array[0])) == NULL)
 	goto free;
     /* Send the packet, log the sent packet */
     sendto(socket_fd, forward, size, 0, (struct sockaddr *)client, sizeof(*client));
-    fprintf(stdout, "%s %s send S2S LIST\n", server_addr, array[0]);//FIXME
-
-    /////////////////////////////////////////////FIXME
-	/*printf("%s %s Sending: ", server_addr, forward->client.ip_addr);
-	for (i = 0; i < forward->nchannels; i++)
-	    printf("%s ", forward->payload[i].item);
-	printf(" ** ");
-	j = i;
-	for (i = 0; i < forward->nto_visit; i++)
-	    printf("%s ", forward->payload[j + i].item);
-	puts("");*/
-	/////////////////////////////////////////////
-
+    fprintf(stdout, "%s %s send S2S LIST\n", server_addr, array[0]);
     goto free;
     
 free:
