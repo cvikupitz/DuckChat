@@ -133,8 +133,8 @@ struct request_s2s_say {
 	char req_text[SAY_MAX];
 } packed;
 
-struct s2s_channel {
-	char channel[CHANNEL_MAX];
+struct s2s_list_container {
+	char element[CHANNEL_MAX];
 } packed;
 
 struct request_s2s_list {
@@ -143,12 +143,11 @@ struct request_s2s_list {
 	int nchannels;
 	int nto_visit;
 	struct ip_address client;
-	struct s2s_channel req_channels[0]; // May actually be more than 0
-	struct ip_address to_visit[0]; // May actually be more than 0
+	struct s2s_list_container payload[0]; // May actually be more than 0
 } packed;
 
-struct s2s_username {
-	char username[USERNAME_MAX];
+struct s2s_who_container {
+	char element[USERNAME_MAX];
 } packed;
 
 struct request_s2s_who {
@@ -158,8 +157,7 @@ struct request_s2s_who {
 	char channel[CHANNEL_MAX];
 	int nusers;
 	int nto_visit;
-	struct s2s_username req_users[0]; // May actually be more than 0
-	struct ip_address to_visit[0]; // May actually be more than 0
+	struct s2s_who_container payload[0]; // May actually be more than 0
 } packed;
 
 

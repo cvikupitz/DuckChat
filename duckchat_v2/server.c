@@ -1095,7 +1095,15 @@ static void server_who_request(const char *packet, char *client_ip) {
 	    goto error;
 	/* Send the packet, log the sent packet */
 	sendto(socket_fd, s2s_who, size, 0, (struct sockaddr *)forward, sizeof(*forward));
-	fprintf(stdout, "%s %s send S2S WHO %s\n", server_addr, array[0], who_packet->req_channel);
+	//fprintf(stdout, "%s %s send S2S WHO %s\n", server_addr, array[0], who_packet->req_channel);//FIXME
+
+	////////////////////////////////////
+	printf("%s %s SENDING [%s]: ", server_addr, array[0], s2s_who->channel);
+	for (i = 0; i < s2s_who->nusers; i++)
+	    printf("%s ", s2s_who->req_users[i].username);
+	puts("");
+	////////////////////////////////////
+
 	/* Free all allocated memory */
 	free(forward);
 	free(array);
@@ -1739,7 +1747,15 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
     struct request_s2s_who *s2s_who = (struct request_s2s_who *) packet;
 
     /* Log the received packet */
-    fprintf(stdout, "%s %s recv S2S WHO %s\n", server_addr, client_ip, s2s_who->channel);
+    //fprintf(stdout, "%s %s recv S2S WHO %s\n", server_addr, client_ip, s2s_who->channel);//FIXME
+
+    ////////////////////////////////////
+	printf("%s %s RECEIVED [%s]: ", server_addr, client_ip, s2s_who->channel);
+	for (i = 0; i < s2s_who->nusers; i++)
+	    printf("%s ", s2s_who->req_users[i].username);
+	puts("");
+    ////////////////////////////////////
+	
     /* Create new list to store usernames */
     if ((user_list = ll_create()) == NULL)
 	goto free;
@@ -1806,6 +1822,13 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
 	sendto(socket_fd, who_packet, size, 0, (struct sockaddr *)client, sizeof(*client));
 	fprintf(stdout, "%s %s send WHO REPLY %s\n",
 		server_addr, s2s_who->client.ip_addr, who_packet->txt_channel);
+
+	////////////////////////////////////
+	printf("%s %s SENDING [%s]: ", server_addr, s2s_who->client.ip_addr, who_packet->txt_channel);
+	for (i = 0; i < who_packet->txt_nusernames; i++)
+	    printf("%s ", who_packet->txt_users[i].us_username);
+	puts("");
+	////////////////////////////////////
 	goto free;
     }
 
