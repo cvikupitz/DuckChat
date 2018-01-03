@@ -1392,11 +1392,13 @@ static void server_s2s_verify(const char *packet, char *client_ip) {
     if (unique) {
 	for (i = 0L; i < len; i++)
 	    if (strcmp(ip_list[i], client_ip))
-		(void)hm_put(ip_set, ip_list[i], NULL, NULL);
+		if (!hm_containsKey(ip_set, ip_list[i]))
+		    (void)hm_put(ip_set, ip_list[i], NULL, NULL);
     }
     /* Copy all IP addresses from received packet into hashmap */
     for (i = 0; i < s2s_verify->nto_visit; i++)
-	(void)hm_put(ip_set, s2s_verify->to_visit[i].ip_addr, NULL, NULL);
+	if (!hm_containsKey(ip_set, s2s_verify->to_visit[i].ip_addr))
+	    (void)hm_put(ip_set, s2s_verify->to_visit[i].ip_addr, NULL, NULL);
 
     /* If there are no more servers to visit, send reply back to client */
     if (hm_isEmpty(ip_set) || !res) {
@@ -1624,12 +1626,8 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 
     /////////////////////////////////////////////FIXME
 	printf("%s %s Received: ", server_addr, client_ip);
-	for (i = 0; i < s2s_list->nchannels; i++)
-	    printf("%s ", s2s_list->payload[i].element);
-	printf("** ");
-	j = i;
-	for (i = 0; i < s2s_list->nto_visit; i++)
-	    printf("%s ", s2s_list->payload[j + i].element);
+	for (i = 0; i < s2s_list->nchannels+s2s_list->nto_visit; i++)
+	    printf("%s, ", s2s_list->payload[i].element);
 	puts("");
 	/////////////////////////////////////////////
     
@@ -1664,12 +1662,14 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
     if (unique) {
 	for (i = 0L; i < len; i++)
 	    if (strcmp(array[i], client_ip))
-		(void)hm_put(ip_set, array[i], NULL, NULL);
+		if (!hm_containsKey(ip_set, array[i]))
+		    (void)hm_put(ip_set, array[i], NULL, NULL);
     }
     /* Transfer the rest of IPs from packet into map */
     j = i;
     for (i = 0; i < s2s_list->nto_visit; i++)
-	(void)hm_put(ip_set, s2s_list->payload[j + i].element, NULL, NULL);
+	if (!hm_containsKey(ip_set, s2s_list->payload[j + i].element))
+	    (void)hm_put(ip_set, s2s_list->payload[j + i].element, NULL, NULL);
     free(array);
 
     /* If there are no more servers to visit, we can send response back to client */
@@ -1696,12 +1696,12 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 
 	/* Send the packet to client, log the sent packet */
 	sendto(socket_fd, list_packet, size, 0, (struct sockaddr *)client, sizeof(*client));
-	//fprintf(stdout, "%s %s send LIST REPLY\n", server_addr, s2s_list->client.ip_addr);//FIXME
+	fprintf(stdout, "%s %s send LIST REPLY\n", server_addr, s2s_list->client.ip_addr);//FIXME
 	/////////////////////////////////////////////
-	printf("%s %s Sending: ", server_addr, s2s_list->client.ip_addr);
+	/*printf("%s %s Sending: ", server_addr, s2s_list->client.ip_addr);
 	for (i = 0; i < list_packet->txt_nchannels; i++)
 	    printf("%s ", list_packet->txt_channels[i].ch_channel);
-	puts("");
+	puts("");*/
 	/////////////////////////////////////////////
 
 	goto free;
@@ -1731,6 +1731,8 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
     if ((array = hm_keyArray(ip_set, &len)) == NULL)
 	goto free;
     forward->nto_visit = (int)len - 1;
+    //printf("############## %s\n", array[0]);
+
     j = i;
     for (i = 0L; i < len - 1; i++)
 	strncpy(forward->payload[j + i].element, array[i + 1], (CHANNEL_MAX - 1));
@@ -1740,17 +1742,17 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 	goto free;
     /* Send the packet, log the sent packet */
     sendto(socket_fd, forward, size, 0, (struct sockaddr *)client, sizeof(*client));
-    //fprintf(stdout, "%s %s send S2S LIST\n", server_addr, array[0]);//FIXME
+    fprintf(stdout, "%s %s send S2S LIST\n", server_addr, array[0]);//FIXME
 
     /////////////////////////////////////////////FIXME
-	printf("%s %s Sending: ", server_addr, forward->client.ip_addr);
+	/*printf("%s %s Sending: ", server_addr, forward->client.ip_addr);
 	for (i = 0; i < forward->nchannels; i++)
 	    printf("%s ", forward->payload[i].element);
 	printf(" ** ");
 	j = i;
 	for (i = 0; i < forward->nto_visit; i++)
 	    printf("%s ", forward->payload[j + i].element);
-	puts("");
+	puts("");*/
 	/////////////////////////////////////////////
 
     goto free;
