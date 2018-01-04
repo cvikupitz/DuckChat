@@ -1,7 +1,7 @@
 #
 # DuckChat Makefile
 # Author: Cole Vikupitz
-# Last Modified: 11/25/2017
+# Last Modified: 1/3/2018
 #
 
 
@@ -27,7 +27,6 @@ tarfile:
 	mkdir DuckChat/
 	cp $(FILES) DuckChat/
 	tar -zcvf DuckChat.tgz DuckChat/
-	tar -ztvf DuckChat.tgz
 	rm -fr DuckChat/
 
 help:

@@ -1,7 +1,7 @@
 #
 # DuckChat v2 Makefile
 # Author: Cole Vikupitz
-# Last Modified: 1/1/2018
+# Last Modified: 1/3/2018
 #
 
 
@@ -26,7 +26,6 @@ tarfile:
 	mkdir DuckChat_v2/
 	cp $(FILES) DuckChat_v2/
 	tar -zcvf DuckChat_v2.tgz DuckChat_v2/
-	tar -ztvf DuckChat_v2.tgz
 	rm -fr DuckChat_v2/
 
 help:
