@@ -399,7 +399,37 @@ static int remove_server_leaf(char *channel) {
     fprintf(stdout, "%s %s send S2S LEAVE %s\n",
 	    server_addr, server->ip_addr, leave_packet.req_channel);
     return res;
-}    
+}
+
+/**
+ * FIXME
+ */
+static void update_sub_tree(char *channel) {
+    
+    Server *server;
+    LinkedList *user_list;
+    long i;
+    struct request_s2s_leafcheck leaf_packet;
+    
+    (void)hm_get(channels, channel, (void **)&user_list);
+    if (!ll_isEmpty(user_list))
+	return;
+    if (!remove_server_leaf(channel) && !hm_isEmpty(neighbors)) {
+	
+	memset(&leaf_packet, 0, sizeof(leaf_packet));
+	leaf_packet.req_type = REQ_S2S_LEAF_CHECK;
+	leaf_packet.id = generate_id();
+	strncpy(leaf_packet.channel, channel, (CHANNEL_MAX - 1));
+
+	(void)hm_get(r_table, channel, (void **)&user_list);
+	for (i = 0L; i < ll_size(user_list); i++) {
+	    (void)ll_get(user_list, i, (void **)&server);
+	    sendto(socket_fd, &leaf_packet, sizeof(leaf_packet), 0,
+		(struct sockaddr *)server->addr, sizeof(*server->addr));
+	    fprintf(stdout, "%s %s send S2S LEAF CHECK %s\n", server_addr, server->ip_addr, channel);///FIXME
+	}
+    }
+}
 
 /**
  * Floods all the neighboring servers with an S2S JOIN request given the specified
@@ -820,7 +850,7 @@ static void server_leave_request(const char *packet, char *client_ip) {
     }
 
     /* Server removes itself from channel sub-tree if leaf */
-    (void)remove_server_leaf(channel);
+    update_sub_tree(channel);
 }
 
 /**
@@ -1896,6 +1926,13 @@ free:
     return;
 }
 
+static void server_s2s_leaf_check(const char *packet, char *client_ip) {
+
+    struct request_s2s_leafcheck *s2s_leaf = (struct request_s2s_leafcheck *) packet;
+
+    fprintf(stdout, "%s %s recv S2S LEAF CHECK %s\n", server_addr, client_ip, s2s_leaf->channel);
+}
+
 /**
  * Frees the reserved memory occupied by the specified LinkedList. Used by
  * the LinkedList destructor.
@@ -2139,6 +2176,10 @@ int main(int argc, char *argv[]) {
 	    case REQ_S2S_WHO:
 		/* Server-to-server who request, collect listening users and forward to neighbors */
 		server_s2s_who_request(buffer, client_ip);
+		break;
+	    case REQ_S2S_LEAF_CHECK:
+		/* Server-to-server leaf-check, checks if the server is a leaf in channel sub-tree */
+		server_s2s_leaf_check(buffer, client_ip);
 		break;
 	    default:
 		/* Do nothing, likey a bogus packet */
