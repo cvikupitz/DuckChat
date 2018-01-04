@@ -1098,6 +1098,7 @@ static void server_who_request(const char *packet, char *client_ip) {
 	return;
     }
 
+    /* If channel does not exist, respond back to client with error message */
     if (!res) {
 	sprintf(buffer, "No channel by the name %s.", who_packet->req_channel);
 	server_send_error(user->addr, buffer);
@@ -1648,7 +1649,7 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
 		if (!hm_containsKey(ip_set, array[i]))
 		    (void)hm_put(ip_set, array[i], NULL, NULL);
     }
-    free(array);
+    free(array);    /* Deallocate array */
     array = NULL;
     
     /* Transfer the rest of IPs from packet into map */
@@ -1703,14 +1704,14 @@ static void server_s2s_list_request(const char *packet, char *client_ip) {
     forward->nchannels = (int)len;
     for (i = 0L; i < len; i++)
 	strncpy(forward->payload[i].item, array[i], (CHANNEL_MAX - 1));
-    free(array);
+    free(array);    /* Deallocate array */
     array = NULL;
     
     /* Get array of IPs left to visit, copy contents into packet */
     if ((array = hm_keyArray(ip_set, &len)) == NULL)
 	goto free;
     forward->nto_visit = (int)len - 1;
-
+    /* Copy IP visitation list into packet */
     j = i;
     for (i = 0L; i < len - 1; i++)
 	strncpy(forward->payload[j + i].item, array[i + 1], (CHANNEL_MAX - 1));
@@ -1753,11 +1754,12 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
     struct request_s2s_who *forward = NULL;
     struct request_s2s_who *s2s_who = (struct request_s2s_who *) packet;
 
+    /* Log the received packet */
     fprintf(stdout, "%s %s recv S2S WHO %s\n", server_addr, client_ip, s2s_who->channel);
-
+    /* Create linked list to hold all usernames */
     if ((unames = ll_create()) == NULL)
 	goto free;
-
+    /* Copy all usernames in packet into list */
     for (i = 0; i < s2s_who->nusers; i++)
 	(void)ll_add(unames, strdup(s2s_who->payload[i].item));
 
@@ -1766,12 +1768,12 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
 	queue_id(s2s_who->id);
 	/* Add all users from channel into list */
 	if (hm_get(channels, s2s_who->channel, (void **)&temp)) {
-	    if (!ll_isEmpty(temp)) {
+	    if (!ll_isEmpty(temp)) {	/* Skip if no usernames stored */
 		if ((u_list = (User **)ll_toArray(temp, &len)) == NULL)
 		    goto free;
 		for (i = 0L; i < len; i++)
 		    (void)ll_add(unames, strdup(u_list[i]->username));
-		free(u_list);
+		free(u_list);	/* Deallocate array */
 		u_list = NULL;
 	    }
 	}
@@ -1790,7 +1792,7 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
 		if (!hm_containsKey(ip_set, array[i]))
 		    (void)hm_put(ip_set, array[i], NULL, NULL);
     }
-    free(array);
+    free(array);    /* Deallocate array */
     array = NULL;
 
     /* Transfer the rest of IPs from packet into map */
@@ -1806,6 +1808,7 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
 	if ((client = get_addr(s2s_who->client.ip_addr)) == NULL)
 	    goto free;
 
+	/* If no usernames recorded, channel doesn't exist; respond with error message */
 	if (ll_isEmpty(unames) && strcmp(s2s_who->channel, DEFAULT_CHANNEL)) {
 	    sprintf(buffer, "No channel by the name %s.", s2s_who->channel);
 	    server_send_error(client, buffer);
@@ -1859,7 +1862,7 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
     forward->nusers = (int)len;
     for (i = 0L; i < len; i++)
 	strncpy(forward->payload[i].item, array[i], (USERNAME_MAX - 1));
-    if (array != NULL) {
+    if (array != NULL) {    /* Deallocate array */
 	free(array);
 	array = NULL;
     }
@@ -1868,7 +1871,7 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
     if ((array = hm_keyArray(ip_set, &len)) == NULL)
 	goto free;
     forward->nto_visit = (int)len - 1;
-
+    /* Copy IP addresses into packet */
     j = i;
     for (i = 0L; i < len - 1; i++)
 	strncpy(forward->payload[j + i].item, array[i + 1], (USERNAME_MAX - 1));
@@ -1882,6 +1885,7 @@ static void server_s2s_who_request(const char *packet, char *client_ip) {
     goto free;
 
 free:
+    /* Free all allocated memory */
     if (u_list != NULL) free(u_list);
     if (array != NULL) free(array);
     if (unames != NULL) ll_destroy(unames, free);
@@ -1953,6 +1957,7 @@ static void server_exit(UNUSED int signo) {
  */
 int main(int argc, char *argv[]) {
 
+    LinkedList *default_ll;
     struct sockaddr_in server, client;
     struct hostent *host_end;
     struct timeval timeout;
@@ -1994,10 +1999,8 @@ int main(int argc, char *argv[]) {
 	print_error("Server socket must be in the range [0, 65535].");
 
     /* Obtain the address of the specified host */
-    if ((host_end = gethostbyname(argv[1])) == NULL) {
-	sprintf(buffer, "Failed to locate the host.");
-	print_error(buffer);
-    }
+    if ((host_end = gethostbyname(argv[1])) == NULL)
+	print_error("Failed to locate the host.");
 
     /* Create server address struct, set internet family, address, & port number */
     memset((char *)&server, 0, sizeof(server));
@@ -2016,7 +2019,6 @@ int main(int argc, char *argv[]) {
 	print_error("Failed to allocate a sufficient amount of memory.");
     if ((channels = hm_create(100L, 0.0f)) == NULL)
 	print_error("Failed to allocate a sufficient amount of memory.");
-    LinkedList *default_ll;
     if ((default_ll = ll_create()) == NULL)
 	print_error("Failed to allocate a sufficient amount of memory.");
     if (!hm_put(channels, DEFAULT_CHANNEL, default_ll, NULL))

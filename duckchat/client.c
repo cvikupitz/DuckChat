@@ -1,7 +1,7 @@
 /**
  * client.c
  * Author: Cole Vikupitz
- * Last Modified: 12/31/2017
+ * Last Modified: 1/3/2018
  *
  * Client side of a chat application using the DuckChat protocol. The client sends
  * and receives packets from a server using this protocol and handles each of the
@@ -539,7 +539,7 @@ int main(int argc, char *argv[]) {
     strncpy(username, argv[3], (USERNAME_MAX - 1));
 
     /* Subscribe and join the default channel upon login */
-    /* For this assignment, the default channel is named 'Common' */
+    /* The default channel name is defined in properties.h */
     strncpy(active_channel, DEFAULT_CHANNEL, (CHANNEL_MAX - 1));
     strncpy(subscribed[0], DEFAULT_CHANNEL, (CHANNEL_MAX - 1));
     /* Opens up all other spots for channels to join */
@@ -585,8 +585,7 @@ int main(int argc, char *argv[]) {
 	FD_SET(STDIN_FILENO, &receiver);
 	res = select((socket_fd + 1), &receiver, NULL, NULL, &timeout);
 
-	/* Select() timed out, user has not sent packet */
-	/* Send a keep-alive packet to server, reset the timer */
+	/* Select() timed out, send a keep-alive packet to server, reset timer */
 	if (res == 0) {
 	    client_keep_alive_request();
 	    timeout.tv_sec = KEEP_ALIVE_RATE;
