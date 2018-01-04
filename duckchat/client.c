@@ -1,7 +1,7 @@
 /**
  * client.c
  * Author: Cole Vikupitz
- * Last Modified: 1/3/2018
+ * Last Modified: 1/4/2018
  *
  * Client side of a chat application using the DuckChat protocol. The client sends
  * and receives packets from a server using this protocol and handles each of the
@@ -17,6 +17,7 @@
 #include <stdio.h> 
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <signal.h>
 #include <unistd.h>
 #include <sys/time.h>
@@ -654,6 +655,9 @@ int main(int argc, char *argv[]) {
 			    continue;
 			i--;
 			putchar('\b'); putchar(' '); putchar('\b');
+		    } else if (!isprint(ch)) {
+			/* Skip if character isn't alphanumeric, punctuation, or whitespace */
+			continue;
 		    } else if (i != (SAY_MAX - 1)) {
 			/* Display character on prompt, add to buffer */
 			buffer[i++] = ch;
