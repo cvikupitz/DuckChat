@@ -30,6 +30,8 @@ You must run the following commands:
 `$ ./server localhost 4001 localhost 4000 localhost 4002`  
 `$ ./server localhost 4002 localhost 4001`  
 
+You can also comment out and uncomment your desired topology in the given shell script, then run it.
+
 Usage to run the client is as follows:
 
 `$ ./client server_socket server_port username`
