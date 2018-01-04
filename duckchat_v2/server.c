@@ -375,7 +375,8 @@ static int remove_server_leaf(char *channel) {
 	    res = 1;
     }
 
-    if (!res) return res;   /* Server not a leaf, return */
+    if (!res)
+	return res;   /* Server not a leaf, return */
 
     /* Initialize & set S2S leave request packet members */
     memset(&leave_packet, 0, sizeof(leave_packet));
@@ -399,7 +400,13 @@ static int remove_server_leaf(char *channel) {
     fprintf(stdout, "%s %s send S2S LEAVE %s\n",
 	    server_addr, server->ip_addr, leave_packet.req_channel);
     return res;
-}    
+}
+
+/**
+ * FIXME
+ */
+static void update_sub_tree(char *channel) {
+}
 
 /**
  * Floods all the neighboring servers with an S2S JOIN request given the specified
