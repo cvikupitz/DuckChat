@@ -516,7 +516,7 @@ static void server_list_request(char *client_ip) {
 	strncpy(list_packet->txt_channels[i].ch_channel, ch_list[i], (CHANNEL_MAX - 1));
 
     /* Send the packet to client, log the listing event */
-    sendto(socket_fd, list_packet, sizeof(*list_packet), 0,
+    sendto(socket_fd, list_packet, size, 0,
 		(struct sockaddr *)user->addr, sizeof(*user->addr));
     sprintf(buffer, "%s listed available channels on server", user->username);
     print_log_message(buffer);
@@ -591,7 +591,7 @@ static void server_who_request(const char *packet, char *client_ip) {
 	strncpy(send_packet->txt_users[i].us_username, user_list[i]->username, (USERNAME_MAX - 1));
 
     /* Send the packet to client, log the listing event */
-    sendto(socket_fd, send_packet, sizeof(*send_packet), 0,
+    sendto(socket_fd, send_packet, size, 0,
 		(struct sockaddr *)user->addr, sizeof(*user->addr));
     sprintf(buffer, "%s listed all users on channel %s", user->username, who_packet->req_channel);
     print_log_message(buffer);
