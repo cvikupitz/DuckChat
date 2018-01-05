@@ -828,22 +828,23 @@ static void server_leave_request(const char *packet, char *client_ip) {
     /* Server removes itself from channel sub-tree if leaf */
     if (remove_server_leaf(channel))
 	return;
-
+    /* Checks to see if clients are currently subscribed */
     if (hm_get(channels, channel, (void **)&user_list))
 	if (!ll_isEmpty(user_list))
 	    return;
-    
+    /* If no clients are subscribed, send a leaf check packet to all neighbors */
     if (!hm_isEmpty(neighbors)) {
+
+	/* Initialize and set packet members */
 	(void)hm_get(r_table, channel, (void **)&user_list);
 	memset(&leaf_packet, 0, sizeof(leaf_packet));
 	leaf_packet.req_type = REQ_S2S_LEAF;
 	leaf_packet.id = generate_id();
 	strncpy(leaf_packet.channel, channel, (CHANNEL_MAX - 1));
-
+	/* Sends the packet to all neighbors */
 	for (i = 0L; i < ll_size(user_list); i++) {
-	    
+	    /* Get the server's address, send the packet */
 	    (void)ll_get(user_list, i, (void **)&server);
-	    
 	    sendto(socket_fd, &leaf_packet, sizeof(leaf_packet), 0,
 		(struct sockaddr *)server->addr, sizeof(*server->addr));
 	    fprintf(stdout, "%s %s send S2S LEAF %s\n", server_addr, server->ip_addr, leaf_packet.channel);//FIXME
@@ -1194,9 +1195,11 @@ static void server_keep_alive_request(char *client_ip) {
 static void logout_user(User *user) {
 
     User *tmp;
+    Server *server;
     LinkedList *user_list;
     long i;
     char *ch;
+    struct request_s2s_leaf leaf_packet;
 
     /* For each of the user's subscribed channels */
     /* Remove user from each of the existing channel's subscription list */
@@ -1224,12 +1227,38 @@ static void logout_user(User *user) {
 	    ll_destroy(user_list, NULL);
 	    fprintf(stdout, "%s Removed the empty channel %s\n", server_addr, ch);
 	}
+	
 	/* Removes server from channel sub-tree if leaf */
-	(void)remove_server_leaf(ch);
-	/* Free allocated memory */
+	if (!remove_server_leaf(ch)) {
+	    
+	    /* If clients are still subscribed, do nothing */
+	    if (hm_get(channels, ch, (void **)&user_list)) {
+		if (!ll_isEmpty(user_list)) {
+		    free(ch);
+		    continue;
+		}
+	    }
+    
+	    /* Otherwise, send a leaf check to all neighboring servers */
+	    if (!hm_isEmpty(neighbors)) {
+		/* Initialize and set packet members */
+		(void)hm_get(r_table, ch, (void **)&user_list);
+		memset(&leaf_packet, 0, sizeof(leaf_packet));
+		leaf_packet.req_type = REQ_S2S_LEAF;
+		leaf_packet.id = generate_id();
+		strncpy(leaf_packet.channel, ch, (CHANNEL_MAX - 1));
+		/* Send the packet to each neighboring server */
+		for (i = 0L; i < ll_size(user_list); i++) {
+		    /* Get the IP address, send the packet */
+		    (void)ll_get(user_list, i, (void **)&server);
+		    sendto(socket_fd, &leaf_packet, sizeof(leaf_packet), 0,
+			    (struct sockaddr *)server->addr, sizeof(*server->addr));
+		    fprintf(stdout, "%s %s send S2S LEAF %s\n", server_addr, server->ip_addr, leaf_packet.channel);//FIXME
+		}
+	    }
+	}
 	free(ch);
     }
-    /* Free allocated memory */
     free_user(user);
 }
 
