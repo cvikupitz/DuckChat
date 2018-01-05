@@ -1922,7 +1922,10 @@ free:
 }
 
 /**
- * FIXME
+ * Server recieves an S2S LEAF request. the server will check to see if it's a
+ * leaf node in the channel subtree. If so, it will respond back with an S2S LEAVE
+ * request. Otherwise, it will forward the S2S LEAF request to all neighbors, but
+ * not if the channel exists and there are clients currently subscribed.
  */
 static void s2s_leaf_request(const char *packet, char *client_ip) {
     
@@ -1933,42 +1936,45 @@ static void s2s_leaf_request(const char *packet, char *client_ip) {
     struct request_s2s_leave leave_packet;
     struct request_s2s_leaf *s2s_leaf = (struct request_s2s_leaf *) packet;
 
-    //fprintf(stdout, "%s %s recv S2S LEAF %s\n", server_addr, client_ip, s2s_leaf->channel);//FIXME
-
+    /* If the ID is in cache, send S2S LEAVE back; this is to guard against loops */
     if (!id_unique(s2s_leaf->id)) {
+	
+	/* Initialize and set packet members */
 	memset(&leave_packet, 0, sizeof(leave_packet));
 	leave_packet.req_type = REQ_S2S_LEAVE;
 	strncpy(leave_packet.req_channel, s2s_leaf->channel, (CHANNEL_MAX - 1));
-
+	/* Get address of server to send request back to */
 	if ((client = get_addr(client_ip)) == NULL)
 	    return;
+	/* Send the packet, log the sent packet */
 	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
 		(struct sockaddr *)client, sizeof(*client));
 	fprintf(stdout, "%s %s send S2S LEAVE %s\n", server_addr, client_ip,
 		leave_packet.req_channel);
 	goto free;
     }
-
+    /* Add ID into cache */
     queue_id(s2s_leaf->id);
-
+    /* Do nothing if there are users listening on channel */
     if (hm_get(channels, s2s_leaf->channel, (void **)&users))
 	if (!ll_isEmpty(users))
 	    return;
-
+    /* Remove server from subtree */
     if (remove_server_leaf(s2s_leaf->channel))
 	goto free;
 
+    /* If there are no usersand there are neighbors listening, forward S2S LEAF request */
     (void)hm_get(r_table, s2s_leaf->channel, (void **)&users);
     for (i = 0L; i < ll_size(users); i++) {
+	/* Get neighboring address, send the packet */
 	(void)ll_get(users, i, (void **)&server);
 	sendto(socket_fd, s2s_leaf, sizeof(*s2s_leaf), 0,
 		(struct sockaddr *)server->addr, sizeof(*server->addr));
-	/*fprintf(stdout, "%s %s send S2S LEAF %s\n", server_addr, server->ip_addr,
-		s2s_leaf->channel);*/ //FIXME
     }
     goto free;
 
 free:
+    /* Free all allocated memory */
     if (client != NULL) free(client);
     return;
 }
