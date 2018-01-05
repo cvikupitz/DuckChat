@@ -847,7 +847,7 @@ static void server_leave_request(const char *packet, char *client_ip) {
 	    (void)ll_get(user_list, i, (void **)&server);
 	    sendto(socket_fd, &leaf_packet, sizeof(leaf_packet), 0,
 		(struct sockaddr *)server->addr, sizeof(*server->addr));
-	    fprintf(stdout, "%s %s send S2S LEAF %s\n", server_addr, server->ip_addr, leaf_packet.channel);//FIXME
+	    //fprintf(stdout, "%s %s send S2S LEAF %s\n", server_addr, server->ip_addr, leaf_packet.channel);//FIXME
 	}
     }
 }
@@ -1253,7 +1253,7 @@ static void logout_user(User *user) {
 		    (void)ll_get(user_list, i, (void **)&server);
 		    sendto(socket_fd, &leaf_packet, sizeof(leaf_packet), 0,
 			    (struct sockaddr *)server->addr, sizeof(*server->addr));
-		    fprintf(stdout, "%s %s send S2S LEAF %s\n", server_addr, server->ip_addr, leaf_packet.channel);//FIXME
+		    //fprintf(stdout, "%s %s send S2S LEAF %s\n", server_addr, server->ip_addr, leaf_packet.channel);//FIXME
 		}
 	    }
 	}
@@ -1958,18 +1958,51 @@ free:
  */
 static void s2s_leaf_request(const char *packet, char *client_ip) {
     
+    Server *server;
+    LinkedList *user_list;
+    long i;
+    struct sockaddr_in *client = NULL;
+    struct request_s2s_leave s2s_leave;
     struct request_s2s_leaf *s2s_leaf = (struct request_s2s_leaf *) packet;
 
-    fprintf(stdout, "%s %s recv S2S LEAF %s\n", server_addr, client_ip, s2s_leaf->channel);//FIXME
+    //fprintf(stdout, "%s %s recv S2S LEAF %s\n", server_addr, client_ip, s2s_leaf->channel);//FIXME
 
-    /*
-     * If there are clients subscribed:
-     *     drop request
-     * If loop detected:
-     *     respond to client w/ S2S LEAVE
-     * Cache ID
-     * FIXME
-     */
+    if (remove_server_leaf(s2s_leaf->channel))
+	return;
+    if (!id_unique(s2s_leaf->id)) {
+	if ((client = get_addr(client_ip)) == NULL)
+	    goto free;
+	memset(&s2s_leave, 0, sizeof(s2s_leave));
+	s2s_leave.req_type = REQ_S2S_LEAVE;
+	strncpy(s2s_leave.req_channel, s2s_leaf->channel, (CHANNEL_MAX - 1));
+
+	sendto(socket_fd, &s2s_leave, sizeof(s2s_leave), 0, (struct sockaddr *)client, sizeof(*client));
+	//fprintf(stdout, "%s %s send S2S LEAVE %s\n", server_addr, client_ip, s2s_leave.req_channel);
+	goto free;
+    }
+    queue_id(s2s_leaf->id);
+
+
+     /* If clients are still subscribed, do nothing */
+    if (hm_get(channels, s2s_leaf->channel, (void **)&user_list))
+	if (!ll_isEmpty(user_list))
+	    return;
+    
+    (void)hm_get(r_table, s2s_leaf->channel, (void **)&user_list);
+    for (i = 0L; i < ll_size(user_list); i++) {
+	(void)ll_get(user_list, i, (void **)&server);
+	if (strcmp(server->ip_addr, client_ip)) {
+	    sendto(socket_fd, s2s_leaf, sizeof(*s2s_leaf), 0, (struct sockaddr *)server->addr, sizeof(*server->addr));
+	    //fprintf(stdout, "%s %s send S2S LEAF %s\n", server_addr, server->ip_addr, s2s_leaf->channel); //FIXME
+	}
+    }
+
+    goto free;
+
+free:
+    /* Free all allocated memory */
+    if (client != NULL) free(client);
+    return;
 }
 
 /**
