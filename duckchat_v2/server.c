@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 1/3/2018
+ * Last Modified: 1/4/2018
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -11,6 +11,9 @@
  * be run in parallel, reducing individual server load and improving response time(s).
  *
  * Usage: ./server domain_name port_number [domain_name port_number] ...
+ * The first two arguments are the IP address and port number this server binds to. The
+ * following optional arguments are the IP address and port number of the adjacent server(s)
+ * to connect to.
  *
  * Resources Used:
  * Lots of help about basic socket programming received from Beej's Guide to Socket Programming:
@@ -375,8 +378,7 @@ static int remove_server_leaf(char *channel) {
 	    res = 1;
     }
 
-    if (!res)
-	return res;   /* Server not a leaf, return */
+    if (!res) return res;   /* Server not a leaf, return */
 
     /* Initialize & set S2S leave request packet members */
     memset(&leave_packet, 0, sizeof(leave_packet));
@@ -400,13 +402,7 @@ static int remove_server_leaf(char *channel) {
     fprintf(stdout, "%s %s send S2S LEAVE %s\n",
 	    server_addr, server->ip_addr, leave_packet.req_channel);
     return res;
-}
-
-/**
- * FIXME
- */
-static void update_sub_tree(char *channel) {
-}
+}    
 
 /**
  * Floods all the neighboring servers with an S2S JOIN request given the specified
@@ -1342,7 +1338,7 @@ static void logout_inactive_users(void) {
  * replies back to client immediately if invalid. Otherwise, if there are servers that still
  * need to be checked, forward the packet to the next server on the visitation list.
  */
-static void server_s2s_verify(const char *packet, char *client_ip) {
+static void s2s_verify_request(const char *packet, char *client_ip) {
 
     HashMap *ip_set = NULL;
     User *user;
@@ -1460,7 +1456,7 @@ free:
  * channel, it subscribes itself to the channel and forwards the packet to all of its
  * neighboring servers. Otherwise, does nothing.
  */
-static void server_s2s_join_request(const char *packet, char *client_ip) {
+static void s2s_join_request(const char *packet, char *client_ip) {
 
     Server *server, *sender;
     LinkedList *servers;
@@ -1505,7 +1501,7 @@ static void server_s2s_join_request(const char *packet, char *client_ip) {
  * the server wont send messages to this server to avoid loops, or empty
  * server channels.
  */
-static void server_s2s_leave_request(const char *packet, char *client_ip) {
+static void s2s_leave_request(const char *packet, char *client_ip) {
 
     LinkedList *servers;
     Server *server;
@@ -1539,7 +1535,7 @@ static void server_s2s_leave_request(const char *packet, char *client_ip) {
  * channel sub-tree, and no users are listening on the channel, the server replies
  * by sending an S2S leave request.
  */
-static void server_s2s_say_request(const char *packet, char *client_ip) {
+static void s2s_say_request(const char *packet, char *client_ip) {
 
     Server *server, *sender;
     LinkedList *users, *servers;
@@ -1606,7 +1602,7 @@ static void server_s2s_say_request(const char *packet, char *client_ip) {
  * there are still servers to visit, the server forwards the S2S LIST to the next,
  * otherwise sends a reply back to the client.
  */
-static void server_s2s_list_request(const char *packet, char *client_ip) {
+static void s2s_list_request(const char *packet, char *client_ip) {
 
     HashMap *ch_set = NULL, *ip_set = NULL;
     char **array = NULL;
@@ -1748,7 +1744,7 @@ free:
  * the server's table(s)). If there are still servers to visit, the server forwards
  * the S2S request to the next server, otherwise it sends a reply back to the client.
  */
-static void server_s2s_who_request(const char *packet, char *client_ip) {
+static void s2s_who_request(const char *packet, char *client_ip) {
 
     LinkedList *temp, *unames = NULL;
     HashMap *ip_set = NULL;
@@ -1900,6 +1896,57 @@ free:
     if (client != NULL) free(client);
     if (who_packet != NULL) free(who_packet);
     if (forward != NULL) free(forward);
+    return;
+}
+
+/**
+ * FIXME
+ */
+static void s2s_leaf_request(const char *packet, char *client_ip) {
+    
+    Server *server;
+    LinkedList *users;
+    long i;
+    struct sockaddr_in *client = NULL;
+    struct request_s2s_leave leave_packet;
+    struct request_s2s_leaf *s2s_leaf = (struct request_s2s_leaf *) packet;
+
+    fprintf(stdout, "%s %s recv S2S LEAF %s\n", server_addr, client_ip, s2s_leaf->channel);//FIXME
+
+    if (!id_unique(s2s_leaf->id)) {
+	memset(&leave_packet, 0, sizeof(leave_packet));
+	leave_packet.req_type = REQ_S2S_LEAVE;
+	strncpy(leave_packet.req_channel, s2s_leaf->channel, (CHANNEL_MAX - 1));
+
+	if ((client = get_addr(client_ip)) == NULL)
+	    return;
+	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
+		(struct sockaddr *)client, sizeof(*client));
+	fprintf(stdout, "%s %s send S2S LEAVE %s\n", server_addr, client_ip,
+		leave_packet.req_channel);
+	goto free;
+    }
+
+    queue_id(s2s_leaf->id);
+    if (remove_server_leaf(s2s_leaf->channel))
+	goto free;
+
+    if (hm_get(channels, s2s_leaf->channel, (void **)&users))
+	if (!ll_isEmpty(users))
+	    return;
+
+    (void)hm_get(r_table, s2s_leaf->channel, (void **)&users);
+    for (i = 0L; i < ll_size(users); i++) {
+	(void)ll_get(users, i, (void **)&server);
+	sendto(socket_fd, s2s_leaf, sizeof(*s2s_leaf), 0,
+		(struct sockaddr *)server->addr, sizeof(*server->addr));
+	fprintf(stdout, "%s %s send S2S LEAF %s\n", server_addr, server->ip_addr,
+		s2s_leaf->channel);
+    }
+    goto free;
+
+free:
+    if (client != NULL) free(client);
     return;
 }
 
@@ -2125,27 +2172,31 @@ int main(int argc, char *argv[]) {
 		break;
 	    case REQ_S2S_VERIFY:
 		/* Server-to-server verify request, check for username verification */
-		server_s2s_verify(buffer, client_ip);
+		s2s_verify_request(buffer, client_ip);
 		break;
 	    case REQ_S2S_JOIN:
 		/* Server-to-server join request, forward it to neighbors */
-		server_s2s_join_request(buffer, client_ip);
+		s2s_join_request(buffer, client_ip);
 		break;
 	    case REQ_S2S_LEAVE:
 		/* Server-to-server leave request, unsubscribe server from a channel */
-		server_s2s_leave_request(buffer, client_ip);
+		s2s_leave_request(buffer, client_ip);
 		break;
 	    case REQ_S2S_SAY:
 		/* Server-to-server say request, forward to all subscribed servers */
-		server_s2s_say_request(buffer, client_ip);
+		s2s_say_request(buffer, client_ip);
 		break;
 	    case REQ_S2S_LIST:
 		/* Server-to-server list request, collect channel names and forward to neighbors */
-		server_s2s_list_request(buffer, client_ip);
+		s2s_list_request(buffer, client_ip);
 		break;
 	    case REQ_S2S_WHO:
 		/* Server-to-server who request, collect listening users and forward to neighbors */
-		server_s2s_who_request(buffer, client_ip);
+		s2s_who_request(buffer, client_ip);
+		break;
+	    case REQ_S2S_LEAF:
+		/* Server-to-server leaf-checking; checks to see if server is leaf in a channel subtree */
+		s2s_leaf_request(buffer, client_ip);
 		break;
 	    default:
 		/* Do nothing, likey a bogus packet */
