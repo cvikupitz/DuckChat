@@ -759,13 +759,11 @@ error:
 static void server_leave_request(const char *packet, char *client_ip) {
 
     User *user, *tmp;
-    Server *server;
     LinkedList *user_list;
     int removed = 0;
     long i;
     char *ch;
     char channel[CHANNEL_MAX], buffer[256];
-    struct request_s2s_leaf leaf_packet;
     struct request_leave *leave_packet = (struct request_leave *) packet;
 
     /* Assert that the user requesting is currently logged in, do nothing if not */
@@ -826,26 +824,7 @@ static void server_leave_request(const char *packet, char *client_ip) {
     }
 
     /* Server removes itself from channel sub-tree if leaf */
-    if (remove_server_leaf(channel))
-	return;
-    /* If there are still clients subscribed, don't check for leaf */
-    if (hm_get(channels, channel, (void **)&user_list))
-	if (!ll_isEmpty(user_list))
-	    return;
-    
-    /* Initialize and set packet members */
-    (void)hm_get(r_table, channel, (void **)&user_list);
-    memset(&leaf_packet, 0, sizeof(leaf_packet));
-    leaf_packet.req_type = REQ_S2S_LEAF;
-    leaf_packet.id = generate_id();
-    strncpy(leaf_packet.channel, channel, (CHANNEL_MAX - 1));
-
-    /* Send the leaf-checking packet to all neighbors */
-    for (i = 0L; i < ll_size(user_list); i++) {
-	(void)ll_get(user_list, i, (void **)&server);
-	sendto(socket_fd, &leaf_packet, sizeof(leaf_packet), 0,
-		(struct sockaddr *)server->addr, sizeof(*server->addr));
-    }
+    (void)remove_server_leaf(channel);
 }
 
 /**
@@ -1922,64 +1901,6 @@ free:
 }
 
 /**
- * Server recieves an S2S LEAF request. the server will check to see if it's a
- * leaf node in the channel subtree. If so, it will respond back with an S2S LEAVE
- * request. Otherwise, it will forward the S2S LEAF request to all neighbors, but
- * not if the channel exists and there are clients currently subscribed.
- */
-static void s2s_leaf_request(const char *packet, char *client_ip) {
-    
-    Server *server;
-    LinkedList *users;
-    long i;
-    struct sockaddr_in *client = NULL;
-    struct request_s2s_leave leave_packet;
-    struct request_s2s_leaf *s2s_leaf = (struct request_s2s_leaf *) packet;
-
-    /* If the ID is in cache, send S2S LEAVE back; this is to guard against loops */
-    if (!id_unique(s2s_leaf->id)) {
-	
-	/* Initialize and set packet members */
-	memset(&leave_packet, 0, sizeof(leave_packet));
-	leave_packet.req_type = REQ_S2S_LEAVE;
-	strncpy(leave_packet.req_channel, s2s_leaf->channel, (CHANNEL_MAX - 1));
-	/* Get address of server to send request back to */
-	if ((client = get_addr(client_ip)) == NULL)
-	    return;
-	/* Send the packet, log the sent packet */
-	sendto(socket_fd, &leave_packet, sizeof(leave_packet), 0,
-		(struct sockaddr *)client, sizeof(*client));
-	fprintf(stdout, "%s %s send S2S LEAVE %s\n", server_addr, client_ip,
-		leave_packet.req_channel);
-	goto free;
-    }
-    /* Add ID into cache */
-    queue_id(s2s_leaf->id);
-    /* Do nothing if there are users listening on channel */
-    if (hm_get(channels, s2s_leaf->channel, (void **)&users))
-	if (!ll_isEmpty(users))
-	    return;
-    /* Remove server from subtree */
-    if (remove_server_leaf(s2s_leaf->channel))
-	goto free;
-
-    /* If there are no usersand there are neighbors listening, forward S2S LEAF request */
-    (void)hm_get(r_table, s2s_leaf->channel, (void **)&users);
-    for (i = 0L; i < ll_size(users); i++) {
-	/* Get neighboring address, send the packet */
-	(void)ll_get(users, i, (void **)&server);
-	sendto(socket_fd, s2s_leaf, sizeof(*s2s_leaf), 0,
-		(struct sockaddr *)server->addr, sizeof(*server->addr));
-    }
-    goto free;
-
-free:
-    /* Free all allocated memory */
-    if (client != NULL) free(client);
-    return;
-}
-
-/**
  * Frees the reserved memory occupied by the specified LinkedList. Used by
  * the LinkedList destructor.
  */
@@ -2222,10 +2143,6 @@ int main(int argc, char *argv[]) {
 	    case REQ_S2S_WHO:
 		/* Server-to-server who request, collect listening users and forward to neighbors */
 		s2s_who_request(buffer, client_ip);
-		break;
-	    case REQ_S2S_LEAF:
-		/* Server-to-server leaf-checking; checks to see if server is leaf in a channel subtree */
-		s2s_leaf_request(buffer, client_ip);
 		break;
 	    default:
 		/* Do nothing, likey a bogus packet */

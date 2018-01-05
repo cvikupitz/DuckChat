@@ -40,7 +40,6 @@ typedef int text_t;
 #define REQ_S2S_SAY 12
 #define REQ_S2S_LIST 13
 #define REQ_S2S_WHO 14
-#define REQ_S2S_LEAF 15
 
 /* Define codes for text types.  These are the messages sent to the client. */
 #define TXT_VERIFY 0
@@ -159,12 +158,6 @@ struct request_s2s_who {
 	char channel[CHANNEL_MAX];
 	struct ip_address client;
 	struct s2s_who_container payload[0]; // May actually be more than 0
-} packed;
-
-struct request_s2s_leaf {
-	request_t req_type; /* = REQ_S2S_LEAF */
-	long id;
-	char channel[CHANNEL_MAX];
 } packed;
 
 
