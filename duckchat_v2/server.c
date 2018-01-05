@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 1/4/2018
+ * Last Modified: 1/5/2018
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -759,11 +759,13 @@ error:
 static void server_leave_request(const char *packet, char *client_ip) {
 
     User *user, *tmp;
+    Server *server;
     LinkedList *user_list;
     int removed = 0;
     long i;
     char *ch;
     char channel[CHANNEL_MAX], buffer[256];
+    struct request_s2s_leaf leaf_packet;
     struct request_leave *leave_packet = (struct request_leave *) packet;
 
     /* Assert that the user requesting is currently logged in, do nothing if not */
@@ -824,7 +826,29 @@ static void server_leave_request(const char *packet, char *client_ip) {
     }
 
     /* Server removes itself from channel sub-tree if leaf */
-    (void)remove_server_leaf(channel);
+    if (remove_server_leaf(channel))
+	return;
+
+    if (hm_get(channels, channel, (void **)&user_list))
+	if (!ll_isEmpty(user_list))
+	    return;
+    
+    if (!hm_isEmpty(neighbors)) {
+	(void)hm_get(r_table, channel, (void **)&user_list);
+	memset(&leaf_packet, 0, sizeof(leaf_packet));
+	leaf_packet.req_type = REQ_S2S_LEAF;
+	leaf_packet.id = generate_id();
+	strncpy(leaf_packet.channel, channel, (CHANNEL_MAX - 1));
+
+	for (i = 0L; i < ll_size(user_list); i++) {
+	    
+	    (void)ll_get(user_list, i, (void **)&server);
+	    
+	    sendto(socket_fd, &leaf_packet, sizeof(leaf_packet), 0,
+		(struct sockaddr *)server->addr, sizeof(*server->addr));
+	    fprintf(stdout, "%s %s send S2S LEAF %s\n", server_addr, server->ip_addr, leaf_packet.channel);//FIXME
+	}
+    }
 }
 
 /**
@@ -1901,6 +1925,25 @@ free:
 }
 
 /**
+ * FIXME
+ */
+static void s2s_leaf_request(const char *packet, char *client_ip) {
+    
+    struct request_s2s_leaf *s2s_leaf = (struct request_s2s_leaf *) packet;
+
+    fprintf(stdout, "%s %s recv S2S LEAF %s\n", server_addr, client_ip, s2s_leaf->channel);//FIXME
+
+    /*
+     * If there are clients subscribed:
+     *     drop request
+     * If loop detected:
+     *     respond to client w/ S2S LEAVE
+     * Cache ID
+     * FIXME
+     */
+}
+
+/**
  * Frees the reserved memory occupied by the specified LinkedList. Used by
  * the LinkedList destructor.
  */
@@ -2143,6 +2186,10 @@ int main(int argc, char *argv[]) {
 	    case REQ_S2S_WHO:
 		/* Server-to-server who request, collect listening users and forward to neighbors */
 		s2s_who_request(buffer, client_ip);
+		break;
+	    case REQ_S2S_LEAF:
+		/* Server-to-server leaf request, checks if the server is a leaf in channel subtree */
+		s2s_leaf_request(buffer, client_ip);
 		break;
 	    default:
 		/* Do nothing, likey a bogus packet */
