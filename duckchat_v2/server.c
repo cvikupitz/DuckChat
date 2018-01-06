@@ -847,7 +847,6 @@ static void server_leave_request(const char *packet, char *client_ip) {
 	    (void)ll_get(user_list, i, (void **)&server);
 	    sendto(socket_fd, &leaf_packet, sizeof(leaf_packet), 0,
 		(struct sockaddr *)server->addr, sizeof(*server->addr));
-	    //fprintf(stdout, "%s %s send S2S LEAF %s\n", server_addr, server->ip_addr, leaf_packet.channel);//FIXME
 	}
     }
 }
@@ -1253,7 +1252,6 @@ static void logout_user(User *user) {
 		    (void)ll_get(user_list, i, (void **)&server);
 		    sendto(socket_fd, &leaf_packet, sizeof(leaf_packet), 0,
 			    (struct sockaddr *)server->addr, sizeof(*server->addr));
-		    //fprintf(stdout, "%s %s send S2S LEAF %s\n", server_addr, server->ip_addr, leaf_packet.channel);//FIXME
 		}
 	    }
 	}
@@ -1477,7 +1475,7 @@ static void s2s_verify_request(const char *packet, char *client_ip) {
 	goto free;
     
     /* Initialize and set packet members */
-    memset(forward, 0, sizeof(*forward));
+    memset(forward, 0, size);
     forward->req_type = REQ_S2S_VERIFY;
     forward->id = s2s_verify->id;
     strcpy(forward->req_username, s2s_verify->req_username);
