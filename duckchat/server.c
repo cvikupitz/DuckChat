@@ -1,17 +1,19 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 12/31/2017
+ * Last Modified: 1/6/2017
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
  * packets accordingly.
  *
  * Usage: ./server domain_name port_number
+ *     domain_name: The host address this server will bind to.
+ *     port_number: The port number this server will listen on.
  *
  * Resources Used:
  * Lots of help about basic socket programming received from Beej's Guide to Socket Programming:
- * https://beej.us/guide/bgnet/output/html/multipage/index.html
+ * https://beej.us/guide/bgnet/html/multi/index.html
  *
  * Implementations for the LinkedList and HashMap ADTs that this server uses were borrowed from
  * professor Joe Sventek's ADT library on github (https://github.com/jsventek/ADTs).
@@ -57,7 +59,7 @@ typedef struct {
     struct sockaddr_in *addr;	/* The client's address to send packets to */
     LinkedList *channels;	/* List of channel names user is listening to */
     char *ip_addr;		/* Full IP address of client in string format */
-    char *username;		/* The username of user */
+    char *username;		/* The user's username */
     short last_min;		/* Clock minute of last received packet from this client */
 } User;
 

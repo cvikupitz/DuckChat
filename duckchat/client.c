@@ -1,17 +1,20 @@
 /**
  * client.c
  * Author: Cole Vikupitz
- * Last Modified: 1/4/2018
+ * Last Modified: 1/6/2018
  *
  * Client side of a chat application using the DuckChat protocol. The client sends
  * and receives packets from a server using this protocol and handles each of the
  * packets accordingly.
  *
  * Usage: ./client server_socket server_port username
+ *     server_socket: The hostname the server is running on.
+ *     server_port: The port number the server is listening on.
+ *     username: The client's requested username.
  *
  * Resources Used:
  * Lots of help about basic socket programming received from Beej's Guide to Socket Programming:
- * https://beej.us/guide/bgnet/output/html/multipage/index.html
+ * https://beej.us/guide/bgnet/html/multi/index.html
  */
 
 #include <stdio.h> 
@@ -107,8 +110,7 @@ static void client_join_request(const char *request) {
     struct request_join join_packet;
 
     /* Parse the request, return with error if failed */
-    channel = strchr(request, ' ');
-    if (channel == NULL) {
+    if ((channel = strchr(request, ' ')) == NULL) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
     }
@@ -139,8 +141,7 @@ static void client_leave_request(const char *request) {
     struct request_leave leave_packet;
 
     /* Parse the request, return with error if failed */
-    channel = strchr(request, ' ');
-    if (channel == NULL) {
+    if ((channel = strchr(request, ' ')) == NULL) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
     }
@@ -235,8 +236,7 @@ static void client_who_request(const char *request) {
     struct request_who who_packet;
 
     /* Parse the request, return with error if failed */
-    channel = strchr(request, ' ');
-    if (channel == NULL) {
+    if ((channel = strchr(request, ' ')) == NULL) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
     }
@@ -276,8 +276,7 @@ static void client_switch_request(const char *request) {
     int i;
 
     /* Parse the request, return with error if failed */
-    channel = strchr(request, ' ');
-    if (channel == NULL) {
+    if ((channel = strchr(request, ' ')) == NULL) {
 	fprintf(stdout, "*Unknown command\n");
 	return;
     }
@@ -553,7 +552,7 @@ int main(int argc, char *argv[]) {
     /* Send a packet to the server to log user in */
     memset(&login_packet, 0, sizeof(login_packet));
     login_packet.req_type = REQ_LOGIN;
-    strncpy(login_packet.req_username, username, USERNAME_MAX);
+    strncpy(login_packet.req_username, username, (USERNAME_MAX - 1));
     sendto(socket_fd, &login_packet, sizeof(login_packet), 0,
 		(struct sockaddr *)&server, sizeof(server));
 
@@ -611,7 +610,9 @@ int main(int argc, char *argv[]) {
 
 		/* Erases all typed text in the prompt to make space for message */
 		for (j = 0; j < (i + 2); j++) {
-		    putchar('\b'); putchar(' '); putchar('\b');
+		    putchar('\b');
+		    putchar(' ');
+		    putchar('\b');
 		}
 
 		switch (packet_type->txt_type) {
@@ -654,7 +655,9 @@ int main(int argc, char *argv[]) {
 			if (i == 0)
 			    continue;
 			i--;
-			putchar('\b'); putchar(' '); putchar('\b');
+			putchar('\b');
+			putchar(' ');
+			putchar('\b');
 		    } else if (!isprint(ch)) {
 			/* Skip if character isn't alphanumeric, punctuation, or whitespace */
 			continue;
