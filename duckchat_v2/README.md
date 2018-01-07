@@ -60,7 +60,7 @@ as such below:
 
 ## Resources
 A lot of help consulted from Beej's Guide to Network/Socket Programming
-http://beej.us/guide/bgnet/output/html/multipage/index.html
+https://beej.us/guide/bgnet/html/multi/index.html
 
 The LinkedList and HashMap implementations used by the server are borrowed from professor Joe Sventek's
 C ADT library (https://github.com/jsventek/ADTs). Credit belongs to him.
