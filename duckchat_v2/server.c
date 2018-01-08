@@ -172,6 +172,8 @@ static void free_user(User *user) {
  */
 static Server *malloc_server(const char *ip, struct sockaddr_in *addr) {
 
+    struct tm *timestamp;
+    time_t timer;
     Server *new_server;
 
     /* Allocate memory for the struct itself */
@@ -192,6 +194,9 @@ static Server *malloc_server(const char *ip, struct sockaddr_in *addr) {
 	/* Initialize all the members, return the pointer */
 	*new_server->addr = *addr;
 	strcpy(new_server->ip_addr, ip);
+	time(&timer);
+	timestamp = localtime(&timer);
+	new_server->last_min = timestamp->tm_min;
     }
 
     return new_server;
@@ -1384,7 +1389,8 @@ static void logout_inactive_users(void) {
 	    fprintf(stdout, "%s Removed inactive server %s from channel %s\n",
 			server_addr, server->ip_addr, chs[i]);
 	    /* Remove server from channel sub-tree if becomes a leaf */
-	    (void)remove_server_leaf(chs[i]);
+	    if (remove_server_leaf(chs[i]))
+		break;
 	}
     }
     /* Free the allocated memory */
