@@ -182,20 +182,20 @@ static void server_send_error(struct sockaddr_in *addr, const char *msg) {
 static void server_authenticate_request(const char *packet, struct sockaddr_in *client) {
 
     User *user;
-    char **ip_list;
+    HMEntry **u_list;
     int res = 1;
     long i, len = 0L;
     struct text_verify respond_packet;
     struct request_verify *verify_packet = (struct request_verify *) packet;
 
     /* Server failed to allocate memory, do nothing */
-    if ((ip_list = hm_keyArray(users, &len)) == NULL)
+    if ((u_list = hm_entryArray(users, &len)) == NULL)
 	if (!hm_isEmpty(users))
 	    return;
     
     for (i = 0L; i < len; i++) {
 	/* Check each user, see if the username is taken */
-	(void)hm_get(users, ip_list[i], (void **)&user);
+	user = (User *)hmentry_value(u_list[i]);
 	if (!strcmp(verify_packet->req_username, user->username)) {
 	    res = 0;
 	    break;
@@ -209,7 +209,7 @@ static void server_authenticate_request(const char *packet, struct sockaddr_in *
     /* Send packet back to client */
     sendto(socket_fd, &respond_packet, sizeof(respond_packet), 0,
 		(struct sockaddr *)client, sizeof(*client));
-    free(ip_list);  /* Free allocated memory */
+    free(u_list);  /* Free allocated memory */
 }
 
 /**
@@ -733,8 +733,8 @@ static int user_inactive(User *user) {
 static void logout_inactive_users(void) {
     
     User *user;
+    HMEntry **u_list;
     long i, len;
-    char **user_list;
     char buffer[256];
 
     /* If no users are connected, don't bother with the scan */
@@ -743,15 +743,13 @@ static void logout_inactive_users(void) {
 
     /* Retrieve the list of all connected clients */
     /* Abort the scan if failed (malloc() error), log the error */
-    if ((user_list = hm_keyArray(users, &len)) == NULL) {
+    if ((u_list = hm_entryArray(users, &len)) == NULL) {
 	print_log_message("*** Failed to perform server scan, memory allocation failed");
 	return;
     }
 
     for (i = 0L; i < len; i++) {
-	/* Assert the user exists in the map */
-	if (!hm_get(users, user_list[i], (void **)&user))
-	    continue;
+	user = (User *)hmentry_value(u_list[i]);
 	/* Determines if the user is inactive */
 	if (user_inactive(user)) {
 	    /* User is deemed inactive, logout & remove the user */
@@ -763,7 +761,7 @@ static void logout_inactive_users(void) {
     }
 
     /* Log the scan, free allocated memory */
-    free(user_list);
+    free(u_list);
 }
 
 /**

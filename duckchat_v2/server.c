@@ -424,12 +424,12 @@ static int remove_server_leaf(char *channel) {
 static void neighbor_flood_channel(char *channel, char *sender_ip) {
     
     Server *server;
+    HMEntry **addrs;
     struct request_s2s_join join_packet;
-    char **addrs;
-    long i, len;
+    long i, len = 0L;
 
-    /* Get the array of neighboring server IPs, return if malloc() fails */
-    if ((addrs = hm_keyArray(neighbors, &len)) == NULL) {
+    /* Get the array of neighboring servers, return if malloc() fails */
+    if ((addrs = hm_entryArray(neighbors, &len)) == NULL) {
 	fprintf(stdout, "%s Failed to flood server(s), memory allocation failed\n",
 		server_addr);
 	return;
@@ -443,8 +443,7 @@ static void neighbor_flood_channel(char *channel, char *sender_ip) {
     /* Send the packet to each of the connecting servers */
     /* Do not send it to the server that it received from */
     for (i = 0L; i < len; i++) {
-	if (!hm_get(neighbors, addrs[i], (void **)&server))
-	    continue;
+	server = (Server *)hmentry_value(addrs[i]);
 	if (strcmp(server->ip_addr, sender_ip)) {
 	    sendto(socket_fd, &join_packet, sizeof(join_packet), 0,
 		    (struct sockaddr *)server->addr, sizeof(*server->addr));
@@ -492,19 +491,18 @@ static int server_join_channel(char *channel) {
 
     LinkedList *servers = NULL;
     Server *server;
-    char **addrs = NULL;
-    long i, len;
+    HMEntry **addrs = NULL;
+    long i, len = 0L;
 
     /* Create the list of listening servers */
     if ((servers = ll_create()) == NULL)
 	goto error;
-    if ((addrs = hm_keyArray(neighbors, &len)) == NULL)
+    if ((addrs = hm_entryArray(neighbors, &len)) == NULL)
 	goto error;
 
     /* Adds each connected server into the list */
     for (i = 0L; i < len; i++) {
-	if (!hm_get(neighbors, addrs[i], (void **)&server))
-	    continue;
+	server = (Server *)hmentry_value(addrs[i]);
 	/* Checks for malloc() errors */
 	if (!ll_add(servers, server))
 	    goto error;
@@ -553,6 +551,7 @@ static void server_send_error(struct sockaddr_in *addr, const char *msg) {
 static void server_verify_request(const char *packet, const char *client_ip, struct sockaddr_in *client) {
 
     User *user;
+    HMEntry **u_list = NULL;
     char **ip_list = NULL;
     int res = 1;
     long i, len = 0L;
@@ -566,19 +565,19 @@ static void server_verify_request(const char *packet, const char *client_ip, str
 	    server_addr, client_ip, verify_packet->req_username);
     
     /* Retrieve list of users to check for verification */
-    if ((ip_list = hm_keyArray(users, &len)) == NULL)
+    if ((u_list = hm_entryArray(users, &len)) == NULL)
 	if (!hm_isEmpty(users))
 	    return;
     
     /* Check each username for uniqueness */
     for (i = 0L; i < len; i++) {
-	(void)hm_get(users, ip_list[i], (void **)&user);
+	user = (User *)hmentry_value(u_list[i]);
 	if (strcmp(verify_packet->req_username, user->username) == 0) {
 	    res = 0;	/* Username taken, break from loop */
 	    break;
 	}
     }
-    free(ip_list);  /* Free allocated memory */
+    free(u_list);  /* Free allocated memory */
 
     /* If the username is valid, and there are neighboring servers to check, */
     /* Forward the packet to the next server in the list */
@@ -633,6 +632,7 @@ error:
     /* Send error back to client */
     server_send_error(client, "Verification failed.");
     /* Free all allocated memory */
+    if (u_list != NULL) free(u_list);
     if (ip_list != NULL) free(ip_list);
     if (forward != NULL) free(forward);
     if (s2s_verify != NULL) free(s2s_verify);
@@ -1068,7 +1068,7 @@ static void server_who_request(const char *packet, char *client_ip) {
 
     User *user, **user_list = NULL;
     LinkedList *subscribers;
-    char **array= NULL;
+    char **array = NULL;
     int size, res = 0;
     long i, j, len = 0L;
     char buffer[256];
@@ -1319,8 +1319,8 @@ static int is_inactive(short last_min) {
 static void logout_inactive_users(void) {
     
     User *user;
-    long i, len;
-    char **user_list;
+    HMEntry **u_list;
+    long i, len = 0L;
 
     /* If no users are connected, don't bother with the scan */
     if (hm_isEmpty(users))
@@ -1328,16 +1328,14 @@ static void logout_inactive_users(void) {
 
     /* Retrieve the list of all connected clients */
     /* Abort the scan if failed (malloc() error), log the error */
-    if ((user_list = hm_keyArray(users, &len)) == NULL) {
+    if ((u_list = hm_entryArray(users, &len)) == NULL) {
 	fprintf(stdout, "%s Failed to scan for inactive users, memory allocation failed\n",
 		server_addr);
 	return;
     }
 
     for (i = 0L; i < len; i++) {
-	/* Assert the user exists in the map */
-	if (!hm_get(users, user_list[i], (void **)&user))
-	    continue;
+	user = (User *)hmentry_value(u_list[i]);
 	/* Determines if the user is inactive */
 	if (is_inactive(user->last_min)) {
 	    /* User is deemed inactive, logout & remove the user */
@@ -1349,7 +1347,7 @@ static void logout_inactive_users(void) {
     }
 
     /* Free allocated memory */
-    free(user_list);
+    free(u_list);
 }
 
 /**
@@ -1406,6 +1404,7 @@ static void s2s_verify_request(const char *packet, char *client_ip) {
 
     HashMap *ip_set = NULL;
     User *user;
+    HMEntry **u_list = NULL;
     char **ip_list = NULL;
     long i, len = 0L;
     int unique, size, res = 1;
@@ -1423,18 +1422,19 @@ static void s2s_verify_request(const char *packet, char *client_ip) {
     if ((unique = id_unique(s2s_verify->id)) != 0) {
 	queue_id(s2s_verify->id);
 	/* Get list of users to check */
-	if ((ip_list = hm_keyArray(users, &len)) == NULL)
+	if ((u_list = hm_entryArray(users, &len)) == NULL)
 	    if (!hm_isEmpty(users))
 		goto free;
 	/* Iterate through list, check for uniqueness */
 	for (i = 0L; i < len; i++) {
-	    (void)hm_get(users, ip_list[i], (void **)&user);
+	    user = (User *)hmentry_value(u_list[i]);
 	    if (strcmp(s2s_verify->req_username, user->username) == 0) {
 		res = 0;    /* Username is taken, break from loop */
 		break;
 	    }
 	}
-	free(ip_list);
+	free(u_list);
+	u_list = NULL;
     }
 
     /* Get list of neighboring servers */
@@ -1508,6 +1508,7 @@ static void s2s_verify_request(const char *packet, char *client_ip) {
 
 free:
     /* Free all allocated memory */
+    if (u_list != NULL) free(u_list);
     if (ip_list != NULL) free(ip_list);
     if (ip_set != NULL) hm_destroy(ip_set, NULL);
     if (client != NULL) free(client);
