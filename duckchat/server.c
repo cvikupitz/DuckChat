@@ -536,8 +536,8 @@ error:
 		user->username);
     print_log_message(buffer);
     /* Free all allocated memory */
-    if (ch_list == NULL) free(ch_list);
-    if (list_packet == NULL) free(list_packet);
+    if (ch_list != NULL) free(ch_list);
+    if (list_packet != NULL) free(list_packet);
 }
 
 /**
