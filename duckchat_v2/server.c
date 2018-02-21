@@ -1281,13 +1281,15 @@ static void remove_server(char *ip, char **chs, long len) {
     long i, j;
 
     for (i = 0L; i < len; i++) {
-        
+        /* Get list of servers */
         if (!hm_get(r_table, chs[i], (void **)&s_list)) 
             continue;
         for (j = 0L; j < ll_size(s_list); j++) {
+            /* Find inactive server in the list */
             (void)ll_get(s_list, j, (void **)&server);
             if (strcmp(ip, server->ip_addr) != 0)
                 continue;
+            /* Remove instance from channel list */
             (void)ll_remove(s_list, j, (void **)&server);
             (void)remove_server_leaf(chs[i]);
             break;
@@ -1375,7 +1377,9 @@ static void logout_inactive_users(void) {
 }
 
 /**
- * FIXME
+ * Performs a scan on all the neighboring servers and determines for
+ * each one whether the server has crashed or not. If so, all instances
+ * of the server are removed from the internal tables.
  */
  static void remove_inactive_servers(void) {
     
@@ -1384,12 +1388,14 @@ static void logout_inactive_users(void) {
     char **chs = NULL;
     long i, c_len = 0L, s_len = 0L;
 
+    /* Skip scan if either table is empty */
     if (hm_isEmpty(neighbors) || hm_isEmpty(r_table))
         return;
 
+    /* Get list of neighbors to check */
     chs = hm_keyArray(r_table, &c_len);
     s_list = hm_entryArray(neighbors, &s_len);
-
+    /* malloc() failed, print error and return */
     if (chs == NULL || s_list == NULL) {
         fprintf(stdout, "%s Failed to scan for crashed servers, failed to allocate memory\n",
             server_addr);
@@ -1399,6 +1405,7 @@ static void logout_inactive_users(void) {
     for (i = 0L; i < s_len; i++) {
         server = hmentry_value(s_list[i]);
         if (is_inactive(server->last_min)) {
+            /* If server deemed crashed, remove all records of it */
             (void)hm_remove(neighbors, server->ip_addr, (void **)&server);
             fprintf(stdout, "%s Removed crashed server %s\n", server_addr, server->ip_addr);
 	    remove_server(server->ip_addr, chs, c_len);
@@ -1408,6 +1415,7 @@ static void logout_inactive_users(void) {
     goto free;
     
 free:
+    /* Free all allocated memory */
     if (chs != NULL) free(chs);
     if (s_list != NULL) free(s_list);
     return;
