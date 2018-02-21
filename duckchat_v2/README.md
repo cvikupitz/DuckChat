@@ -22,7 +22,7 @@ You may pass in as many pairs as you need.
 
 For example, to create a server topology like the one shown below:
 
-    4000 <-----> 4001 <-----> 4002
+    4000-----4001-----4002
 
 You must run the following commands:
 
@@ -42,6 +42,9 @@ on, and the client's username.
 ## Using the Server
 The server(s) will run on their own and requires no user input.
 To end a server session, press CTRL+C or send a SIGINT to the running process.
+Each server also has soft-state tracking on each of its neighbors. If no messages are received from a
+neighbor after a certain period of time, that server is considered to have crashed and is removed from
+all of the server's internal records and tables.
 
 ## Using the Client
 To send a message, simply type the message and press enter. The message you send will be sent to all other
