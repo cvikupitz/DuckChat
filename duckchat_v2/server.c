@@ -428,6 +428,9 @@ static void neighbor_flood_channel(char *channel, char *sender_ip) {
     struct request_s2s_join join_packet;
     long i, len = 0L;
 
+    if (hm_isEmpty(neighbors))
+        return;
+
     /* Get the array of neighboring servers, return if malloc() fails */
     if ((addrs = hm_entryArray(neighbors, &len)) == NULL) {
 	fprintf(stdout, "%s Failed to flood server(s), memory allocation failed\n",
