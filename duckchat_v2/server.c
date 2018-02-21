@@ -1272,6 +1272,30 @@ static void logout_user(User *user) {
 }
 
 /**
+ * Removes all instances of the server from the routing table.
+ */
+static void remove_server(char *ip, char **chs, long len) {
+
+    LinkedList *s_list;
+    Server *server;
+    long i, j;
+
+    for (i = 0L; i < len; i++) {
+        
+        if (!hm_get(r_table, chs[i], (void **)&s_list)) 
+            continue;
+        for (j = 0L; j < ll_size(s_list); j++) {
+            (void)ll_get(s_list, j, (void **)&server);
+            if (strcmp(ip, server->ip_addr) != 0)
+                continue;
+            (void)ll_remove(s_list, j, (void **)&server);
+            (void)remove_server_leaf(chs[i]);
+            break;
+        }
+    }
+}
+
+/**
  * Server receives a logout packet from a client; server removes the user from the
  * user database and any instances of them from all the channels.
  */
@@ -1351,49 +1375,42 @@ static void logout_inactive_users(void) {
 }
 
 /**
- * Performs a scan on all the currently subscribed channels and determines
- * whether each of the neighboring servers are inactive or not. If inactive,
- * the server is removed from the subscription list, or ignored if otherwise.
+ * FIXME
  */
  static void remove_inactive_servers(void) {
     
-    LinkedList *servers;
     Server *server;
-    char **chs;
-    long i, j, len = 0L;
+    HMEntry **s_list = NULL;
+    char **chs = NULL;
+    long i, c_len = 0L, s_len = 0L;
+
+    if (hm_isEmpty(neighbors) || hm_isEmpty(r_table))
+        return;
+
+    chs = hm_keyArray(r_table, &c_len);
+    s_list = hm_entryArray(neighbors, &s_len);
+
+    if (chs == NULL || s_list == NULL) {
+        fprintf(stdout, "%s Failed to scan for crashed servers, failed to allocate memory\n",
+            server_addr);
+        goto free;
+    }
+
+    for (i = 0L; i < s_len; i++) {
+        server = hmentry_value(s_list[i]);
+        if (is_inactive(server->last_min)) {
+            (void)hm_remove(neighbors, server->ip_addr, (void **)&server);
+            fprintf(stdout, "%s Removed crashed server %s\n", server_addr, server->ip_addr);
+	    remove_server(server->ip_addr, chs, c_len);
+            free_server(server);
+        }
+    }
+    goto free;
     
-    /* If server channel subscription list is empty, don't bother with scan */
-    if (hm_isEmpty(r_table))
-	return;
-
-    /* Get the full list of server's subscribed channels, log error if malloc() fails */
-    if ((chs = hm_keyArray(r_table, &len)) == NULL) {
-	fprintf(stdout, "%s Failed to scan for crashed servers, memory allocation failed\n",
-		server_addr);
-	return;
-    }
-
-    for (i = 0L; i < len; i++) {
-	/* Assert that the channel exists */
-	if (!hm_get(r_table, chs[i], (void **)&servers))
-	    continue;
-	for (j = 0L; j < ll_size(servers); j++) {
-	    /* Obtain the neighboring subscribed server */
-	    (void)ll_get(servers, j, (void **)&server);
-	    if (!is_inactive(server->last_min))
-		continue;
-	    /* Server deemed inactive, remove it from the subscription list */
-	    (void)ll_remove(servers, j, (void **)&server);
-	    fprintf(stdout, "%s Removed inactive server %s from channel %s\n",
-			server_addr, server->ip_addr, chs[i]);
-	    /* Remove server from channel sub-tree if becomes a leaf */
-	    if (remove_server_leaf(chs[i]))
-		break;
-	}
-    }
-
-    /* Free the allocated memory */
-    free(chs);
+free:
+    if (chs != NULL) free(chs);
+    if (s_list != NULL) free(s_list);
+    return;
 }
 
 /**
