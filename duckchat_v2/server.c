@@ -1391,6 +1391,7 @@ static void logout_inactive_users(void) {
 		break;
 	}
     }
+
     /* Free the allocated memory */
     free(chs);
 }

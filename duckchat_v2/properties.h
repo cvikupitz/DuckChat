@@ -23,7 +23,7 @@
 /* Clients will send a verification packet before login to server for username uniqueness */
 /* The client will wait this long for a server response, and exit if no response given */
 /* Should be kept at 5-8 seconds */
-#define TIMEOUT_RATE 6
+#define TIMEOUT_RATE 8
 
 /* The rate (in seconds) for the client to send a keep alive request */
 /* Clients will send a keep alive request to prevent server from logging them out */

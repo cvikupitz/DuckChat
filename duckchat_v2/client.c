@@ -547,6 +547,7 @@ int main(int argc, char *argv[]) {
 	strcpy(subscribed[i], "");
 
     /* Authenticate the user, ensure the username is not currently taken */
+    fprintf(stdout, "[Client]: Establishing connection...\n");
     authenticate_client();
 
     /* Send a packet to the server to log user in */
@@ -674,6 +675,12 @@ int main(int argc, char *argv[]) {
 		buffer[i] = '\0';
 		i = 0;
 		putchar('\n');
+
+                /* Empty messages not allowed, skip over */
+                if (strcmp(buffer, "") == 0) {
+                    prompt();
+                    continue;
+                }
 
 		/* If the first character of input is '/', interpret as special command */
 		if (buffer[0] == '/') {
