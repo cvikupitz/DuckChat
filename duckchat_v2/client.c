@@ -320,12 +320,14 @@ static void client_subscribed_request(void) {
 static void client_help_request(void) {
     
     fprintf(stdout, "Possible commands are:\n");
-    fprintf(stdout, "  /join <channel>: Join the named channel, creating it if it doesn't exist.\n");
-    fprintf(stdout, "  /leave <channel>: Unsubscribe from the named channel.\n");
+    fprintf(stdout, "  /join <channel>: Joins the named channel, creating it if it doesn't exist.\n");
+    fprintf(stdout, "  /leave <channel>: Unsubscribes from the named channel.\n");
     fprintf(stdout, "  /list: Lists the names of all the available channels.\n");
     fprintf(stdout, "  /who <channel>: Lists all users who are on the named channel.\n");
-    fprintf(stdout, "  /switch <channel>: Switch to the named channel you are subscribed to.\n");
+    fprintf(stdout, "  /switch <channel>: Switches to the named channel you are subscribed to.\n");
     fprintf(stdout, "  /subscribed: Lists the names of all the channels you're subscribed to.\n");
+    fprintf(stdout, "  /whoami: Displays your username.\n");
+    fprintf(stdout, "  /whereami: Displays the server address you are connected to.\n");
     fprintf(stdout, "  /clear: Clears the terminal screen.\n");
     fprintf(stdout, "  /help: Lists all available commands.\n");
     fprintf(stdout, "  /exit: Logout and exit the client software.\n");
@@ -676,12 +678,6 @@ int main(int argc, char *argv[]) {
 		i = 0;
 		putchar('\n');
 
-                /* Empty messages not allowed, skip over */
-                if (strcmp(buffer, "") == 0) {
-                    prompt();
-                    continue;
-                }
-
 		/* If the first character of input is '/', interpret as special command */
 		if (buffer[0] == '/') {
 		    if (strncmp(buffer, "/join ", 6) == 0) {
@@ -702,7 +698,13 @@ int main(int argc, char *argv[]) {
 		    } else if (strcmp(buffer, "/subscribed") == 0) {
 			/* User lists their subscribed channels */
 			client_subscribed_request();
-		    } else if (strcmp(buffer, "/clear") == 0) {
+		    } else if (strcmp(buffer, "/whoami") == 0) {
+                        /* User displays the username */
+                        fprintf(stdout, "%s\n", username);
+                    } else if (strcmp(buffer, "/whereami") == 0) {
+                        /* User displays the server address */
+                        fprintf(stdout, "%s:%d\n", inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+                    } else if (strcmp(buffer, "/clear") == 0) {
 			/* User clears the prompt */
 			system("clear");
 		    } else if (strcmp(buffer, "/help") == 0) {
@@ -717,8 +719,9 @@ int main(int argc, char *argv[]) {
 			fprintf(stdout, "*Unknown command\n");
 		    }
 		} else {
-		    /* No special command given, send say message to server */
-		    client_say_request(buffer);
+                    /* No special command given, send say message to server */
+                    if (strcmp(buffer, "") != 0)
+                        client_say_request(buffer);
 		}
 		prompt();
 	    }
