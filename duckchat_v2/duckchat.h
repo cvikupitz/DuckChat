@@ -16,7 +16,7 @@
 #define USERNAME_MAX 32
 #define CHANNEL_MAX 32
 #define SAY_MAX 64
-#define IP_MAX 30
+#define IP_MAX 36
 
 /* Define some types for designating request and text codes */
 typedef int request_t;
@@ -41,6 +41,7 @@ typedef int text_t;
 #define REQ_S2S_LIST 13
 #define REQ_S2S_WHO 14
 #define REQ_S2S_LEAF 15
+#define REQ_S2S_KEEP_ALIVE 16
 
 /* Define codes for text types.  These are the messages sent to the client. */
 #define TXT_VERIFY 0
@@ -165,6 +166,10 @@ struct request_s2s_leaf {
 	request_t req_type; /* = REQ_S2S_LEAF */
 	long id;
 	char channel[CHANNEL_MAX];
+} packed;
+
+struct request_s2s_keep_alive {
+        request_t req_type;     /* = REQ_S2S_KEEP_ALIVE */
 } packed;
 
 

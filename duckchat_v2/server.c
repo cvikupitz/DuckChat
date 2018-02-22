@@ -1,7 +1,7 @@
 /**
  * server.c
  * Author: Cole Vikupitz
- * Last Modified: 1/6/2018
+ * Last Modified: 1/21/2018
  *
  * Server side of a chat application using the DuckChat protocol. The server receives
  * and sends packets to and from clients using this protocol and handles each of the
@@ -457,6 +457,40 @@ static void neighbor_flood_channel(char *channel, char *sender_ip) {
     }
 
     free(addrs);
+}
+
+/**
+ * Sends a S2S KEEP ALIVE packet to each of the neighboring servers; this
+ * will prevent the neighboring servers from being removed fom inactivity.
+ */
+static void flood_s2s_keep_alive(void) {
+
+    Server *server;
+    HMEntry **s_list;
+    long i, len = 0L;
+    struct request_s2s_keep_alive kalive_packet;
+
+    /* No neighbors, do nothing */
+    if (hm_isEmpty(neighbors))
+        return;
+    /* malloc() error, print message and return */
+    if ((s_list = hm_entryArray(neighbors, &len)) == NULL) {
+        fprintf(stdout, "%s Failed to flood S2S KEEP ALIVE, memory allocation failed\n",
+                server_addr);
+        return;
+    }
+    /* Initialize and set packet members */
+    memset(&kalive_packet, 0, sizeof(kalive_packet));
+    kalive_packet.req_type = REQ_S2S_KEEP_ALIVE;
+
+    for (i = 0L; i < len; i++) {
+        /* Send the packet to each of the neighbors */
+        server = hmentry_value(s_list[i]);
+        sendto(socket_fd, &kalive_packet, sizeof(kalive_packet), 0,
+		    (struct sockaddr *)server->addr, sizeof(*server->addr));
+    }
+
+    free(s_list);
 }
 
 /**
@@ -1337,7 +1371,7 @@ static int is_inactive(short last_min) {
     else
 	diff = ((60 - last_min) + timestamp->tm_min);
     /* Check and return user inactivity */
-    return (diff >= REFRESH_RATE);
+    return (diff > REFRESH_RATE);
 }
 
 /**
@@ -1392,17 +1426,24 @@ static void logout_inactive_users(void) {
     long i, c_len = 0L, s_len = 0L;
 
     /* Skip scan if either table is empty */
-    if (hm_isEmpty(neighbors) || hm_isEmpty(r_table))
+    if (hm_isEmpty(neighbors))
         return;
 
-    /* Get list of neighbors to check */
-    chs = hm_keyArray(r_table, &c_len);
-    s_list = hm_entryArray(neighbors, &s_len);
     /* malloc() failed, print error and return */
-    if (chs == NULL || s_list == NULL) {
-        fprintf(stdout, "%s Failed to scan for crashed servers, failed to allocate memory\n",
-            server_addr);
-        goto free;
+    if ((chs = hm_keyArray(r_table, &c_len)) == NULL) {
+        if (!hm_isEmpty(r_table)) {
+            fprintf(stdout, "%s Failed to scan for crashed servers, failed to allocate memory\n",
+                    server_addr);
+            goto free;
+        }
+    }
+    /* malloc() failed, print error and return */
+    if ((s_list = hm_entryArray(neighbors, &s_len)) == NULL) {
+        if (!hm_isEmpty(neighbors)) {
+            fprintf(stdout, "%s Failed to scan for crashed servers, failed to allocate memory\n",
+                    server_addr);
+            goto free;
+        }
     }
 
     for (i = 0L; i < s_len; i++) {
@@ -2057,6 +2098,19 @@ static void s2s_leaf_request(const char *packet, char *client_ip) {
 }
 
 /**
+ * Updates the server's log time given its IP address; updates the time this
+ * server last sent packet.
+ */
+static void s2s_keep_alive_request(char *client_ip) {
+
+    Server *server;
+
+    if (!hm_get(neighbors, client_ip, (void **)&server))
+        return;
+    update_server_time(server); /* Update the log time */
+}
+
+/**
  * Frees the reserved memory occupied by the specified LinkedList. Used by
  * the LinkedList destructor.
  */
@@ -2217,6 +2271,7 @@ int main(int argc, char *argv[]) {
 
 	/* A minute passes, flood all servers with JOIN requests */
 	if (res == 0) {
+            flood_s2s_keep_alive();
 	    refresh_s2s_joins();
 	    mode++;
 	    /* Checks for inactive users and servers */
@@ -2304,6 +2359,10 @@ int main(int argc, char *argv[]) {
 		/* Server-to-server leaf request, checks if the server is a leaf in channel subtree */
 		s2s_leaf_request(buffer, client_ip);
 		break;
+            case REQ_S2S_KEEP_ALIVE:
+                /* Server-to-server keep alive request, update time for corresponding server */
+                s2s_keep_alive_request(client_ip);
+                break;
 	    default:
 		/* Do nothing, likey a bogus packet */
 		break;
