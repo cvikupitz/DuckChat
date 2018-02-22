@@ -51,12 +51,14 @@ To send a message, simply type the message and press enter. The message you send
 clients listening on the current channel. The client supports a number of special commands that are listed
 as such below:
 
-* /join [channel]: Join the named channel, creating it if it doesn't exist.
-* /leave [channel]: Unsubscribe from the named channel.
+* /join [channel]: Joins the named channel, creating it if it doesn't exist.
+* /leave [channel]: Unsubscribes from the named channel.
 * /list: Lists the names of all the available channels.
 * /who [channel]: Lists all users who are on the named channel.
-* /switch [channel]: Switch to the named channel you are subscribed to.
+* /switch [channel]: Switches to the named channel you are subscribed to.
 * /subscribed: Lists the names of all the channels you're subscribed to.
+* /whoami: Displays your username.
+* /whereami: Displays the server address you are connected to.
 * /clear: Clears the terminal screen.
 * /help: Lists all available commands.
 * /exit: Logout and exit the client software.
