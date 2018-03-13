@@ -1,7 +1,6 @@
-/**
+/*
  * properties.h
  * Author: Cole Vikupitz
- * Last Modified: 1/2/2018
  *
  * Properties to be used for the DuckChat client/server programs.
  */
@@ -14,7 +13,7 @@
 #define UNUSED __attribute__((unused))
 
 /* Maximum number of bytes for host to receive from another at a time */
-#define BUFF_SIZE 100000
+#define BUFF_SIZE 150000
 
 /* Maximum number of channels a client may be subscribed to at once */
 #define MAX_CHANNELS 10
@@ -41,5 +40,5 @@
 #define DEFAULT_CHANNEL "Common"
 
 
-#endif	/* __PROPERTIES_H_ */
+#endif  /* __PROPERTIES_H_ */
 

@@ -16,7 +16,7 @@
 #define USERNAME_MAX 32
 #define CHANNEL_MAX 32
 #define SAY_MAX 64
-#define IP_MAX 36
+#define IP_MAX 64
 
 /* Define some types for designating request and text codes */
 typedef int request_t;
@@ -60,8 +60,8 @@ struct request {
  * corresponds with one of the REQ_ codes above. */
 
 struct request_verify {
-	request_t req_type; /* = REQ_VERIFY */
-	char req_username[USERNAME_MAX];
+        request_t req_type; /* = REQ_VERIFY */
+        char req_username[USERNAME_MAX];
 } packed;
 
 struct request_login {
@@ -105,67 +105,67 @@ struct request_keep_alive {
 
 /* Server-to-server protocols */
 struct ip_address {
-	char ip_addr[IP_MAX];
+        char ip_addr[IP_MAX];
 } packed;
 
 struct request_s2s_verify {
-	request_t req_type; /* = REQ_S2S_VERIFY */
-	long id;
-	int nto_visit;
-	char req_username[USERNAME_MAX];
-	struct ip_address client;
-	struct ip_address to_visit[0]; // May actually be more than 0
+        request_t req_type; /* = REQ_S2S_VERIFY */
+        long id;
+        int nto_visit;
+        char req_username[USERNAME_MAX];
+        struct ip_address client;
+        struct ip_address to_visit[0]; // May actually be more than 0
 } packed;
 
 struct request_s2s_join {
-	request_t req_type; /* = REQ_S2S_JOIN */
-	char req_channel[CHANNEL_MAX];
+        request_t req_type; /* = REQ_S2S_JOIN */
+        char req_channel[CHANNEL_MAX];
 } packed;
 
 struct request_s2s_leave {
-	request_t req_type; /* = REQ_S2S_LEAVE */
-	char req_channel[CHANNEL_MAX];
+        request_t req_type; /* = REQ_S2S_LEAVE */
+        char req_channel[CHANNEL_MAX];
 } packed;
 
 struct request_s2s_say {
-	request_t req_type; /* = REQ_S2S_SAY */
-	long id;
-	char req_username[USERNAME_MAX];
-	char req_channel[CHANNEL_MAX];
-	char req_text[SAY_MAX];
+        request_t req_type; /* = REQ_S2S_SAY */
+        long id;
+        char req_username[USERNAME_MAX];
+        char req_channel[CHANNEL_MAX];
+        char req_text[SAY_MAX];
 } packed;
 
 struct s2s_list_container {
-	char item[CHANNEL_MAX];
+        char item[CHANNEL_MAX];
 } packed;
 
 struct request_s2s_list {
-	request_t req_type;	/* = REQ_S2S_LIST */
-	long id;
-	int nchannels;
-	int nto_visit;
-	struct ip_address client;
-	struct s2s_list_container payload[0]; // May actually be more than 0
+        request_t req_type;     /* = REQ_S2S_LIST */
+        long id;
+        int nchannels;
+        int nto_visit;
+        struct ip_address client;
+        struct s2s_list_container payload[0]; // May actually be more than 0
 } packed;
 
 struct s2s_who_container {
-	char item[USERNAME_MAX];
+        char item[USERNAME_MAX];
 } packed;
 
 struct request_s2s_who {
-	request_t req_type;	/* = REQ_S2S_WHO */
-	long id;
-	int nusers;
-	int nto_visit;
-	char channel[CHANNEL_MAX];
-	struct ip_address client;
-	struct s2s_who_container payload[0]; // May actually be more than 0
+        request_t req_type;     /* = REQ_S2S_WHO */
+        long id;
+        int nusers;
+        int nto_visit;
+        char channel[CHANNEL_MAX];
+        struct ip_address client;
+        struct s2s_who_container payload[0]; // May actually be more than 0
 } packed;
 
 struct request_s2s_leaf {
-	request_t req_type; /* = REQ_S2S_LEAF */
-	long id;
-	char channel[CHANNEL_MAX];
+        request_t req_type; /* = REQ_S2S_LEAF */
+        long id;
+        char channel[CHANNEL_MAX];
 } packed;
 
 struct request_s2s_keep_alive {
@@ -183,8 +183,8 @@ struct text {
  * corresponds with one of the TXT_ codes above. */
 
 struct text_verify {
-	text_t txt_type;    /* = TXT_VERIFY */
-	int valid;
+        text_t txt_type;    /* = TXT_VERIFY */
+        int valid;
 } packed;
 
 struct text_say {

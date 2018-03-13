@@ -49,8 +49,8 @@ struct request {
  * corresponds with one of the REQ_ codes above. */
 
 struct request_verify {
-	request_t req_type; /* = REQ_VERIFY */
-	char req_username[USERNAME_MAX];
+        request_t req_type; /* = REQ_VERIFY */
+        char req_username[USERNAME_MAX];
 } packed;
 
 struct request_login {
@@ -101,8 +101,8 @@ struct text {
  * corresponds with one of the TXT_ codes above. */
 
 struct text_verify {
-	text_t txt_type;    /* = TXT_VERIFY */
-	int valid;
+        text_t txt_type;  /* = TXT_VERIFY */
+        int valid;
 } packed;
 
 struct text_say {
