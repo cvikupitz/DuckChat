@@ -1,4 +1,4 @@
-/**
+/*
  * properties.h
  * Author: Cole Vikupitz
  *
