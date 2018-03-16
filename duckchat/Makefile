@@ -1,7 +1,6 @@
 #
 # DuckChat Makefile
 # Author: Cole Vikupitz
-# Last Modified: 1/3/2018
 #
 
 
@@ -10,7 +9,7 @@ FILES=client.c duckchat.h hashmap.c hashmap.h linkedlist.c \
 	README.md server.c
 
 CC=gcc
-CFLAGS=-Wall -W -g
+CFLAGS=-Wall -W -g -O2
 OBJECTS=client.o server.o raw.o hashmap.o linkedlist.o
 EXECS=client server
 

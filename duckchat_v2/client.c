@@ -186,7 +186,7 @@ static void client_join_request(const char *request) {
     ++channel;  /* Skip leading whitespace character */
     if (!join_channel(channel)) {
         fprintf(stdout, "Cannot join channel, subscribed to the maximum allowed (%d).\n",
-            MAX_CHANNELS);
+                MAX_CHANNELS);
         return;
     }
     /* Create & send the join channel packet to the server */
@@ -257,7 +257,7 @@ static void server_say_reply(const char *packet) {
     struct text_say *say_packet = (struct text_say *) packet;
 
     fprintf(stdout, "[%s][%s]: %s\n", say_packet->txt_channel,
-    say_packet->txt_username, say_packet->txt_text);
+            say_packet->txt_username, say_packet->txt_text);
 }
 
 /*
@@ -515,7 +515,7 @@ int main(int argc, char *argv[]) {
     /* Maximum length is specified in duckchat.h */
     if (strlen(argv[1]) > UNIX_PATH_MAX) {
         sprintf(buffer, "Path name to domain socket length exceeds the length allowed (%d).",
-        UNIX_PATH_MAX);
+                UNIX_PATH_MAX);
         print_error(buffer);
     }
 
@@ -625,24 +625,24 @@ int main(int argc, char *argv[]) {
 
                 switch (packet_type->txt_type) {
                     case TXT_SAY:
-                    /* Message received from another client */
-                    server_say_reply(in_buff);
-                    break;
-                        case TXT_LIST:
-                    /* List server's available channels */
-                    server_list_reply(in_buff);
-                    break;
-                        case TXT_WHO:
-                    /* List users on a server's channel */
-                    server_who_reply(in_buff);
-                    break;
-                        case TXT_ERROR:
-                    /* Error message received from the server */
-                    server_error_reply(in_buff);
-                    break;
-                        default:
-                    /* Do nothing, likely a bogus packet */
-                    break;
+                        /* Message received from another client */
+                        server_say_reply(in_buff);
+                        break;
+                    case TXT_LIST:
+                        /* List server's available channels */
+                        server_list_reply(in_buff);
+                        break;
+                    case TXT_WHO:
+                        /* List users on a server's channel */
+                        server_who_reply(in_buff);
+                        break;
+                    case TXT_ERROR:
+                        /* Error message received from the server */
+                        server_error_reply(in_buff);
+                        break;
+                    default:
+                        /* Do nothing, likely a bogus packet */
+                        break;
                 }
 
                 /* Redisplays the prompt and all text the user typed in before */

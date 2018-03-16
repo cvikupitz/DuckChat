@@ -35,7 +35,7 @@
 /* Should be kept between 2-5 minutes */
 #define REFRESH_RATE 2
 
-/* Size of the server's cache sor storing the IDs of received S2S packets */
+/* Size of the server's cache for storing the IDs of received S2S packets */
 /* The server will cache this many IDs before replacing older ones */
 #define MSGQ_SIZE 48
 

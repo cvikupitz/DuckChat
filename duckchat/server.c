@@ -254,7 +254,7 @@ error:
     server_send_error(addr, "Failed to log into the server.");
     /* Log the server error */
     sprintf(buffer, "*** Failed to login %s, memory allocation failed",
-    client_ip);
+            client_ip);
     print_log_message(buffer);
     /* Free all allocated memory */
     if (user != NULL)
@@ -381,7 +381,7 @@ static void server_leave_request(const char *packet, char *client_ip) {
     /* If not, report error back to user, log the error */
     if (!hm_get(channels, channel, (void **)&user_list)) {
         sprintf(buffer, "No channel by the name %s.", leave_packet->req_channel);
-        server_send_error(user->addr, buffer);
+                server_send_error(user->addr, buffer);
         sprintf(buffer, "%s attempted to leave non-existent channel %s", user->username, leave_packet->req_channel);
         print_log_message(buffer);
         return;
@@ -496,7 +496,7 @@ static void server_say_request(const char *packet, char *client_ip) {
 static void server_list_request(char *client_ip) {
 
     User *user;
-    int size;
+    size_t nbytes;
     long i, len = 0L;
     char **ch_list = NULL;
     char buffer[256];
@@ -514,14 +514,14 @@ static void server_list_request(char *client_ip) {
             goto error;
 
     /* Calculate the exact size of packet to send back */
-    size = sizeof(struct text_list) + (sizeof(struct channel_info) * len);
+    nbytes = sizeof(struct text_list) + (sizeof(struct channel_info) * len);
     /* Allocate memory for the packet using calculated size */
     /* Send error back to user if failed (malloc() error), log the error */
-    if ((list_packet = malloc(size)) == NULL)
+    if ((list_packet = malloc(nbytes)) == NULL)
         goto error;
 
     /* Initialize the packet; set the type and number of channels */
-    memset(list_packet, 0, size);
+    memset(list_packet, 0, nbytes);
     list_packet->txt_type = TXT_LIST;
     list_packet->txt_nchannels = (int)len;
     /* Copy each channel name from the list into the packet */
@@ -529,7 +529,7 @@ static void server_list_request(char *client_ip) {
         strncpy(list_packet->txt_channels[i].ch_channel, ch_list[i], (CHANNEL_MAX - 1));
 
     /* Send the packet to client, log the listing event */
-    sendto(socket_fd, list_packet, size, 0,
+    sendto(socket_fd, list_packet, nbytes, 0,
             (struct sockaddr *)user->addr, sizeof(*user->addr));
     sprintf(buffer, "%s listed available channels on server", user->username);
     print_log_message(buffer);
@@ -562,7 +562,7 @@ static void server_who_request(const char *packet, char *client_ip) {
 
     User *user, **user_list = NULL;
     LinkedList *subscribers;
-    int size;
+    size_t nbytes;
     long i, len = 0L;
     char buffer[256];
     struct text_who *send_packet = NULL;
@@ -590,14 +590,14 @@ static void server_who_request(const char *packet, char *client_ip) {
             goto error;
 
     /* Calculate the exact size of packet to send back */
-    size = sizeof(struct text_who) + (sizeof(struct user_info) * len);
+    nbytes = sizeof(struct text_who) + (sizeof(struct user_info) * len);
     /* Allocate memory for the packet using calculated size */
     /* Send error back to user if failed (malloc() error), log the error */
-    if ((send_packet = malloc(size)) == NULL)
+    if ((send_packet = malloc(nbytes)) == NULL)
         goto error;
 
     /* Initialize the packet; set the type, number of users, and channel */
-    memset(send_packet, 0, size);
+    memset(send_packet, 0, nbytes);
     send_packet->txt_type = TXT_WHO;
     send_packet->txt_nusernames = (int)len;
     strncpy(send_packet->txt_channel, who_packet->req_channel, (CHANNEL_MAX - 1));
@@ -606,7 +606,7 @@ static void server_who_request(const char *packet, char *client_ip) {
         strncpy(send_packet->txt_users[i].us_username, user_list[i]->username, (USERNAME_MAX - 1));
 
     /* Send the packet to client, log the listing event */
-    sendto(socket_fd, send_packet, size, 0,
+    sendto(socket_fd, send_packet, nbytes, 0,
             (struct sockaddr *)user->addr, sizeof(*user->addr));
     sprintf(buffer, "%s listed all users on channel %s", user->username, who_packet->req_channel);
     print_log_message(buffer);
@@ -904,7 +904,7 @@ int main(int argc, char *argv[]) {
 
     /* Display successful launch title, timestamp & address */
     sprintf(buffer, "Duckchat server launched addressed at %s:%d",
-    inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+            inet_ntoa(server.sin_addr), ntohs(server.sin_port));
     print_log_message(buffer);
     /* Set the timeout timer for select() */
     memset(&timeout, 0, sizeof(timeout));
